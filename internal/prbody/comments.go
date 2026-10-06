@@ -175,20 +175,26 @@ func DeclinedComment(pr int64, paths []string, optInFile string) string {
 	if len(ps) == 0 {
 		return b.String()
 	}
-	b.WriteString("\n\nTo keep your own versions of these files for good, add them to `ignore` in " + optIn + ":\n\n```yaml\nignore:\n")
+	var y strings.Builder
+	y.WriteString("ignore:\n")
 	listed, size := 0, 0
 	for _, p := range ps {
 		entry := "  - " + yamlQuote(ignorePattern(p)) + "\n"
 		if listed == maxRows || (listed > 0 && size+len(entry) > maxYAML) {
 			break
 		}
-		b.WriteString(entry)
+		y.WriteString(entry)
 		listed, size = listed+1, size+len(entry)
 	}
 	if more := len(ps) - listed; more > 0 {
-		b.WriteString("  # …and " + strconv.Itoa(more) + " more\n")
+		y.WriteString("  # …and " + strconv.Itoa(more) + " more\n")
 	}
-	b.WriteString("```")
+	// A path may hold backticks: the fence is longer than any run of them
+	// inside, so a path can never close the block early.
+	fence := strings.Repeat("`", max(3, longestRun(y.String(), '`')+1))
+	b.WriteString("\n\nTo keep your own versions of these files for good, add them to `ignore` in " + optIn + ":\n\n" + fence + "yaml\n")
+	b.WriteString(y.String())
+	b.WriteString(fence)
 	return b.String()
 }
 

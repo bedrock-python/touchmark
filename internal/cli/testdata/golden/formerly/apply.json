@@ -1,0 +1,85 @@
+{
+  "command": "apply",
+  "dry_run": false,
+  "hub": {
+    "dir": "$HUB",
+    "id": "acme-eng",
+    "commit": "$COMMIT"
+  },
+  "target": {
+    "root": "$TARGET",
+    "ref": "acme/svc",
+    "opt_in_file": ".engineering-assets.yml",
+    "opted_in": true
+  },
+  "selection": {
+    "packs": [
+      "python-library"
+    ],
+    "complete": true,
+    "unresolved": [],
+    "sources": {
+      "python-library": [
+        ".engineering-assets.yml"
+      ]
+    }
+  },
+  "entries": [
+    {
+      "path": "only-old.md",
+      "state": "retired",
+      "action": "delete",
+      "pack": "python-library",
+      "from": "99ec2297a1f19985e7a610eb6a9ee30caa822b1d",
+      "to": "",
+      "mode": "",
+      "detail": "no longer shipped by pack python-library",
+      "after_deletes": false
+    },
+    {
+      "path": "pyproject.md",
+      "state": "outdated",
+      "action": "update",
+      "pack": "python-library",
+      "from": "657540fcc86f9a5394a3ad486ea99a60bc3339d4",
+      "to": "6305e11bad63947d61aa60c7f4e4a1d794fbe06c",
+      "mode": "100644",
+      "detail": "",
+      "after_deletes": false
+    }
+  ],
+  "results": [
+    {
+      "path": "only-old.md",
+      "action": "delete",
+      "state": "retired",
+      "outcome": "done",
+      "detail": ""
+    },
+    {
+      "path": "pyproject.md",
+      "action": "update",
+      "state": "outdated",
+      "outcome": "done",
+      "detail": ""
+    }
+  ],
+  "summary": {
+    "missing": 0,
+    "current": 0,
+    "outdated": 1,
+    "local": 0,
+    "ignored": 0,
+    "retired": 1,
+    "retired_local": 0,
+    "unsafe": 0,
+    "orphaned": 0,
+    "changes": 2,
+    "done": 2,
+    "skipped": 0,
+    "failed": 0
+  },
+  "warnings": [
+    ".engineering-assets.yml: pack \"python-lib\" was renamed to \"python-library\"; using \"python-library\""
+  ]
+}

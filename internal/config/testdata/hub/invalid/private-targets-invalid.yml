@@ -1,0 +1,5 @@
+# error: security.private_targets_in_public_hub: "mask"
+version: 1
+id: acme-eng
+security:
+  private_targets_in_public_hub: mask

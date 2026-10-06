@@ -1,0 +1,43 @@
+# What moves under this project without a commit of its own: the actions the
+# workflows run, the Go modules, the base images the Dockerfile pins by
+# digest, and the lock file of the docs toolchain. Each gets one grouped pull
+# request a week. uv, not pip: the pip ecosystem never updates uv.lock. The
+# tools the workflows and the Makefile run by version, and the images of
+# scripts/e2e, are moved by hand.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      go:
+        patterns: ["*"]
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      image:
+        patterns: ["*"]
+
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      docs:
+        patterns: ["*"]

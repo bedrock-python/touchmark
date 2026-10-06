@@ -1,0 +1,6 @@
+# 44.0 and 1e3 are integers, in YAML and in JSON Schema.
+version: 1
+forget_declines:
+  - target: gh:acme/docs
+    pr: 44.0
+allow_mass_close: {max: 1e3, until: 2026-10-01}

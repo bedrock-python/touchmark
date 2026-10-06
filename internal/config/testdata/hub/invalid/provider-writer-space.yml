@@ -1,0 +1,7 @@
+# error: providers[0].writer
+version: 1
+id: acme-eng
+providers:
+  - id: gh
+    type: github
+    writer: touchmark bot

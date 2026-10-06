@@ -1,0 +1,5 @@
+# The template ships targets.yml with examples in comments only.
+#
+# version: 1
+# targets:
+#   - repo: acme/billing

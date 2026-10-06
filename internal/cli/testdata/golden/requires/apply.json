@@ -1,0 +1,105 @@
+{
+  "command": "apply",
+  "dry_run": false,
+  "hub": {
+    "dir": "$HUB",
+    "id": "acme-eng",
+    "commit": "$COMMIT"
+  },
+  "target": {
+    "root": "$TARGET",
+    "ref": "acme/svc",
+    "opt_in_file": ".engineering-assets.yml",
+    "opted_in": true
+  },
+  "selection": {
+    "packs": [
+      "agents",
+      "claude"
+    ],
+    "complete": true,
+    "unresolved": [],
+    "sources": {
+      "agents": [
+        "requires claude"
+      ],
+      "claude": [
+        ".engineering-assets.yml"
+      ]
+    }
+  },
+  "entries": [
+    {
+      "path": ".agents/shared.md",
+      "state": "missing",
+      "action": "create",
+      "pack": "claude",
+      "from": "",
+      "to": "30f15c3c47a98e4f75455d69e18a6bf61b9e0f84",
+      "mode": "100644",
+      "detail": "",
+      "after_deletes": false
+    },
+    {
+      "path": "AGENTS.md",
+      "state": "missing",
+      "action": "create",
+      "pack": "agents",
+      "from": "",
+      "to": "2774b2f1d1ee89ed9963bc42a7d26f25aa5dbb06",
+      "mode": "100644",
+      "detail": "",
+      "after_deletes": false
+    },
+    {
+      "path": "CLAUDE.md",
+      "state": "missing",
+      "action": "create",
+      "pack": "claude",
+      "from": "",
+      "to": "7394be6759baae42db1c0c6ff25492c2f0d84fe8",
+      "mode": "100644",
+      "detail": "",
+      "after_deletes": false
+    }
+  ],
+  "results": [
+    {
+      "path": ".agents/shared.md",
+      "action": "create",
+      "state": "missing",
+      "outcome": "done",
+      "detail": ""
+    },
+    {
+      "path": "AGENTS.md",
+      "action": "create",
+      "state": "missing",
+      "outcome": "done",
+      "detail": ""
+    },
+    {
+      "path": "CLAUDE.md",
+      "action": "create",
+      "state": "missing",
+      "outcome": "done",
+      "detail": ""
+    }
+  ],
+  "summary": {
+    "missing": 3,
+    "current": 0,
+    "outdated": 0,
+    "local": 0,
+    "ignored": 0,
+    "retired": 0,
+    "retired_local": 0,
+    "unsafe": 0,
+    "orphaned": 0,
+    "changes": 3,
+    "done": 3,
+    "skipped": 0,
+    "failed": 0
+  },
+  "warnings": []
+}

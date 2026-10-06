@@ -1,0 +1,7 @@
+# error: the single-provider shorthand cannot be combined with providers
+version: 1
+id: acme-eng
+writer: touchmark-bot
+providers:
+  - id: gh
+    type: github

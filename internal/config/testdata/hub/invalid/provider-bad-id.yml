@@ -1,0 +1,6 @@
+# error: providers[0].id: provider id "GitHub"
+version: 1
+id: acme-eng
+providers:
+  - id: GitHub
+    type: github

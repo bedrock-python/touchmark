@@ -1,0 +1,5 @@
+# error: targets[0].topics[0]: must not be blank
+version: 1
+targets:
+  - org: acme
+    topics: ["\_"]

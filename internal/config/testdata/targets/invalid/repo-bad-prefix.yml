@@ -1,0 +1,4 @@
+# error: targets[0].repo: "GH:acme/billing": provider id "GH"
+version: 1
+targets:
+  - repo: GH:acme/billing

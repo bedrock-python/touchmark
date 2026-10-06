@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/bedrock-python/touchmark/master/schemas/operations.schema.json",
+  "title": "touchmark .touchmark/operations.yml",
+  "description": "One-off operations of a hub that override a safeguard: rebuild a paused sync branch, propose declined content again, allow a mass close, adopt the pull requests of a multi-gitter setup. The file goes through review like packs, and only distribute on the default branch carries it out. Every entry limits itself (a branch head, a pull request number, a date), so a forgotten entry does nothing; touchmark check warns about entries past their date. Format v1.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "description": "Format version. Only 1 exists; when absent, 1 is assumed with a warning.",
+      "type": "integer",
+      "const": 1
+    },
+    "recreate": {
+      "description": "Rebuild a paused sync branch from scratch. Commits others added to it are dropped. An entry acts only while the branch head is the given commit.",
+      "type": ["array", "null"],
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["target", "head"],
+        "properties": {
+          "target": { "$ref": "#/$defs/target" },
+          "head": {
+            "description": "Full commit id of the sync branch head to replace: 40 or 64 lowercase hex digits.",
+            "$ref": "#/$defs/head"
+          }
+        }
+      }
+    },
+    "forget_declines": {
+      "description": "Propose again the content of a pull request the target closed without merging. touchmark marks that pull request revoked, so the entry acts once.",
+      "type": ["array", "null"],
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["target", "pr"],
+        "properties": {
+          "target": { "$ref": "#/$defs/target" },
+          "pr": {
+            "description": "Number of the declined pull request.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9223372036854775807
+          }
+        }
+      }
+    },
+    "allow_mass_close": {
+      "description": "Lift the guard against closing many pull requests in one run, up to max closes, until the date.",
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["max", "until"],
+      "properties": {
+        "max": {
+          "description": "How many pull requests a run may close.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "until": { "$ref": "#/$defs/until" }
+      }
+    },
+    "adopt_unmarked": {
+      "description": "Take over the open pull requests without a marker that a multi-gitter setup opened (from known_authors, on branch_aliases), until the date.",
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["until"],
+      "properties": {
+        "until": { "$ref": "#/$defs/until" }
+      }
+    }
+  },
+  "$defs": {
+    "target": {
+      "description": "One target repository: <provider>:<path> or <path>, as touchmark prints it.",
+      "type": "string",
+      "maxLength": 512,
+      "pattern": "^([a-z][a-z0-9-]{0,31}:)?([A-Za-z0-9_-][A-Za-z0-9_.-]*|\\.[A-Za-z0-9_-][A-Za-z0-9_.-]*|\\.\\.[A-Za-z0-9_.-]+)(/([A-Za-z0-9_-][A-Za-z0-9_.-]*|\\.[A-Za-z0-9_-][A-Za-z0-9_.-]*|\\.\\.[A-Za-z0-9_.-]+))+$"
+    },
+    "head": {
+      "type": "string",
+      "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"
+    },
+    "until": {
+      "description": "Last day the entry is active, YYYY-MM-DD, in UTC.",
+      "type": "string",
+      "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$"
+    }
+  }
+}

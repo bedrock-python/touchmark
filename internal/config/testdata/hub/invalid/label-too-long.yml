@@ -1,0 +1,5 @@
+# error: pr.labels[0]
+version: 1
+id: acme-eng
+pr:
+  labels: [abcdefghij-abcdefghij-abcdefghij-abcdefghij-abcdefghij]

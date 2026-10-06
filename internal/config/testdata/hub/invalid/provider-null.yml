@@ -1,0 +1,5 @@
+# error: providers[0]: expected a mapping, got null
+version: 1
+id: acme-eng
+providers:
+  -

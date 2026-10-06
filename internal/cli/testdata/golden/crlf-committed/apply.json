@@ -1,0 +1,79 @@
+{
+  "command": "apply",
+  "dry_run": false,
+  "hub": {
+    "dir": "$HUB",
+    "id": "acme-eng",
+    "commit": "$COMMIT"
+  },
+  "target": {
+    "root": "$TARGET",
+    "ref": "acme/svc",
+    "opt_in_file": ".engineering-assets.yml",
+    "opted_in": true
+  },
+  "selection": {
+    "packs": [
+      "base"
+    ],
+    "complete": true,
+    "unresolved": [],
+    "sources": {
+      "base": [
+        ".engineering-assets.yml"
+      ]
+    }
+  },
+  "entries": [
+    {
+      "path": ".github/pull_request_template.md",
+      "state": "current",
+      "action": "keep",
+      "pack": "base",
+      "from": "da9823e8fe7223ced65fd1d888c4086c5663d588",
+      "to": "",
+      "mode": "",
+      "detail": "",
+      "after_deletes": false
+    },
+    {
+      "path": "AGENTS.md",
+      "state": "local",
+      "action": "keep",
+      "pack": "base",
+      "from": "",
+      "to": "",
+      "mode": "",
+      "detail": "",
+      "after_deletes": false
+    },
+    {
+      "path": "docs/guide.md",
+      "state": "local",
+      "action": "keep",
+      "pack": "base",
+      "from": "",
+      "to": "",
+      "mode": "",
+      "detail": "",
+      "after_deletes": false
+    }
+  ],
+  "results": [],
+  "summary": {
+    "missing": 0,
+    "current": 1,
+    "outdated": 0,
+    "local": 2,
+    "ignored": 0,
+    "retired": 0,
+    "retired_local": 0,
+    "unsafe": 0,
+    "orphaned": 0,
+    "changes": 0,
+    "done": 0,
+    "skipped": 0,
+    "failed": 0
+  },
+  "warnings": []
+}

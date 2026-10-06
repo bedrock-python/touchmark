@@ -1,0 +1,3 @@
+# error: allow_mass_close.max: must be from 1 to 2147483647, got 0
+version: 1
+allow_mass_close: {max: 0, until: 2026-10-01}

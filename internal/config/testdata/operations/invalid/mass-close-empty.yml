@@ -1,0 +1,4 @@
+# error: allow_mass_close.max: required
+# error: allow_mass_close.until: required
+version: 1
+allow_mass_close: {}

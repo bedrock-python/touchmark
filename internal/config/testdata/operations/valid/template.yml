@@ -1,0 +1,11 @@
+# One-off operations that override a safeguard. They go through review like
+# packs, and only distribute on the default branch carries them out.
+#
+# recreate:
+#   - target: gh:acme/api
+#     head: <full commit id of the paused sync branch>
+# forget_declines:
+#   - target: gh:acme/docs
+#     pr: 44
+# allow_mass_close: { max: 400, until: 2026-10-01 }
+version: 1

@@ -1,0 +1,3 @@
+# error: ignore[0]: pattern
+# A no-break space is trimmed like any other space.
+ignore: ["\_"]

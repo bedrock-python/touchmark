@@ -1,0 +1,120 @@
+name: Bug Report
+description: Something isn't working as expected
+title: "[Bug]: "
+labels: ["bug", "triage"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! Please fill in as much detail as possible.
+
+        Leave out tokens, keys and the names of repositories that are not public. A vulnerability
+        goes to the [security policy](https://github.com/bedrock-python/touchmark/security/policy),
+        not here.
+
+  - type: input
+    id: version
+    attributes:
+      label: touchmark version
+      description: The output of `touchmark version`.
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: input
+    id: git-version
+    attributes:
+      label: git version
+      description: The output of `git --version` where touchmark runs. Leave it empty for the image and the Action, which bring their own.
+      placeholder: "2.45.2"
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      description: Where the hub or the targets live. Pick every one involved.
+      multiple: true
+      options:
+        - GitHub (github.com or GHE.com)
+        - GitHub Enterprise Server
+        - GitLab (gitlab.com)
+        - GitLab self-managed
+        - Gitea
+        - Forgejo
+        - None (a local command)
+    validations:
+      required: true
+
+  - type: input
+    id: platform-version
+    attributes:
+      label: Platform version
+      description: For a self-managed instance, Gitea or Forgejo.
+      placeholder: "GitLab 18.4, Gitea 1.27"
+
+  - type: dropdown
+    id: runs
+    attributes:
+      label: How touchmark runs
+      options:
+        - The GitHub Action
+        - The container image (GitLab CI, Gitea or Forgejo Actions, docker run)
+        - A release binary
+        - go install
+        - Built from source
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "ubuntu-24.04 runner, macOS 15, Windows 11"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the bug
+      description: A clear and concise description of the problem.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Minimal reproduction
+      description: The commands you ran, with their flags.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Configuration
+      description: The smallest hub.yml, targets.yml, .engineering-assets.yml or .touchmark/operations.yml that shows the problem.
+      render: yaml
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include the full output and the exit code. `--format json` gives the whole report.
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional context
+      description: Anything else that might help (the job log, the pull request touchmark opened, the platform's error).

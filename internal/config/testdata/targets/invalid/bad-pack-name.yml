@@ -1,0 +1,5 @@
+# error: targets[0].packs[0]: pack name "Python"
+version: 1
+targets:
+  - repo: acme/billing
+    packs: [Python]

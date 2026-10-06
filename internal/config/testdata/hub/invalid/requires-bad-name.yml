@@ -1,0 +1,6 @@
+# error: packs.claude.requires[0]: pack name "agents_v2"
+version: 1
+id: acme-eng
+packs:
+  claude:
+    requires: [agents_v2]

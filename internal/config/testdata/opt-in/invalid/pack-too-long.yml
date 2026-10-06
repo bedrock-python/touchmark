@@ -1,0 +1,2 @@
+# error: packs[0]: pack name "abcdefghij-abcdefghij-abcdefghij-abcdefghij-abcdefghij-abcdefghij" is longer than 64 characters
+packs: [abcdefghij-abcdefghij-abcdefghij-abcdefghij-abcdefghij-abcdefghij]

@@ -1,0 +1,110 @@
+# The touchmark GitHub Action. It runs touchmark from the image of its own
+# release (docs/reference/action.md): TM_VERSION below is the version of the
+# release this commit belongs to, which release-please writes in every
+# release pull request (release-please-config.json, extra-files).
+# scripts/action/run.sh resolves ghcr.io/bedrock-python/touchmark:<version>
+# to a digest, checks that the digest has a build provenance attestation made
+# by this repository's publish workflow on master (gh attestation verify),
+# and runs the image by that digest only. Pin the Action by commit, with the
+# version in a comment, and let Dependabot move it:
+#
+#   - uses: bedrock-python/touchmark@<commit> # vX.Y.Z
+#     with:
+#       command: distribute
+#     env:
+#       GITHUB_TOKEN: ${{ github.token }}
+#       TOUCHMARK_KEY_EXPOSED: ${{ needs.probe.outputs.exposed }}
+#       TOUCHMARK_WRITE_APP_ID: ${{ vars.TOUCHMARK_WRITE_APP_ID }}
+#       TOUCHMARK_WRITE_APP_KEY: ${{ secrets.TOUCHMARK_WRITE_APP_KEY }}
+#
+# Credentials are never inputs: the step passes them in env, under the names
+# touchmark reads (TOUCHMARK_[<ID>_]READ_TOKEN, …_WRITE_APP_KEY;
+# docs/reference/environment.md), where `touchmark check` finds them for the
+# isolation probe. The inputs map one to one to flags; there is no free-form
+# argument.
+#
+# It is a composite action that runs the image with docker as the runner's
+# user, not a container action (runs.using: docker), which GitHub runs as
+# the image's user and which needs root to write the workspace:
+# scripts/action/run.sh explains. It needs a Linux runner with docker,
+# docker buildx and gh, as GitHub's hosted Linux runners have.
+name: touchmark
+description: Keep shared files in sync across many repositories through pull requests, from an engineering-assets hub.
+author: bedrock-python
+branding:
+  icon: refresh-cw
+  color: blue
+
+inputs:
+  command:
+    description: "The command to run: check, plan, distribute, doctor or version."
+    required: true
+  hub:
+    description: The hub checkout, relative to the workspace (--hub). Check it out with fetch-depth 0.
+    required: false
+    default: "."
+  strict:
+    description: "plan, distribute, doctor: exit 3 on a blocked or deferred target, an incomplete resolve or a check that warns (--strict). true or false."
+    required: false
+    default: "false"
+  all:
+    description: "plan: in a hub pull request, plan every target, not only those of the packs it changes (--all). true or false."
+    required: false
+    default: "false"
+  comment:
+    description: "plan: keep the report in one comment of the hub pull request, through GITHUB_TOKEN (--comment). true or false."
+    required: false
+    default: "false"
+  assume-opt-in:
+    description: "plan: report as if every target had opted in (--assume-opt-in). true or false."
+    required: false
+    default: "false"
+  dry-run:
+    description: "distribute: check everything with the write account and write nothing (--dry-run). true or false."
+    required: false
+    default: "false"
+  only:
+    description: "plan, distribute, doctor: only these targets, comma-separated [PROVIDER:]PATH (--only)."
+    required: false
+    default: ""
+  deadline:
+    description: "distribute: start no target after this duration, such as 50m (--deadline). Default: 5h30m on GitHub Actions."
+    required: false
+    default: ""
+  format:
+    description: "The output format: text, json or markdown (--format; check takes text or json)."
+    required: false
+    default: ""
+  report:
+    description: "distribute, doctor: also write the JSON report to this file, relative to the workspace (--report)."
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: touchmark ${{ inputs.command }}
+      shell: bash
+      env:
+        # The image and the version of this release; on the default branch,
+        # the latest release's version, or 0.0.0 before the first one, which
+        # run.sh refuses. The step's own env: a workflow cannot override them.
+        TM_IMAGE: ghcr.io/bedrock-python/touchmark
+        TM_VERSION: "0.0.0" # x-release-please-version
+        # gh needs a token to start; with --bundle-from-oci it reads the
+        # attestation from the registry, not from the GitHub API. The
+        # container never gets it (run.sh passes CI, GITHUB_* and
+        # TOUCHMARK_* only).
+        GH_TOKEN: ${{ github.token }}
+        TM_COMMAND: ${{ inputs.command }}
+        TM_HUB: ${{ inputs.hub }}
+        TM_STRICT: ${{ inputs.strict }}
+        TM_ALL: ${{ inputs.all }}
+        TM_COMMENT: ${{ inputs.comment }}
+        TM_ASSUME_OPT_IN: ${{ inputs.assume-opt-in }}
+        TM_DRY_RUN: ${{ inputs.dry-run }}
+        TM_ONLY: ${{ inputs.only }}
+        TM_DEADLINE: ${{ inputs.deadline }}
+        TM_FORMAT: ${{ inputs.format }}
+        TM_REPORT: ${{ inputs.report }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/action/run.sh"

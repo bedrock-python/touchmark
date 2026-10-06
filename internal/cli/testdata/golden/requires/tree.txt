@@ -1,0 +1,4 @@
+.agents/shared.md  claude shared v1
+.engineering-assets.yml  version: 1
+AGENTS.md  agents AGENTS.md v1
+CLAUDE.md  claude CLAUDE.md v1

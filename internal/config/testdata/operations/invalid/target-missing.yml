@@ -1,0 +1,4 @@
+# error: forget_declines[0].target: required
+version: 1
+forget_declines:
+  - pr: 44

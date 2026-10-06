@@ -1,0 +1,18 @@
+# The single-provider shorthand without the required id.
+# error: id: required
+version: 1
+platform: gitlab                       # github | gitlab | gitea
+base_url: https://gitlab.example.com   # self-managed only
+branch: chore/sync-engineering-assets
+commit:
+  message: "chore: sync engineering assets"
+  author: { name: engineering-assets-bot, email: bot@example.com }
+pr:
+  title: "chore: sync engineering assets"
+  labels: [engineering-assets]
+sensitive_paths:                       # added to the built-in list
+  - deploy/**
+packs:                                 # pack metadata, optional
+  claude:
+    description: Claude Code skills, reviewer agent and settings
+    requires: [agents]

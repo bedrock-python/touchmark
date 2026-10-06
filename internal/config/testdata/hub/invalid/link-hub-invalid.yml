@@ -1,0 +1,5 @@
+# error: pr.link_hub: "sometimes" must be one of auto, always, never
+version: 1
+id: acme-eng
+pr:
+  link_hub: sometimes

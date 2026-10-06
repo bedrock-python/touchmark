@@ -1,0 +1,15 @@
+touchmark plan · hub acme-eng (github.com/712345678) @ $COMMIT · touchmark dev
+gh    github.com          read acme-read[bot]  write acme-write[bot]: not checked  resolve complete
+corp  gitlab.example.com  read tm-reader       write tm-writer: not checked        resolve complete
+
+  open       5  corp:platform/api, gh:acme/billing, gh:acme/docs and 2 more
+  update     1  gh:acme/sdk #1 (content)
+  unchanged  1  gh:acme/api #1
+  close      1  gh:acme/old #1 (no-diff)
+  skipped    2  gh:acme/archive (archived), gh:acme/web (not-opted-in)
+  blocked    1  gh:acme/cli #1 (branch-in-use)
+
+Warnings
+  hub head not checked: a local run cannot read the tip of the hub's default branch
+  gh:acme/tools: orphaned 1: docs/python.md
+Cost  gh ≈ 20 writes (<1 min) · corp ≈ 2 writes (<1 min) · 1 run

@@ -1,0 +1,3 @@
+# error: adopt_unmarked.until: "2026-02-29" is not a calendar date
+version: 1
+adopt_unmarked: {until: 2026-02-29}

@@ -1,0 +1,4 @@
+# error: unknown key "platfrom"
+version: 1
+id: acme-eng
+platfrom: github

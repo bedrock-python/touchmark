@@ -1,0 +1,6 @@
+# The README's hub.yml: the provider's type and URL come from the CI
+# environment, or locally from the hub's origin remote.
+version: 1
+id: acme-eng
+writer: acme-assets-write[bot]
+sign: always

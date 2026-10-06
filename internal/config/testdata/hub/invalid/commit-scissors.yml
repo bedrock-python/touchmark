@@ -1,0 +1,5 @@
+# error: commit.message: must not hold git's scissors line
+version: 1
+id: acme-eng
+commit:
+  message: "chore: sync\n\n# ------------------------ >8 ------------------------\nsee the hub"

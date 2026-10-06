@@ -1,0 +1,11 @@
+# error: version: must be 1, got 3
+# error: recreate[0].head: required
+# error: forget_declines[0].pr: must be a positive
+# error: allow_mass_close.until: required
+version: 3
+recreate:
+  - target: gh:acme/api
+forget_declines:
+  - target: gh:acme/docs
+    pr: 0
+allow_mass_close: {max: 3}

@@ -1,0 +1,12 @@
+touchmark status · hub acme-eng @ $COMMIT · target acme/svc
+packs: base (.engineering-assets.yml)
+
+  delete  retired        tools/legacy/run.md               base  no longer shipped by pack base
+  delete  retired        scripts/old.md                    base  no longer shipped by pack base
+  create  missing        .github/pull_request_template.md  base
+  create  missing        AGENTS.md                         base
+  keep    retired-local  NOTES.md                          base  no longer shipped; the content is the target's own
+  create  missing        docs/guide.md                     base
+
+missing 3 · retired 2 · retired-local 1
+5 changes to apply: run touchmark apply

@@ -1,0 +1,5 @@
+# error: forget_declines[0].target: "gh:acme/../docs": ".." path segment
+version: 1
+forget_declines:
+  - target: gh:acme/../docs
+    pr: 44

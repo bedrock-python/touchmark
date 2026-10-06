@@ -1,0 +1,151 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/bedrock-python/touchmark/master/schemas/targets.schema.json",
+  "title": "touchmark targets.yml",
+  "description": "Which repositories a hub delivers to and which packs they get. Format v1; the pre-v1 format, a bare repos: list, is also accepted.",
+  "type": "object",
+  "oneOf": [
+    { "$ref": "#/$defs/v1" },
+    { "$ref": "#/$defs/legacy" }
+  ],
+  "$defs": {
+    "v1": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "description": "Format version. Only 1 exists; when absent, 1 is assumed with a warning.",
+          "type": "integer",
+          "const": 1
+        },
+        "defaults": {
+          "description": "Applies to every target.",
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "properties": {
+            "provider": {
+              "description": "Provider of entries that name none. Needed when hub.yml has several providers.",
+              "$ref": "#/$defs/providerId"
+            },
+            "packs": {
+              "description": "Packs every target gets, before the packs of its entries and its opt-in file.",
+              "$ref": "#/$defs/packList"
+            }
+          }
+        },
+        "targets": {
+          "description": "Repositories, organisations and groups to deliver to, in delivery order.",
+          "type": ["array", "null"],
+          "items": { "$ref": "#/$defs/entry" }
+        },
+        "exclude": {
+          "description": "Repositories never delivered to, even when an entry selects them.",
+          "type": ["array", "null"],
+          "items": { "$ref": "#/$defs/ref" }
+        }
+      }
+    },
+    "legacy": {
+      "description": "The pre-v1 format: a bare list of repository paths, read as repo: entries.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repos"],
+      "properties": {
+        "repos": {
+          "deprecated": true,
+          "type": ["array", "null"],
+          "items": { "$ref": "#/$defs/ref" }
+        }
+      }
+    },
+    "entry": {
+      "oneOf": [
+        { "$ref": "#/$defs/repoEntry" },
+        { "$ref": "#/$defs/orgEntry" },
+        { "$ref": "#/$defs/groupEntry" }
+      ]
+    },
+    "repoEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repo"],
+      "properties": {
+        "repo": {
+          "description": "One repository: owner/name or group/sub/project, optionally prefixed with a provider id and a colon.",
+          "$ref": "#/$defs/ref"
+        },
+        "provider": { "$ref": "#/$defs/providerId" },
+        "packs": { "$ref": "#/$defs/packList" }
+      }
+    },
+    "orgEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["org"],
+      "properties": {
+        "org": {
+          "description": "Every repository in a GitHub organisation or a GitLab, Gitea or Forgejo namespace (a synonym of group).",
+          "$ref": "#/$defs/namespace"
+        },
+        "provider": { "$ref": "#/$defs/providerId" },
+        "topics": { "$ref": "#/$defs/topics" },
+        "subgroups": { "$ref": "#/$defs/subgroups" },
+        "forks": { "$ref": "#/$defs/forks" },
+        "packs": { "$ref": "#/$defs/packList" }
+      }
+    },
+    "groupEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["group"],
+      "properties": {
+        "group": {
+          "description": "Every repository in a GitLab group, with its subgroups unless subgroups is false (a synonym of org).",
+          "$ref": "#/$defs/namespace"
+        },
+        "provider": { "$ref": "#/$defs/providerId" },
+        "topics": { "$ref": "#/$defs/topics" },
+        "subgroups": { "$ref": "#/$defs/subgroups" },
+        "forks": { "$ref": "#/$defs/forks" },
+        "packs": { "$ref": "#/$defs/packList" }
+      }
+    },
+    "topics": {
+      "description": "Only repositories with all of these topics.",
+      "type": ["array", "null"],
+      "items": { "type": "string", "pattern": "[^\t\n\u000b\f\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]" }
+    },
+    "subgroups": {
+      "description": "Include repositories in nested groups. Default: true.",
+      "type": ["boolean", "null"]
+    },
+    "forks": {
+      "description": "Include forks. Default: false.",
+      "type": "boolean"
+    },
+    "packList": {
+      "type": ["array", "null"],
+      "items": { "$ref": "#/$defs/packName" }
+    },
+    "packName": {
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+    },
+    "providerId": {
+      "description": "Id of a provider in hub.yml.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,31}$"
+    },
+    "ref": {
+      "type": "string",
+      "maxLength": 512,
+      "pattern": "^([a-z][a-z0-9-]{0,31}:)?([A-Za-z0-9_-][A-Za-z0-9_.-]*|\\.[A-Za-z0-9_-][A-Za-z0-9_.-]*|\\.\\.[A-Za-z0-9_.-]+)(/([A-Za-z0-9_-][A-Za-z0-9_.-]*|\\.[A-Za-z0-9_-][A-Za-z0-9_.-]*|\\.\\.[A-Za-z0-9_.-]+))+$"
+    },
+    "namespace": {
+      "type": "string",
+      "maxLength": 512,
+      "pattern": "^([a-z][a-z0-9-]{0,31}:)?([A-Za-z0-9_-][A-Za-z0-9_.-]*|\\.[A-Za-z0-9_-][A-Za-z0-9_.-]*|\\.\\.[A-Za-z0-9_.-]+)(/([A-Za-z0-9_-][A-Za-z0-9_.-]*|\\.[A-Za-z0-9_-][A-Za-z0-9_.-]*|\\.\\.[A-Za-z0-9_.-]+))*$"
+    }
+  }
+}

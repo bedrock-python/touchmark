@@ -1,0 +1,4 @@
+# error: targets[0].group: "acme//platform": empty path segment
+version: 1
+targets:
+  - group: acme//platform

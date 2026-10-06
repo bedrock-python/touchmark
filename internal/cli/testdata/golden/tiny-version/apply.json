@@ -1,0 +1,87 @@
+{
+  "command": "apply",
+  "dry_run": false,
+  "hub": {
+    "dir": "$HUB",
+    "id": "acme-eng",
+    "commit": "$COMMIT"
+  },
+  "target": {
+    "root": "$TARGET",
+    "ref": "acme/svc",
+    "opt_in_file": ".engineering-assets.yml",
+    "opted_in": true
+  },
+  "selection": {
+    "packs": [
+      "base"
+    ],
+    "complete": true,
+    "unresolved": [],
+    "sources": {
+      "base": [
+        ".engineering-assets.yml"
+      ]
+    }
+  },
+  "entries": [
+    {
+      "path": "AGENTS.md",
+      "state": "missing",
+      "action": "create",
+      "pack": "base",
+      "from": "",
+      "to": "f14d69790c939769881dcc505507364b7d1f2f55",
+      "mode": "100644",
+      "detail": "",
+      "after_deletes": false
+    },
+    {
+      "path": "config.json",
+      "state": "local",
+      "action": "keep",
+      "pack": "base",
+      "from": "",
+      "to": "",
+      "mode": "",
+      "detail": "",
+      "after_deletes": false
+    },
+    {
+      "path": "empty/.gitkeep",
+      "state": "retired-local",
+      "action": "keep",
+      "pack": "base",
+      "from": "",
+      "to": "",
+      "mode": "",
+      "detail": "no longer shipped; the content is the target's own",
+      "after_deletes": false
+    }
+  ],
+  "results": [
+    {
+      "path": "AGENTS.md",
+      "action": "create",
+      "state": "missing",
+      "outcome": "done",
+      "detail": ""
+    }
+  ],
+  "summary": {
+    "missing": 1,
+    "current": 0,
+    "outdated": 0,
+    "local": 1,
+    "ignored": 0,
+    "retired": 0,
+    "retired_local": 1,
+    "unsafe": 0,
+    "orphaned": 0,
+    "changes": 1,
+    "done": 1,
+    "skipped": 0,
+    "failed": 0
+  },
+  "warnings": []
+}

@@ -1,0 +1,6 @@
+.claude/settings.json  python-service settings v1
+.engineering-assets.yml  version: 1
+.github/pull_request_template.md  base PR template v1
+AGENTS.md  base AGENTS.md v1
+docs/guide.md  base guide v1
+ruff.toml  # python-service ruff.toml v1

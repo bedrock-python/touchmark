@@ -1,0 +1,34 @@
+{
+  "command": "apply",
+  "dry_run": false,
+  "hub": {
+    "dir": "$HUB",
+    "id": "acme-eng",
+    "commit": "$COMMIT"
+  },
+  "target": {
+    "root": "$TARGET",
+    "ref": "acme/svc",
+    "opt_in_file": ".engineering-assets.yml",
+    "opted_in": false
+  },
+  "selection": null,
+  "entries": [],
+  "results": [],
+  "summary": {
+    "missing": 0,
+    "current": 0,
+    "outdated": 0,
+    "local": 0,
+    "ignored": 0,
+    "retired": 0,
+    "retired_local": 0,
+    "unsafe": 0,
+    "orphaned": 0,
+    "changes": 0,
+    "done": 0,
+    "skipped": 0,
+    "failed": 0
+  },
+  "warnings": []
+}

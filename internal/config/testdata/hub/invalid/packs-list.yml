@@ -1,0 +1,4 @@
+# error: expected a mapping, got a list
+version: 1
+id: acme-eng
+packs: [agents, claude]

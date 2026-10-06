@@ -1,0 +1,6 @@
+# Quoted numbers are strings, and so are unquoted dates.
+version: 1
+id: "123"
+pr:
+  title: 2026-09-24
+  labels: ["2026", "true"]

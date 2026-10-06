@@ -1,0 +1,5 @@
+# error: platform: required with base_url
+version: 1
+id: acme-eng
+writer: touchmark-bot
+base_url: https://git.example.com

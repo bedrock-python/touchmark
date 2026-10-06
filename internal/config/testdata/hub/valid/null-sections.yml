@@ -1,0 +1,15 @@
+# Keys left empty, as a template leaves them for people to fill in.
+version: 1
+id: acme-eng
+commit:
+pr:
+  # labels: [engineering-assets]
+limits:
+memory:
+security:
+providers:
+sensitive_paths:
+packs:
+  agents:
+  claude:
+    requires:

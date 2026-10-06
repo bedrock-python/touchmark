@@ -1,0 +1,9 @@
+version: 1
+defaults:
+  packs:
+targets:
+  - org: acme
+    topics:
+    subgroups:
+    packs:
+exclude:

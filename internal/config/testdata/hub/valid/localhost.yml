@@ -1,0 +1,9 @@
+version: 1
+id: acme-eng
+providers:
+  - id: local
+    type: forgejo
+    url: http://localhost:3000
+  - id: loopback
+    type: gitea
+    url: http://127.0.0.1:3001/

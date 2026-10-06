@@ -1,0 +1,11 @@
+touchmark status · hub acme-eng @ $COMMIT · target acme/svc
+packs: base (.engineering-assets.yml)
+
+  keep    ignored  .claude/settings.json             base  listed under ignore
+  keep    ignored  .claude/skills/review/SKILL.md    base  listed under ignore
+  create  missing  .github/pull_request_template.md  base
+  create  missing  AGENTS.md                         base
+  create  missing  docs/guide.md                     base
+
+missing 3 · ignored 2
+3 changes to apply: run touchmark apply

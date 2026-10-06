@@ -1,0 +1,4 @@
+# error: opt_in_file: invalid repository path: leading or trailing slash
+version: 1
+id: acme-eng
+opt_in_file: /etc/engineering-assets.yml

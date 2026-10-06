@@ -1,0 +1,4 @@
+# error: targets[0].repo: "acme/../billing": ".." path segment
+version: 1
+targets:
+  - repo: acme/../billing

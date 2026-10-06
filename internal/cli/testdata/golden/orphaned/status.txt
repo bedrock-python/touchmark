@@ -1,0 +1,10 @@
+touchmark status · hub acme-eng @ $COMMIT · target acme/svc
+packs: base (defaults)
+
+  create  missing   .github/pull_request_template.md  base
+  create  missing   AGENTS.md                         base
+  keep    orphaned  EXTRA.md                          extra  pack extra is no longer selected
+  create  missing   docs/guide.md                     base
+
+missing 3 · orphaned 1
+3 changes to apply: run touchmark apply

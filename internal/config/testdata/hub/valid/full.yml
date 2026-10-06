@@ -1,0 +1,54 @@
+# Every hub.yml field, with two providers.
+version: 1
+id: acme-eng
+branch: touchmark/acme-eng
+branch_aliases: [chore/sync-engineering-assets]
+previous_fingerprints: [gitlab.example.com/1234, "github.com/712345678", "git.example.com:8443/7"]
+opt_in_file: .github/engineering-assets.yml
+commit:
+  message: |
+    chore: sync engineering assets
+
+    Delivered by touchmark.
+pr:
+  title: "chore: sync engineering assets"
+  labels: [engineering-assets, automation]
+  draft: true
+  intro_file: docs/pr-intro.md
+  link_hub: never
+limits:
+  max_new_prs_per_run: 0
+  max_close_fraction: 1
+memory:
+  auto_close_cooldown: 12h
+security:
+  write_isolation: external
+  private_targets_in_public_hub: deliver
+providers:
+  - id: gh
+    type: github
+    writer: "acme-touchmark[bot]"
+    known_authors: ["old-app[bot]"]
+    automation_accounts:
+      - "dependabot[bot]"
+      - "stale[bot]"
+    sign: always
+    limits: { writes_per_minute: 30, writes_per_hour: 300, reads: 4 }
+  - id: corp
+    type: gitlab
+    url: https://gitlab.example.com:8443/gitlab/
+    api_url: https://gitlab.example.com:8443/gitlab/api/v4
+    ca_file: certs/corp-ca.pem
+    writer: touchmark-writer
+    sign: auto
+sensitive_paths: [deploy/**, "infra/*.tf"]
+packs:
+  agents:
+    description: AGENTS.md and the project profile
+    formerly: [base]
+  claude:
+    description: Claude Code skills, reviewer agent and settings
+    requires: [agents]
+  python-service:
+    requires: [agents]
+    formerly: [python]

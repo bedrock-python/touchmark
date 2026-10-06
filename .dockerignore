@@ -1,0 +1,12 @@
+# A build from source (Dockerfile, stage source) needs the Go sources alone:
+# everything else stays out of the build context. A release builds the
+# image from the release archives instead, in a context of its own
+# (scripts/release/build-image.sh).
+*
+!go.mod
+!go.sum
+!cmd/
+!internal/
+!schemas/
+**/*_test.go
+**/testdata/

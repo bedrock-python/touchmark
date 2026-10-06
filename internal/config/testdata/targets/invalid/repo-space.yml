@@ -1,0 +1,4 @@
+# error: targets[0].repo: "acme/my billing": character ' ' is not allowed
+version: 1
+targets:
+  - repo: acme/my billing

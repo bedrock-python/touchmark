@@ -1,0 +1,24 @@
+# golangci-lint v2, on top of gofmt and go vet: `make check` and the lint job
+# of .github/workflows/ci.yml run it at the version both pin.
+version: "2"
+
+run:
+  # The live tests build only with the tag e2e: lint them with the rest.
+  build-tags:
+    - e2e
+
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    - errorlint # errors.Is/As instead of == and type switches on wrapped errors
+    - misspell
+    - nolintlint
+    - unconvert
+    - usestdlibvars
+  exclusions:
+    presets:
+      - std-error-handling
+
+formatters:
+  enable:
+    - gofmt

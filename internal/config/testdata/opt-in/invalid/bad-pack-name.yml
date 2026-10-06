@@ -1,0 +1,2 @@
+# error: packs[0]: pack name "Claude"
+packs: [Claude]

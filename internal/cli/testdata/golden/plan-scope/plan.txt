@@ -1,0 +1,9 @@
+touchmark plan · hub acme-eng (github.com/712345678) @ $COMMIT (PR #41) · touchmark dev
+gh    github.com          read acme-read[bot]  write acme-write[bot]: not checked  resolve complete
+corp  gitlab.example.com  read tm-reader       write tm-writer: not checked        resolve complete
+scope: pack python changed → 2 of 11 targets (--all for every target)
+
+  open    1  corp:platform/api
+  update  1  gh:acme/sdk #1 (content)
+
+Cost  gh ≈ 2 writes (<1 min) · corp ≈ 2 writes (<1 min) · 1 run

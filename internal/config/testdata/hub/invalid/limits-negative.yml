@@ -1,0 +1,5 @@
+# error: limits.max_new_prs_per_run: must not be negative
+version: 1
+id: acme-eng
+limits:
+  max_new_prs_per_run: -1

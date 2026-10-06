@@ -1,0 +1,7 @@
+# DL3018: apk versions are not pinned. git comes from Alpine's repository at
+# build time on purpose (the Dockerfile says why): an Alpine branch keeps only
+# the latest build of a package, so a pinned version stops building once the
+# branch moves on, and the Dockerfile's own checks hold what matters, git
+# 2.45 or newer and no git-lfs.
+ignored:
+  - DL3018

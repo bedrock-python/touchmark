@@ -1,0 +1,4 @@
+# error: expected a mapping, got a string
+version: 1
+targets:
+  - acme/billing

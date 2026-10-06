@@ -1,0 +1,13 @@
+# Anchors, aliases and merge keys.
+version: 1
+id: acme-eng
+providers:
+  - &github
+    id: github
+    type: github
+    known_authors: &authors ["old-app[bot]", "older-app[bot]"]
+    sign: always
+  - <<: *github
+    id: ghe
+    url: https://github.example.com
+    known_authors: *authors

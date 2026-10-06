@@ -1,0 +1,5 @@
+# error: forget_declines[0].pr: expected an integer, got a number (44.5)
+version: 1
+forget_declines:
+  - target: gh:acme/docs
+    pr: 44.5

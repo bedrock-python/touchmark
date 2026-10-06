@@ -1,0 +1,87 @@
+{
+  "command": "apply",
+  "dry_run": false,
+  "hub": {
+    "dir": "$HUB",
+    "id": "acme-eng",
+    "commit": "$COMMIT"
+  },
+  "target": {
+    "root": "$TARGET",
+    "ref": "acme/svc",
+    "opt_in_file": ".engineering-assets.yml",
+    "opted_in": true
+  },
+  "selection": {
+    "packs": [
+      "base"
+    ],
+    "complete": true,
+    "unresolved": [],
+    "sources": {
+      "base": [
+        ".engineering-assets.yml"
+      ]
+    }
+  },
+  "entries": [
+    {
+      "path": ".github/pull_request_template.md",
+      "state": "current",
+      "action": "keep",
+      "pack": "base",
+      "from": "da9823e8fe7223ced65fd1d888c4086c5663d588",
+      "to": "",
+      "mode": "",
+      "detail": "",
+      "after_deletes": false
+    },
+    {
+      "path": "AGENTS.md",
+      "state": "outdated",
+      "action": "update",
+      "pack": "base",
+      "from": "f14d69790c939769881dcc505507364b7d1f2f55",
+      "to": "a518023d047aa414783230a696ea1ed1cf7c8b21",
+      "mode": "100644",
+      "detail": "",
+      "after_deletes": false
+    },
+    {
+      "path": "docs/guide.md",
+      "state": "current",
+      "action": "keep",
+      "pack": "base",
+      "from": "b05b6d090e03924f92073d05c2f7471dfc33dc66",
+      "to": "",
+      "mode": "",
+      "detail": "",
+      "after_deletes": false
+    }
+  ],
+  "results": [
+    {
+      "path": "AGENTS.md",
+      "action": "update",
+      "state": "outdated",
+      "outcome": "done",
+      "detail": ""
+    }
+  ],
+  "summary": {
+    "missing": 0,
+    "current": 2,
+    "outdated": 1,
+    "local": 0,
+    "ignored": 0,
+    "retired": 0,
+    "retired_local": 0,
+    "unsafe": 0,
+    "orphaned": 0,
+    "changes": 1,
+    "done": 1,
+    "skipped": 0,
+    "failed": 0
+  },
+  "warnings": []
+}

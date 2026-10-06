@@ -1,0 +1,521 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/bedrock-python/touchmark/master/schemas/report.schema.json",
+  "title": "touchmark delivery report",
+  "description": "The report of touchmark plan and distribute (report/v1): the providers, every target with its outcome, and the estimated (plan) or actual (distribute) API writes. In plan an outcome means what distribute would do. A non-public target of a public hub is only counted: its entry has no path and no repository id.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "command", "engine", "hub", "outcome", "strict", "providers", "targets", "ops", "warnings", "summary", "sweep", "cost"],
+  "properties": {
+    "schema": {
+      "description": "Report format: report/v1.",
+      "const": "report/v1"
+    },
+    "command": {
+      "description": "The command that wrote the report.",
+      "enum": ["plan", "distribute"]
+    },
+    "dry_run": {
+      "description": "Set for distribute --dry-run: nothing was written, and outcomes and writes mean what distribute would do.",
+      "type": "boolean"
+    },
+    "engine": {
+      "description": "touchmark's version.",
+      "type": "string"
+    },
+    "hub": { "$ref": "#/$defs/hub" },
+    "outcome": {
+      "description": "completed, or superseded when the hub's default branch had moved on and nothing was inspected or written.",
+      "enum": ["completed", "superseded"]
+    },
+    "strict": {
+      "description": "The run had --strict: blocked and deferred targets and an incomplete resolve exit with code 3.",
+      "type": "boolean"
+    },
+    "scope": { "$ref": "#/$defs/scope" },
+    "assume_opt_in": {
+      "description": "plan --assume-opt-in: every target counts as opted in, for this report only.",
+      "type": "boolean"
+    },
+    "providers": {
+      "description": "The hub's providers, in hub.yml order.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/provider" }
+    },
+    "targets": {
+      "description": "Every target, sorted by provider and path.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/target" }
+    },
+    "ops": {
+      "description": "Audit journal of every mutation distribute made; empty for plan.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/op" }
+    },
+    "warnings": {
+      "description": "Warnings about the run as a whole; warnings about one target are in the target.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "summary": {
+      "description": "Targets per outcome, every outcome present.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["opened", "updated", "unchanged", "closed", "declined", "skipped", "blocked", "deferred", "failed"],
+      "properties": {
+        "opened": { "$ref": "#/$defs/count" },
+        "updated": { "$ref": "#/$defs/count" },
+        "unchanged": { "$ref": "#/$defs/count" },
+        "closed": { "$ref": "#/$defs/count" },
+        "declined": { "$ref": "#/$defs/count" },
+        "skipped": { "$ref": "#/$defs/count" },
+        "blocked": { "$ref": "#/$defs/count" },
+        "deferred": { "$ref": "#/$defs/count" },
+        "failed": { "$ref": "#/$defs/count" }
+      }
+    },
+    "sweep": { "$ref": "#/$defs/sweep" },
+    "cost": {
+      "description": "Writes per provider id (HTTP writes of the API and git pushes): estimated by plan, counted by distribute.",
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/providerId" },
+      "additionalProperties": { "$ref": "#/$defs/count" }
+    },
+    "estimate": { "$ref": "#/$defs/estimate" },
+    "paths": {
+      "description": "What the pushes of a plan or a dry run change, by path across the targets: sensitive paths first, then deletions, updates, mode changes and additions, each by path.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/pathChange" }
+    },
+    "operations": {
+      "description": "What each one-off operation does in a plan or a dry run: the entries of .touchmark/operations.yml in file order (recreate, forget_declines, allow_mass_close, adopt_unmarked), then the operation flags of a local run.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/operation" }
+    },
+    "notes": {
+      "description": "Free-form remarks about the run, by name.",
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    }
+  },
+  "$defs": {
+    "count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "providerId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,31}$"
+    },
+    "commit": {
+      "description": "Full commit id: 40 or 64 lowercase hex digits.",
+      "type": "string",
+      "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"
+    },
+    "hub": {
+      "description": "The hub the run read.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "fingerprint", "commit"],
+      "properties": {
+        "id": {
+          "description": "hub.yml's id.",
+          "type": "string",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+        },
+        "fingerprint": {
+          "description": "The hub's host and immutable repository id, e.g. github.com/712345678.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9.-]+(:[0-9]{1,5})?/[0-9]+$"
+        },
+        "commit": { "$ref": "#/$defs/commit" },
+        "pr": {
+          "description": "The hub pull request plan ran on.",
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "host", "write_check", "resolve_complete"],
+      "properties": {
+        "id": { "$ref": "#/$defs/providerId" },
+        "type": { "enum": ["github", "gitlab", "gitea", "forgejo"] },
+        "host": {
+          "description": "The provider's host, with a port when it has one.",
+          "type": "string",
+          "minLength": 1
+        },
+        "reader": {
+          "description": "Login of the read account.",
+          "type": "string"
+        },
+        "writer": {
+          "description": "Login of the write account.",
+          "type": "string"
+        },
+        "write_check": {
+          "description": "What is known about the write account's access, e.g. \"not checked\".",
+          "type": "string"
+        },
+        "resolve_complete": {
+          "description": "Every organisation and group of targets.yml was listed in full.",
+          "type": "boolean"
+        },
+        "missing": {
+          "description": "Repositories targets.yml names that the platform does not know, as <provider>:<path>.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "error": {
+          "description": "Why the provider was unavailable.",
+          "type": "string"
+        }
+      }
+    },
+    "pr": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["number"],
+      "properties": {
+        "number": { "type": "integer", "minimum": 1 },
+        "url": { "type": "string" },
+        "state": { "enum": ["open", "closed", "merged"] }
+      }
+    },
+    "changes": {
+      "description": "The changes D holds, by action.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["create", "update", "delete", "chmod"],
+      "properties": {
+        "create": { "$ref": "#/$defs/count" },
+        "update": { "$ref": "#/$defs/count" },
+        "delete": { "$ref": "#/$defs/count" },
+        "chmod": { "$ref": "#/$defs/count" }
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "host", "repo_id", "path", "outcome", "changes", "writes"],
+      "properties": {
+        "provider": { "$ref": "#/$defs/providerId" },
+        "host": { "type": "string", "minLength": 1 },
+        "repo_id": {
+          "description": "The repository's immutable id on the platform.",
+          "type": "string"
+        },
+        "path": {
+          "description": "The repository's canonical path.",
+          "type": "string"
+        },
+        "outcome": { "enum": ["opened", "updated", "unchanged", "closed", "declined", "skipped", "blocked", "deferred", "failed"] },
+        "reason": { "type": "string", "minLength": 1 },
+        "pr": { "$ref": "#/$defs/pr" },
+        "key": {
+          "description": "Content key of the changes; absent when there are none.",
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "packs": {
+          "description": "The packs the target gets, in layering order.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "opt_in_assumed": {
+          "description": "plan --assume-opt-in planned the target as if it had an empty opt-in file: it has none, or one that is not a regular file.",
+          "type": "boolean"
+        },
+        "changes": { "$ref": "#/$defs/changes" },
+        "orphaned": {
+          "description": "Files a pack the target no longer gets shipped, still unchanged in the target.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "warnings": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "writes": {
+          "description": "Writes for this target (HTTP writes of the API and git pushes): estimated by plan, counted by distribute.",
+          "$ref": "#/$defs/count"
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "outcome": { "const": "opened" } } },
+          "then": { "not": { "required": ["reason"] } }
+        },
+        {
+          "if": { "properties": { "outcome": { "const": "updated" } } },
+          "then": {
+            "required": ["reason"],
+            "properties": { "reason": { "enum": ["content", "rebase", "recreate", "body", "title", "base-renamed"] } }
+          }
+        },
+        {
+          "if": { "properties": { "outcome": { "const": "unchanged" } } },
+          "then": { "not": { "required": ["reason"] } }
+        },
+        {
+          "if": { "properties": { "outcome": { "const": "closed" } } },
+          "then": {
+            "required": ["reason"],
+            "properties": { "reason": { "enum": ["no-diff", "opted-out", "target-dropped", "duplicate"] } }
+          }
+        },
+        {
+          "if": { "properties": { "outcome": { "const": "declined" } } },
+          "then": { "required": ["pr"], "not": { "required": ["reason"] } }
+        },
+        {
+          "if": { "properties": { "outcome": { "const": "skipped" } } },
+          "then": {
+            "required": ["reason"],
+            "properties": { "reason": { "enum": ["not-opted-in", "archived", "disabled", "empty", "mirror", "pending-deletion", "prs-disabled", "sha256", "unsafe-opt-in", "private-in-public-hub", "superseded"] } }
+          }
+        },
+        {
+          "if": { "properties": { "outcome": { "const": "blocked" } } },
+          "then": {
+            "required": ["reason"],
+            "properties": {
+              "reason": {
+                "anyOf": [
+                  { "enum": ["edited", "branch-taken", "branch-in-use", "opt-in-invalid", "marker-invalid", "cannot-sign", "archived", "mass-close"] },
+                  { "pattern": "^rules:[^ ]+$" },
+                  { "pattern": "^permission:[^ ]+$" }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "outcome": { "const": "deferred" } } },
+          "then": {
+            "required": ["reason"],
+            "properties": { "reason": { "enum": ["rate-limit", "deadline", "rollout-limit", "provider-down", "interrupted", "cooldown"] } }
+          }
+        },
+        {
+          "if": { "properties": { "outcome": { "const": "failed" } } },
+          "then": {
+            "required": ["reason"],
+            "properties": { "reason": { "enum": ["transient", "auth", "access", "git", "integrity", "race", "secret-exposure", "internal"] } }
+          }
+        },
+        {
+          "description": "A non-public target of a public hub is never named: its path and repository id are empty, and it has no pull request, content key, packs, orphaned files or warnings. Besides skipped:private-in-public-hub, such a target can have the outcome of the sweep that closes a pull request of touchmark's in it (closed, blocked, deferred or failed). Every other target has a path and a repository id.",
+          "if": {
+            "properties": { "path": { "const": "" } }
+          },
+          "then": {
+            "properties": { "repo_id": { "const": "" } },
+            "not": {
+              "anyOf": [
+                { "required": ["pr"] },
+                { "required": ["key"] },
+                { "required": ["packs"] },
+                { "required": ["orphaned"] },
+                { "required": ["warnings"] }
+              ]
+            }
+          },
+          "else": {
+            "properties": { "repo_id": { "minLength": 1 } }
+          }
+        },
+        {
+          "description": "A target skipped as private in a public hub is one the report does not name.",
+          "if": {
+            "required": ["reason"],
+            "properties": { "reason": { "const": "private-in-public-hub" } }
+          },
+          "then": {
+            "properties": { "path": { "const": "" } }
+          }
+        }
+      ]
+    },
+    "op": {
+      "description": "One mutation of distribute.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["time", "account", "target", "kind"],
+      "properties": {
+        "time": { "type": "string", "format": "date-time" },
+        "account": {
+          "description": "Login of the account that wrote.",
+          "type": "string"
+        },
+        "target": {
+          "description": "The target as <provider>:<path>.",
+          "type": "string"
+        },
+        "kind": {
+          "description": "What the mutation did: a git push, a pull request created or edited, a comment, a branch deleted, a label created, or a step of an API commit (the commit, the refs moved, a stage ref deleted).",
+          "enum": ["push", "create-pr", "edit-pr", "comment", "delete-branch", "create-label", "api-commit", "update-refs", "delete-ref"]
+        },
+        "pr": { "type": "integer", "minimum": 1 },
+        "before": {
+          "description": "What the mutation replaced, e.g. the branch head before a push.",
+          "type": "string"
+        },
+        "after": {
+          "description": "What the mutation left, e.g. the branch head after a push.",
+          "type": "string"
+        }
+      }
+    },
+    "scope": {
+      "description": "The part of the fleet a plan in a hub pull request processed in full: every target (all), the targets whose final pack list holds a pack the pull request changes (packs), or none, when it changes only hub files no target receives (hub). The targets outside the scope are only counted.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "processed", "total"],
+      "properties": {
+        "mode": { "enum": ["all", "packs", "hub"] },
+        "reason": {
+          "description": "What decided the mode: --all, the files every target depends on that changed, or why the scope could not be computed.",
+          "type": "string"
+        },
+        "packs": {
+          "description": "The packs the pull request changes.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "base": { "$ref": "#/$defs/commit" },
+        "processed": {
+          "description": "The targets the plan processed in full.",
+          "$ref": "#/$defs/count"
+        },
+        "total": {
+          "description": "The targets the resolve found.",
+          "$ref": "#/$defs/count"
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "mode": { "const": "packs" } } },
+          "then": { "required": ["packs"], "properties": { "packs": { "minItems": 1 } } },
+          "else": { "not": { "required": ["packs"] } }
+        }
+      ]
+    },
+    "estimate": {
+      "description": "What the writes of a plan or a dry run take: per provider the writes and the time its write limits give them, and the runs the rollout needs under limits.max_new_prs_per_run.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["new_prs", "max_new_prs_per_run", "runs", "providers"],
+      "properties": {
+        "new_prs": {
+          "description": "Pull requests the rollout opens, in this run and the next ones.",
+          "$ref": "#/$defs/count"
+        },
+        "max_new_prs_per_run": { "$ref": "#/$defs/count" },
+        "runs": {
+          "description": "Runs distribute needs to open them all: 0 when nothing is written, or when max_new_prs_per_run is 0 and some would open.",
+          "$ref": "#/$defs/count"
+        },
+        "providers": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/providerId" },
+          "additionalProperties": { "$ref": "#/$defs/providerEstimate" }
+        }
+      }
+    },
+    "pathChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "path", "targets"],
+      "properties": {
+        "action": { "enum": ["add", "update", "delete", "chmod"] },
+        "path": { "type": "string", "minLength": 1 },
+        "sensitive": {
+          "description": "The path matches a sensitive pattern (built-in or hub.yml's sensitive_paths) or is written executable.",
+          "type": "boolean"
+        },
+        "targets": {
+          "description": "How many targets the change goes to.",
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "operation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "effect", "detail"],
+      "properties": {
+        "kind": { "enum": ["recreate", "forget_declines", "allow_mass_close", "adopt_unmarked"] },
+        "flag": {
+          "description": "The operation is a flag of a local run, not an entry of operations.yml.",
+          "type": "boolean"
+        },
+        "target": {
+          "description": "The entry's target as operations.yml writes it; absent for a target a public hub's report does not name.",
+          "type": "string",
+          "minLength": 1
+        },
+        "provider": { "$ref": "#/$defs/providerId" },
+        "pr": {
+          "description": "The pull request the entry names (forget_declines) or whose branch it rebuilds (recreate).",
+          "type": "integer",
+          "minimum": 1
+        },
+        "head": { "$ref": "#/$defs/commit" },
+        "max": { "type": "integer", "minimum": 1 },
+        "until": {
+          "description": "The last day the entry is in force: YYYY-MM-DD, UTC.",
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "effect": {
+          "description": "applies: the entry changes what the run does; none: it is in force and changes nothing; expired: its date has passed; unknown: the run cannot tell (its target was not inspected).",
+          "enum": ["applies", "none", "expired", "unknown"]
+        },
+        "detail": { "type": "string", "minLength": 1 }
+      }
+    },
+    "providerEstimate": {
+      "description": "One provider's writes (HTTP writes of the API and git pushes) and the seconds its write limits give them.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["writes", "seconds"],
+      "properties": {
+        "writes": {
+          "description": "This run's writes by the git path: every push one write.",
+          "$ref": "#/$defs/count"
+        },
+        "seconds": { "$ref": "#/$defs/count" },
+        "api_writes": {
+          "description": "This run's writes when every push that needs or may need a signature goes through the platform's API commit; absent when that changes nothing.",
+          "$ref": "#/$defs/count"
+        },
+        "api_seconds": { "$ref": "#/$defs/count" },
+        "total_writes": {
+          "description": "The writes of every run the rollout needs, by the git path; absent when it fits one run.",
+          "$ref": "#/$defs/count"
+        },
+        "total_seconds": { "$ref": "#/$defs/count" }
+      }
+    },
+    "sweep": {
+      "description": "The sweep of stale pull requests.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ran", "complete", "failed"],
+      "properties": {
+        "ran": { "type": "boolean" },
+        "complete": { "type": "boolean" },
+        "failed": { "type": "boolean" },
+        "reason": {
+          "description": "Why the sweep did not run.",
+          "type": "string"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,7 @@
+# error: providers[0].limits.min_interval: "1.5s" is not a number of milliseconds or seconds
+version: 1
+id: acme-eng
+providers:
+  - id: gh
+    type: github
+    limits: { min_interval: 1.5s }

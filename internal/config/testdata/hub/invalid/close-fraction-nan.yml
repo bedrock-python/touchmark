@@ -1,0 +1,5 @@
+# error: expected a number, got a number (.nan)
+version: 1
+id: acme-eng
+limits:
+  max_close_fraction: .nan

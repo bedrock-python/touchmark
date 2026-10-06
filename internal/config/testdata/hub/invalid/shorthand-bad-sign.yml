@@ -1,0 +1,4 @@
+# error: sign: "never" must be one of auto, always
+version: 1
+id: acme-eng
+sign: never

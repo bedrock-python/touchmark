@@ -1,0 +1,4 @@
+# error: forget_declines[0].pr: required
+version: 1
+forget_declines:
+  - target: gh:acme/docs

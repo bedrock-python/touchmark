@@ -1,0 +1,4 @@
+# error: recreate[0].head: required
+version: 1
+recreate:
+  - target: gh:acme/api

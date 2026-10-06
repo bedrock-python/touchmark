@@ -1,0 +1,4 @@
+# error: targets[0]: needs one of repo, org or group
+version: 1
+targets:
+  - packs: [agents]

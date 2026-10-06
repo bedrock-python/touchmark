@@ -1,0 +1,2 @@
+# error: id: required
+# A hub.yml without settings still needs an id.

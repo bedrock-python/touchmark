@@ -1,0 +1,4 @@
+# error: defaults.provider: provider id "9gh"
+version: 1
+defaults:
+  provider: 9gh

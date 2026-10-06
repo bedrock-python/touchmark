@@ -1,0 +1,21 @@
+# Several providers, prefixes, and every selector field.
+version: 1
+defaults:
+  provider: gh
+  packs: [agents, claude]
+targets:
+  - repo: gh:acme/billing
+  - repo: Acme/Payments.Service
+    provider: gh
+    packs: [python-service]
+  - repo: corp:platform/infra/.github-config
+  - group: corp:platform/data
+    subgroups: false
+    forks: true
+    topics: [python, "machine learning"]
+    packs: [python-service]
+  - org: gh:acme
+    provider: gh
+exclude:
+  - corp:platform/data/legacy
+  - acme/archive_2019

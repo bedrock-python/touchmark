@@ -1,0 +1,5 @@
+# error: pr.link_hub: "" must be one of
+version: 1
+id: acme-eng
+pr:
+  link_hub: ""

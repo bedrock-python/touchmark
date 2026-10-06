@@ -1,0 +1,9 @@
+touchmark status · hub $HUB @ $COMMIT · target acme/svc
+packs: base (.engineering-assets.yml)
+warning: hub.yml: not found; legacy hub, every setting has its default
+warning: targets.yml: repos: legacy format, read as targets: entries; convert it to version: 1 with targets:
+
+  keep  ignored  docs/guide.md  base  listed under ignore
+
+current 1 · ignored 1
+in sync

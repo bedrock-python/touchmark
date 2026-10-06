@@ -1,0 +1,6 @@
+# error: security.reason: required with write_isolation: none
+version: 1
+id: acme-eng
+security:
+  write_isolation: none
+  reason: "  "

@@ -1,0 +1,2 @@
+# error: ignore[0]: pattern "./" is empty
+ignore: ["./"]

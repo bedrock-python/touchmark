@@ -1,0 +1,9 @@
+touchmark status · hub acme-eng @ $COMMIT · target acme/svc
+packs: base (.engineering-assets.yml)
+
+  create  missing  .github/pull_request_template.md  base
+  keep    local    AGENTS.md                         base  run touchmark apply --adopt AGENTS.md to take it back, or add it to ignore
+  create  missing  docs/guide.md                     base
+
+missing 2 · local 1
+2 changes to apply: run touchmark apply

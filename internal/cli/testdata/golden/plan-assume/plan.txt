@@ -1,0 +1,11 @@
+touchmark plan · hub acme-eng (github.com/712345678) @ $COMMIT · touchmark dev
+gh    github.com          read acme-read[bot]  write acme-write[bot]: not checked  resolve complete
+corp  gitlab.example.com  read tm-reader       write tm-writer: not checked        resolve complete
+--assume-opt-in: every target counts as opted in, for this report only; 1 target without an opt-in file is planned as if it had an empty one
+
+  open       1  gh:acme/web
+  unchanged  1  gh:acme/api #1
+
+Warnings
+  hub head not checked: a local run cannot read the tip of the hub's default branch
+Cost  gh ≈ 4 writes (<1 min) · corp ≈ 0 writes (<1 min) · 1 run

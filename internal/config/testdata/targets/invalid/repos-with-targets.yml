@@ -1,0 +1,3 @@
+# error: repos: the legacy list cannot be combined with targets
+repos: [acme/billing]
+targets: []

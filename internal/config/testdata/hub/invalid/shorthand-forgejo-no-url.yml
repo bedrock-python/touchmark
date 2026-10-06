@@ -1,0 +1,4 @@
+# error: base_url: required for forgejo
+version: 1
+id: acme-eng
+platform: forgejo

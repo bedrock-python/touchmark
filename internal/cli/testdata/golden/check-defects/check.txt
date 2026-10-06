@@ -1,0 +1,11 @@
+touchmark check · hub change-me @ $COMMIT
+packs: a, b, base, extra
+errors:
+  hub.yml: id: still the template placeholder "change-me"; set this hub's own id
+  hub.yml: requires cycle: a -> b -> a
+  targets.yml: defaults.packs[1]: unknown pack "nope"
+  packs/base/.engineering-assets.yml: the opt-in file is never shipped: each repository writes its own
+  packs/base/link: symlink not allowed: packs ship regular files only
+  packs/base/tiny.txt: 5 bytes, below the 64-byte minimum: content this small cannot prove the hub shipped it
+  packs/extra/readme.md: file differs only by case from file "README.md" in pack "base": they collide on case-insensitive filesystems
+check failed: 7 errors, 0 warnings

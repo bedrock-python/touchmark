@@ -1,0 +1,5 @@
+# error: is longer than 64 characters
+version: 1
+id: acme-eng
+packs:
+  abcdefghij-abcdefghij-abcdefghij-abcdefghij-abcdefghij-abcdefghij:

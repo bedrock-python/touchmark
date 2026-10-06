@@ -1,0 +1,2 @@
+# error: expected an integer, got a string
+version: "1"

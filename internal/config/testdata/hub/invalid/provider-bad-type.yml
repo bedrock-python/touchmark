@@ -1,0 +1,6 @@
+# error: providers[0].type: "bitbucket" must be one of
+version: 1
+id: acme-eng
+providers:
+  - id: bb
+    type: bitbucket

@@ -1,0 +1,5 @@
+# error: targets[0]: provider "gh" contradicts the "corp" prefix of repo
+version: 1
+targets:
+  - repo: corp:acme/billing
+    provider: gh

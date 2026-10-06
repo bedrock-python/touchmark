@@ -1,0 +1,6 @@
+# error: pr.labels[0]
+# A no-break space is blank in the schema (ECMA-262 \s) and in the parser.
+version: 1
+id: acme-eng
+pr:
+  labels: ["\_"]

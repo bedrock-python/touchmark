@@ -1,0 +1,5 @@
+# error: targets[0]: org and group are mutually exclusive
+version: 1
+targets:
+  - org: acme
+    group: acme

@@ -1,0 +1,82 @@
+name: E2E GitLab
+
+# The live tests against GitLab, outside CI: nightly, by hand, and on a pull
+# request labelled e2e-gitlab. They live in a workflow of their own because
+# they listen to the labeled event. In CI, a labeled run would
+# skip every other job, and its "All checks passed" would become the latest
+# result of the required check on the pull request's head: a failure there
+# would block a good pull request, a pass would hide a bad one.
+on:
+  pull_request:
+    branches: [master]
+    types: [opened, synchronize, reopened, labeled]
+  schedule:
+    - cron: '41 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # A labeled event runs in a group of its own label, so that adding another
+  # label never cancels a running e2e-gitlab (whose new run would skip the
+  # job). Only a new push, or e2e-gitlab added again, cancels.
+  group: ${{ github.workflow }}-${{ github.ref }}${{ github.event.action == 'labeled' && format('-labeled-{0}', github.event.label.name) || '' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  e2e-gitlab:
+    # The live e2e tests of the gitlab driver (internal/e2e/gitlab) against
+    # GitLab CE 17.11, 18.11 and 19.4 in Docker: the platform conformance
+    # suite, plan and distribute end to end, the move from multi-gitter, the
+    # platform facts the driver relies on, and the CI experiments on a GitLab
+    # Runner (the reach of a target's CI_JOB_TOKEN, threat T5, and the
+    # isolation probe; docs/project/threat-model.md). A run takes about an
+    # hour, so they run nightly and on demand, not on every push: nightly, by
+    # hand (workflow_dispatch) and on pull requests labelled e2e-gitlab.
+    # docs/project/e2e.md explains how to run them locally.
+    if: >-
+      github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'e2e-gitlab') &&
+      (github.event.action != 'labeled' || github.event.label.name == 'e2e-gitlab'))
+    name: e2e-gitlab (${{ matrix.image }})
+    runs-on: ubuntu-latest
+    # The budget: about 10 minutes to free the disk, pull the images (about
+    # 9 GB), build touchmark and seed; GitLab's boot, at most
+    # TOUCHMARK_E2E_READY_TIMEOUT (15 minutes; 10 to 16 were seen on Docker
+    # Desktop, a hosted runner is not measured yet); then go test, which
+    # stops itself after TOUCHMARK_E2E_TEST_TIMEOUT (45 minutes; the live
+    # runs took 24 to 32) with its goroutine dump, the FINDINGS summary a
+    # minute before. 10 + 15 + 45 = 70 minutes leave room below the job's
+    # limit, so the runner never kills the job before go test's own timeout.
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ['gitlab/gitlab-ce:17.11.7-ce.0', 'gitlab/gitlab-ce:18.11.12-ce.0', 'gitlab/gitlab-ce:19.4.1-ce.0']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The GitLab image takes about 6 GB on disk, the runner and golang:1.26
+      # 3 GB more: drop the preinstalled SDKs the job never uses.
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          docker system prune -af >/dev/null
+          df -h /
+
+      # The script starts GitLab and a runner, seeds them and runs go test
+      # in golang:1.26 next to them; it removes everything it created on
+      # exit.
+      - name: scripts/e2e/gitlab.sh
+        env:
+          IMAGE: ${{ matrix.image }}
+          TOUCHMARK_E2E_READY_TIMEOUT: '900'
+          TOUCHMARK_E2E_TEST_TIMEOUT: 45m
+        run: bash scripts/e2e/gitlab.sh "$IMAGE"

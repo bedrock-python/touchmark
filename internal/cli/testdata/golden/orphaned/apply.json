@@ -1,0 +1,112 @@
+{
+  "command": "apply",
+  "dry_run": false,
+  "hub": {
+    "dir": "$HUB",
+    "id": "acme-eng",
+    "commit": "$COMMIT"
+  },
+  "target": {
+    "root": "$TARGET",
+    "ref": "acme/svc",
+    "opt_in_file": ".engineering-assets.yml",
+    "opted_in": true
+  },
+  "selection": {
+    "packs": [
+      "base"
+    ],
+    "complete": true,
+    "unresolved": [],
+    "sources": {
+      "base": [
+        "defaults"
+      ]
+    }
+  },
+  "entries": [
+    {
+      "path": ".github/pull_request_template.md",
+      "state": "missing",
+      "action": "create",
+      "pack": "base",
+      "from": "",
+      "to": "da9823e8fe7223ced65fd1d888c4086c5663d588",
+      "mode": "100644",
+      "detail": "",
+      "after_deletes": false
+    },
+    {
+      "path": "AGENTS.md",
+      "state": "missing",
+      "action": "create",
+      "pack": "base",
+      "from": "",
+      "to": "f14d69790c939769881dcc505507364b7d1f2f55",
+      "mode": "100644",
+      "detail": "",
+      "after_deletes": false
+    },
+    {
+      "path": "EXTRA.md",
+      "state": "orphaned",
+      "action": "keep",
+      "pack": "extra",
+      "from": "483b8f2f681760a9e465d567d425449b7686a507",
+      "to": "",
+      "mode": "",
+      "detail": "pack extra is no longer selected",
+      "after_deletes": false
+    },
+    {
+      "path": "docs/guide.md",
+      "state": "missing",
+      "action": "create",
+      "pack": "base",
+      "from": "",
+      "to": "b05b6d090e03924f92073d05c2f7471dfc33dc66",
+      "mode": "100644",
+      "detail": "",
+      "after_deletes": false
+    }
+  ],
+  "results": [
+    {
+      "path": ".github/pull_request_template.md",
+      "action": "create",
+      "state": "missing",
+      "outcome": "done",
+      "detail": ""
+    },
+    {
+      "path": "AGENTS.md",
+      "action": "create",
+      "state": "missing",
+      "outcome": "done",
+      "detail": ""
+    },
+    {
+      "path": "docs/guide.md",
+      "action": "create",
+      "state": "missing",
+      "outcome": "done",
+      "detail": ""
+    }
+  ],
+  "summary": {
+    "missing": 3,
+    "current": 0,
+    "outdated": 0,
+    "local": 0,
+    "ignored": 0,
+    "retired": 0,
+    "retired_local": 0,
+    "unsafe": 0,
+    "orphaned": 1,
+    "changes": 3,
+    "done": 3,
+    "skipped": 0,
+    "failed": 0
+  },
+  "warnings": []
+}

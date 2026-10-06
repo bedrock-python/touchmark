@@ -1,0 +1,4 @@
+.engineering-assets.yml  version: 1
+AGENTS.md  base AGENTS.md v1
+config.json  {}
+empty/.gitkeep  (empty)

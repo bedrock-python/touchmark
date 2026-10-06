@@ -1,0 +1,4 @@
+# error: defaults.packs[1]: pack name "python service"
+version: 1
+defaults:
+  packs: [agents, python service]

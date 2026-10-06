@@ -1,0 +1,4 @@
+# error: targets[0]: expected a mapping, got null
+version: 1
+targets:
+  -

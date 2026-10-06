@@ -1,0 +1,188 @@
+{
+  "comment": "Shapes of github.com answers to read-only requests on public repositories, 2026-09-29 (gh api GET and GraphQL queries), trimmed to the fields the GitHub driver reads and reduced to JSON types: no value, login, name or id is kept. \"a|b\" is a field seen with either type; values pin enum-like fields, absent lists fields GitHub leaves out. TestShapes asks the fake the same and compares.",
+  "shapes": {
+    "repo": {
+      "request": "GET /repos/{owner}/{repo}, authenticated",
+      "shape": {"id": "number", "node_id": "string", "full_name": "string", "default_branch": "string", "html_url": "string",
+        "private": "boolean", "visibility": "string", "archived": "boolean", "disabled": "boolean", "fork": "boolean",
+        "mirror_url": "string|null", "size": "number", "has_pull_requests": "boolean", "topics": ["string"],
+        "permissions": {"admin": "boolean", "maintain": "boolean", "push": "boolean", "pull": "boolean"}},
+      "values": {"visibility": "public", "private": false}
+    },
+    "repo_list_item": {
+      "request": "GET /orgs/{org}/repos?type=all, first item",
+      "shape": {"id": "number", "node_id": "string", "full_name": "string", "default_branch": "string", "html_url": "string",
+        "private": "boolean", "visibility": "string", "archived": "boolean", "disabled": "boolean", "fork": "boolean",
+        "mirror_url": "string|null", "size": "number", "has_pull_requests": "boolean", "topics": ["string"]}
+    },
+    "pull": {
+      "request": "GET /repos/{owner}/{repo}/pulls?state=closed, a pull request from a fork",
+      "shape": {"number": "number", "node_id": "string", "html_url": "string", "state": "string", "draft": "boolean",
+        "title": "string", "body": "string|null", "user": {"id": "number", "login": "string", "type": "string"},
+        "labels": [{"name": "string"}],
+        "head": {"ref": "string", "sha": "string", "label": "string", "repo": {"id": "number", "full_name": "string", "fork": "boolean"}},
+        "base": {"ref": "string", "sha": "string", "label": "string", "repo": {"id": "number", "full_name": "string"}},
+        "created_at": "string", "closed_at": "string|null", "merged_at": "string|null"},
+      "values": {"state": "closed", "head.repo.fork": true}
+    },
+    "tree": {
+      "request": "GET /repos/{owner}/{repo}/git/trees/HEAD (not recursive): one entry of each kind",
+      "shape": {"sha": "string", "truncated": "boolean",
+        "blob": {"path": "string", "mode": "string", "type": "string", "sha": "string", "size": "number"},
+        "exec": {"path": "string", "mode": "string", "type": "string", "sha": "string", "size": "number"},
+        "link": {"path": "string", "mode": "string", "type": "string", "sha": "string", "size": "number"},
+        "tree": {"path": "string", "mode": "string", "type": "string", "sha": "string"},
+        "submodule": {"path": "string", "mode": "string", "type": "string", "sha": "string"}},
+      "values": {"blob.mode": "100644", "blob.type": "blob", "exec.mode": "100755", "exec.type": "blob", "link.mode": "120000",
+        "link.type": "blob", "tree.mode": "040000", "tree.type": "tree", "submodule.mode": "160000", "submodule.type": "commit",
+        "truncated": false},
+      "absent": ["tree.size", "submodule.size", "submodule.url"]
+    },
+    "blob": {
+      "request": "GET /repos/{owner}/{repo}/git/blobs/{sha}",
+      "shape": {"sha": "string", "size": "number", "encoding": "string", "content": "string"},
+      "values": {"encoding": "base64"}
+    },
+    "contents_file": {
+      "request": "GET /repos/{owner}/{repo}/contents/{path}, a regular file",
+      "shape": {"type": "string", "name": "string", "path": "string", "sha": "string", "size": "number", "encoding": "string", "content": "string"},
+      "values": {"type": "file", "encoding": "base64"}
+    },
+    "contents_symlink": {
+      "request": "GET /repos/{owner}/{repo}/contents/{path}, a symlink to a regular file: the target's content under the link's name",
+      "shape": {"type": "string", "name": "string", "path": "string", "sha": "string", "size": "number", "encoding": "string", "content": "string"},
+      "values": {"type": "file", "encoding": "base64"},
+      "absent": ["target"]
+    },
+    "contents_submodule": {
+      "request": "GET /repos/{owner}/{repo}/contents/{path}, a submodule",
+      "shape": {"type": "string", "name": "string", "path": "string", "sha": "string", "size": "number", "submodule_git_url": "string"},
+      "values": {"type": "submodule", "size": 0},
+      "absent": ["content"]
+    },
+    "rules_branch": {
+      "request": "GET /repos/{owner}/{repo}/rules/branches/{branch}, the non_fast_forward rule: parameters only on rules that have some",
+      "shape": {"type": "string", "ruleset_id": "number", "ruleset_source": "string", "ruleset_source_type": "string"},
+      "values": {"type": "non_fast_forward", "ruleset_source_type": "Repository"},
+      "absent": ["parameters"]
+    },
+    "rules_missing_branch": {
+      "request": "GET /repos/{owner}/{repo}/rules/branches/{branch} of a branch that does not exist, no ruleset on all branches: 200 and []",
+      "status": 200,
+      "shape": []
+    },
+    "hash_algorithm": {
+      "request": "GET /repos/{owner}/{repo}/hash-algorithm",
+      "shape": {"hash_algorithm": "string"},
+      "values": {"hash_algorithm": "sha1"}
+    },
+    "bot": {
+      "request": "GET /users/{slug}%5Bbot%5D",
+      "shape": {"id": "number", "login": "string", "type": "string", "email": "string|null"},
+      "values": {"type": "Bot"},
+      "suffix": {"login": "[bot]"}
+    },
+    "user": {
+      "request": "GET /users/{login}",
+      "shape": {"id": "number", "login": "string", "type": "string", "email": "string|null"},
+      "values": {"type": "User"}
+    },
+    "label": {
+      "request": "GET /repos/{owner}/{repo}/labels, first item",
+      "shape": {"id": "number", "name": "string"}
+    },
+    "not_found": {
+      "request": "GET /repos/{owner}/{repo} of a repository that does not exist",
+      "status": 404,
+      "shape": {"message": "string", "documentation_url": "string", "status": "string"},
+      "values": {"message": "Not Found", "status": "404"}
+    },
+    "git_commit": {
+      "request": "GET /repos/{owner}/{repo}/git/commits/{sha} of a commit GitHub signed (web-flow)",
+      "shape": {"sha": "string", "tree": {"sha": "string"}, "parents": [{"sha": "string"}],
+        "author": {"name": "string", "email": "string", "date": "string"},
+        "committer": {"name": "string", "email": "string", "date": "string"}, "message": "string",
+        "verification": {"verified": "boolean", "reason": "string", "signature": "string", "payload": "string", "verified_at": "string"}},
+      "values": {"committer.name": "GitHub", "verification.verified": true, "verification.reason": "valid"}
+    },
+    "meta": {
+      "request": "GET /meta on github.com: no installed_version",
+      "shape": {"verifiable_password_authentication": "boolean"},
+      "absent": ["installed_version"]
+    },
+    "pulls_link": {
+      "request": "GET /repos/{owner}/{repo}/pulls?state=all&per_page=N&page=2: the Link header, rels in this order, URLs under /repositories/{id} with the query in its order and page last",
+      "link": ["prev", "next", "last", "first"]
+    },
+    "graphql_not_found": {
+      "request": "POST /graphql: two repository aliases, the second missing; HTTP 200",
+      "status": 200,
+      "shape": {"data": {"a": {"databaseId": "number"}, "b": "null"},
+        "errors": [{"type": "string", "path": ["string"], "locations": [{"line": "number", "column": "number"}], "message": "string"}]},
+      "values": {"errors.0.type": "NOT_FOUND", "errors.0.path.0": "b"},
+      "prefix": {"errors.0.message": "Could not resolve to a Repository with the name "}
+    },
+    "graphql_file_not_found": {
+      "request": "POST /graphql: Commit.file(path:) of a missing path, aliased e; HTTP 200",
+      "status": 200,
+      "shape": {"data": {"repository": {"object": {"e": "null"}}},
+        "errors": [{"type": "string", "path": ["string"], "locations": [{"line": "number", "column": "number"}], "message": "string"}]},
+      "values": {"errors.0.type": "NOT_FOUND", "errors.0.path.0": "repository", "errors.0.path.1": "object", "errors.0.path.2": "e",
+        "errors.0.message": "Could not resolve file for path 'no/such/path'."}
+    },
+    "graphql_invalid": {
+      "request": "POST /graphql: a field the schema lacks; HTTP 200 without data",
+      "status": 200,
+      "shape": {"errors": [{"path": ["string"], "extensions": {"code": "string", "typeName": "string", "fieldName": "string"},
+        "locations": [{"line": "number", "column": "number"}], "message": "string"}]},
+      "values": {"errors.0.extensions.code": "undefinedField"},
+      "absent": ["data"]
+    },
+    "graphql_unused_variable": {
+      "request": "POST /graphql: an anonymous query that declares a variable it does not use; HTTP 200 without data",
+      "status": 200,
+      "shape": {"errors": [{"path": ["string"], "extensions": {"code": "string", "variableName": "string"},
+        "locations": [{"line": "number", "column": "number"}], "message": "string"}]},
+      "values": {"errors.0.extensions.code": "variableNotUsed", "errors.0.path.0": "query", "errors.0.locations.0.line": 1,
+        "errors.0.locations.0.column": 1, "errors.0.message": "Variable $unused is declared by anonymous query but not used"},
+      "absent": ["data"]
+    },
+    "graphql_file_modes": {
+      "request": "POST /graphql: Commit.file(path:) of a symlink, a submodule, an executable and a directory",
+      "shape": {"link": {"mode": "number", "type": "string", "size": "number", "object": {"__typename": "string"}},
+        "submodule": {"mode": "number", "type": "string", "size": "number", "object": "null"},
+        "exec": {"mode": "number", "type": "string", "size": "number", "object": {"__typename": "string"}},
+        "dir": {"mode": "number", "type": "string", "size": "number", "object": {"__typename": "string"}}},
+      "values": {"link.mode": 40960, "link.type": "blob", "link.object.__typename": "Blob", "submodule.mode": 57344,
+        "submodule.type": "commit", "submodule.size": 0, "exec.mode": 33261, "exec.type": "blob", "dir.mode": 16384,
+        "dir.type": "tree", "dir.object.__typename": "Tree"}
+    },
+    "graphql_closed_event": {
+      "request": "POST /graphql: the last ClosedEvent of a pull request a bot closed",
+      "shape": {"__typename": "string", "createdAt": "string", "actor": {"__typename": "string", "login": "string", "databaseId": "number"}},
+      "values": {"__typename": "ClosedEvent", "actor.__typename": "Bot"},
+      "nosuffix": {"actor.login": "[bot]"}
+    },
+    "git_ref": {
+      "request": "GET /repos/{owner}/{repo}/git/ref/heads/{branch} of an existing branch: one ref, not a list",
+      "shape": {"node_id": "string", "object": {"sha": "string", "type": "string", "url": "string"}, "ref": "string", "url": "string"},
+      "values": {"object.type": "commit"},
+      "prefix": {"ref": "refs/heads/"}
+    },
+    "git_ref_missing": {
+      "request": "GET /repos/{owner}/{repo}/git/ref/heads/{branch} of a branch that does not exist, whose name starts another's: 404, no list of matches",
+      "status": 404,
+      "shape": {"message": "string", "documentation_url": "string", "status": "string"},
+      "values": {"message": "Not Found"}
+    },
+    "graphql_pull_request": {
+      "request": "POST /graphql: an open pull request of a person, with the fields the driver reads (gqlPRFields)",
+      "shape": {"author": {"__typename": "string", "databaseId": "number", "login": "string"}, "baseRef": {"name": "string"},
+        "baseRefName": "string", "body": "string", "closedAt": "null|string", "createdAt": "string", "databaseId": "number",
+        "headRefName": "string", "headRefOid": "string", "headRepository": {"databaseId": "number"}, "id": "string",
+        "isDraft": "boolean", "labels": {"nodes": "array"}, "mergedAt": "null|string", "number": "number",
+        "repository": {"databaseId": "number", "nameWithOwner": "string"}, "state": "string", "title": "string", "url": "string"},
+      "values": {"state": "OPEN", "author.__typename": "User", "closedAt": null, "mergedAt": null}
+    }
+  }
+}

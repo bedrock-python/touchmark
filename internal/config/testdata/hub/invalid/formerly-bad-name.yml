@@ -1,0 +1,6 @@
+# error: packs.agents.formerly[0]: pack name "-base"
+version: 1
+id: acme-eng
+packs:
+  agents:
+    formerly: ["-base"]

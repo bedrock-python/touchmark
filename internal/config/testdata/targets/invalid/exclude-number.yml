@@ -1,0 +1,3 @@
+# error: expected a string, got an integer
+version: 1
+exclude: [42]

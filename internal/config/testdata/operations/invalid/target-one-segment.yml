@@ -1,0 +1,5 @@
+# error: recreate[0].target: "acme": a repository path needs an owner and a name
+version: 1
+recreate:
+  - target: acme
+    head: 4b1d9e0c5f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c

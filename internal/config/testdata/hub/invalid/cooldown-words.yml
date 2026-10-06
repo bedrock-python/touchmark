@@ -1,0 +1,5 @@
+# error: memory.auto_close_cooldown: "30 days"
+version: 1
+id: acme-eng
+memory:
+  auto_close_cooldown: 30 days

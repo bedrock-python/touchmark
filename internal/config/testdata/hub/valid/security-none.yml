@@ -1,0 +1,5 @@
+version: 1
+id: acme-eng
+security:
+  write_isolation: none
+  reason: Forgejo Actions cannot scope secrets to a branch; only maintainers push to this hub.

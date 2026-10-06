@@ -1,0 +1,5 @@
+# error: targets[0]: repo and org are mutually exclusive
+version: 1
+targets:
+  - repo: acme/billing
+    org: acme

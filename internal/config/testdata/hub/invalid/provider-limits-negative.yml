@@ -1,0 +1,8 @@
+# error: providers[0].limits.reads: must not be negative
+version: 1
+id: acme-eng
+providers:
+  - id: gh
+    type: github
+    limits:
+      reads: -1

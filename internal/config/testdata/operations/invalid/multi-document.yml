@@ -1,0 +1,4 @@
+# error: more than one YAML document
+version: 1
+---
+version: 1

@@ -1,0 +1,15 @@
+touchmark plan · hub acme-eng (github.com/712345678) @ $COMMIT (PR #41) · touchmark dev
+gh    github.com          read acme-read[bot]  write acme-write[bot]: not checked  resolve complete
+corp  gitlab.example.com  read tm-reader       write tm-writer: not checked        resolve complete
+scope: packs base, python changed → 11 of 11 targets (--all for every target)
+
+  open       4  corp:platform/api, gh:acme/billing, gh:acme/docs and 1 more
+  update     1  gh:acme/sdk #1 (content)
+  unchanged  1  gh:acme/api #1
+  close      1  gh:acme/old #1 (no-diff)
+  skipped    3  gh:acme/archive (archived), gh:acme/web (not-opted-in); 1 private in public hub
+  blocked    1  gh:acme/cli #1 (branch-in-use)
+
+Warnings
+  gh:acme/tools: orphaned 1: docs/python.md
+Cost  gh ≈ 16 writes (<1 min) · corp ≈ 2 writes (<1 min) · 1 run

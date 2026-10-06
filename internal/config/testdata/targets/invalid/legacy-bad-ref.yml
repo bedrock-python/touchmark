@@ -1,0 +1,2 @@
+# error: repos[0]: "/acme/billing": leading or trailing slash
+repos: [/acme/billing]

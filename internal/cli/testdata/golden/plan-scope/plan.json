@@ -1,0 +1,125 @@
+{
+  "schema": "report/v1",
+  "command": "plan",
+  "engine": "dev",
+  "hub": {
+    "id": "acme-eng",
+    "fingerprint": "github.com/712345678",
+    "commit": "$COMMIT",
+    "pr": 41
+  },
+  "outcome": "completed",
+  "strict": true,
+  "scope": {
+    "mode": "packs",
+    "packs": [
+      "python"
+    ],
+    "base": "b72e748a9d8596dc7f7802e3b9d6c51472a80134",
+    "processed": 2,
+    "total": 11
+  },
+  "providers": [
+    {
+      "id": "gh",
+      "type": "github",
+      "host": "github.com",
+      "reader": "acme-read[bot]",
+      "writer": "acme-write[bot]",
+      "write_check": "not checked",
+      "resolve_complete": true
+    },
+    {
+      "id": "corp",
+      "type": "gitlab",
+      "host": "gitlab.example.com",
+      "reader": "tm-reader",
+      "writer": "tm-writer",
+      "write_check": "not checked",
+      "resolve_complete": true
+    }
+  ],
+  "targets": [
+    {
+      "provider": "corp",
+      "host": "gitlab.example.com",
+      "repo_id": "1003",
+      "path": "platform/api",
+      "outcome": "opened",
+      "key": "sha256:1d8844b4dccab31ee8bdaf6d43b297f6ad14d4398af8e07bce04865068e8b6b2",
+      "packs": [
+        "base",
+        "python"
+      ],
+      "changes": {
+        "create": 3,
+        "update": 0,
+        "delete": 0,
+        "chmod": 0
+      },
+      "writes": 2
+    },
+    {
+      "provider": "gh",
+      "host": "github.com",
+      "repo_id": "1007",
+      "path": "acme/sdk",
+      "outcome": "updated",
+      "reason": "content",
+      "pr": {
+        "number": 1,
+        "url": "https://github.com/acme/sdk/pull/1",
+        "state": "open"
+      },
+      "key": "sha256:1d8844b4dccab31ee8bdaf6d43b297f6ad14d4398af8e07bce04865068e8b6b2",
+      "packs": [
+        "base",
+        "python"
+      ],
+      "changes": {
+        "create": 3,
+        "update": 0,
+        "delete": 0,
+        "chmod": 0
+      },
+      "writes": 2
+    }
+  ],
+  "ops": [],
+  "warnings": [],
+  "summary": {
+    "blocked": 0,
+    "closed": 0,
+    "declined": 0,
+    "deferred": 0,
+    "failed": 0,
+    "opened": 1,
+    "skipped": 0,
+    "unchanged": 0,
+    "updated": 1
+  },
+  "sweep": {
+    "ran": false,
+    "complete": false,
+    "failed": false
+  },
+  "cost": {
+    "corp": 2,
+    "gh": 2
+  },
+  "estimate": {
+    "new_prs": 1,
+    "max_new_prs_per_run": 100,
+    "runs": 1,
+    "providers": {
+      "corp": {
+        "writes": 2,
+        "seconds": 1
+      },
+      "gh": {
+        "writes": 2,
+        "seconds": 1
+      }
+    }
+  }
+}

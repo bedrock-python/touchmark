@@ -1,0 +1,4 @@
+# error: branch_aliases[0]: branch name "touchmark/acme.lock"
+version: 1
+id: acme-eng
+branch_aliases: [touchmark/acme.lock]

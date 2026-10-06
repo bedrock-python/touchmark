@@ -1,0 +1,5 @@
+# error: pr.title: must not start with Draft: or WIP:
+version: 1
+id: acme-eng
+pr:
+  title: "Draft: chore: sync engineering assets"

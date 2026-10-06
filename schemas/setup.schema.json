@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/bedrock-python/touchmark/master/schemas/setup.schema.json",
+  "title": "touchmark setup report",
+  "description": "The report of touchmark setup github|gitlab (setup/v1): each step of setting up the hub's platform with an isolated write key, what it found or changed, and what is left to the person. No secret ever appears in it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "command", "engine", "platform", "host", "hub", "isolation", "dry_run", "steps", "next", "summary"],
+  "properties": {
+    "schema": {
+      "description": "Report format: setup/v1.",
+      "const": "setup/v1"
+    },
+    "command": { "const": "setup" },
+    "engine": {
+      "description": "touchmark's version.",
+      "type": "string"
+    },
+    "platform": {
+      "description": "The platform set up.",
+      "enum": ["github", "gitlab"]
+    },
+    "host": {
+      "description": "The platform's host, with a port that is not the scheme's default.",
+      "type": "string"
+    },
+    "hub": {
+      "description": "The hub repository's path on the platform.",
+      "type": "string"
+    },
+    "hub_id": {
+      "description": "The hub repository's immutable id, the second half of its fingerprint.",
+      "type": "string",
+      "pattern": "^[0-9]+$"
+    },
+    "group": {
+      "description": "GitLab: the full path of the group whose projects are the targets.",
+      "type": "string"
+    },
+    "org": {
+      "description": "GitHub: the account that owns the hub and the Apps.",
+      "type": "string"
+    },
+    "isolation": {
+      "description": "security.write_isolation of hub.yml: setup sets up isolated write keys only.",
+      "enum": ["platform", "external"]
+    },
+    "dry_run": {
+      "description": "The run had --dry-run: it read the platform and changed nothing; would steps say what it would change.",
+      "type": "boolean"
+    },
+    "accounts": {
+      "description": "What the reader and the writer are: GitLab service accounts or group access tokens, GitHub Apps.",
+      "enum": ["service-account", "group-access-token", "app"]
+    },
+    "reader": {
+      "description": "The reader's login, when known.",
+      "type": "string"
+    },
+    "writer": {
+      "description": "The writer's login, when known: hub.yml's writer must name it.",
+      "type": "string"
+    },
+    "steps": {
+      "description": "The steps in the order they ran. Steps named \"check <name>\" are the checks of doctor --hub-token on where the hub keeps its keys, made after the changes.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/step" }
+    },
+    "next": {
+      "description": "What the person does after this run, in order.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "summary": {
+      "description": "Steps per status, every status present.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ok", "done", "would", "warn", "manual", "unknown", "fail"],
+      "properties": {
+        "ok": { "$ref": "#/$defs/count" },
+        "done": { "$ref": "#/$defs/count" },
+        "would": { "$ref": "#/$defs/count" },
+        "warn": { "$ref": "#/$defs/count" },
+        "manual": { "$ref": "#/$defs/count" },
+        "unknown": { "$ref": "#/$defs/count" },
+        "fail": { "$ref": "#/$defs/count" }
+      }
+    }
+  },
+  "$defs": {
+    "count": { "type": "integer", "minimum": 0 },
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["step", "status"],
+      "properties": {
+        "step": {
+          "description": "The step's name, such as writer-variable or check key-location.",
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "description": "ok: as wanted, nothing written; done: changed in this run; would: --dry-run would change it; warn: as wanted, with a caveat; manual: left to the person (run setup again once done); unknown: could not be read; fail: failed, or found what setup must not fix.",
+          "enum": ["ok", "done", "would", "warn", "manual", "unknown", "fail"]
+        },
+        "detail": { "type": "string" },
+        "commands": {
+          "description": "Shell commands the person runs to finish the step, such as gh secret set for a GitHub App's private key.",
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}

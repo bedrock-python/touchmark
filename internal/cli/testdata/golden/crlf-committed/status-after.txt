@@ -1,0 +1,7 @@
+touchmark status · hub acme-eng @ $COMMIT · target acme/svc
+packs: base (.engineering-assets.yml)
+
+  keep  local  docs/guide.md  base  run touchmark apply --adopt docs/guide.md to take it back, or add it to ignore
+
+current 2 · local 1
+in sync

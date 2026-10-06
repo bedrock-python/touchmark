@@ -1,0 +1,4 @@
+# error: recreate[0]: expected a mapping, got null
+version: 1
+recreate:
+  -

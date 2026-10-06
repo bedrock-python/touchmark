@@ -1,0 +1,9 @@
+touchmark status · hub acme-eng @ $COMMIT · target acme/svc
+packs: base (.engineering-assets.yml)
+
+  create  missing        AGENTS.md       base
+  keep    local          config.json     base  run touchmark apply --adopt config.json to take it back, or add it to ignore
+  keep    retired-local  empty/.gitkeep  base  no longer shipped; the content is the target's own
+
+missing 1 · local 1 · retired-local 1
+1 change to apply: run touchmark apply

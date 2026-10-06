@@ -1,0 +1,5 @@
+# error: recreate[0].head: expected a string, got null
+version: 1
+recreate:
+  - target: gh:acme/api
+    head:

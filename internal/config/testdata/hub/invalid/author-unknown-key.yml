@@ -1,0 +1,5 @@
+# error: commit.author: unknown key "login"
+version: 1
+id: acme-eng
+commit:
+  author: { login: bot }

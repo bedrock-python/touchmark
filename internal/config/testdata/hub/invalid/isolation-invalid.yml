@@ -1,0 +1,5 @@
+# error: security.write_isolation: "vault"
+version: 1
+id: acme-eng
+security:
+  write_isolation: vault

@@ -1,0 +1,7 @@
+# error: providers[0].url: "http://gitlab.example.com" must be an https:// URL
+version: 1
+id: acme-eng
+providers:
+  - id: corp
+    type: gitlab
+    url: http://gitlab.example.com

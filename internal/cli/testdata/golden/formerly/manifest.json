@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "hub_commit": "$COMMIT",
+  "paths": {
+    "only-old.md": {
+      "python-lib": [
+        {
+          "oid": "99ec2297a1f19985e7a610eb6a9ee30caa822b1d",
+          "size": 95
+        }
+      ]
+    },
+    "pyproject.md": {
+      "python-lib": [
+        {
+          "oid": "657540fcc86f9a5394a3ad486ea99a60bc3339d4",
+          "size": 96
+        }
+      ],
+      "python-library": [
+        {
+          "oid": "6305e11bad63947d61aa60c7f4e4a1d794fbe06c",
+          "size": 100
+        }
+      ]
+    }
+  }
+}

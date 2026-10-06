@@ -1,0 +1,5 @@
+# The pre-v1 format.
+# warning: repos: legacy format
+repos:
+  - acme/billing
+  - acme/platform/tools/engineering-assets

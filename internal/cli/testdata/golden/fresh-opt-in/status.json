@@ -1,0 +1,78 @@
+{
+  "command": "status",
+  "dry_run": false,
+  "hub": {
+    "dir": "$HUB",
+    "id": "acme-eng",
+    "commit": "$COMMIT"
+  },
+  "target": {
+    "root": "$TARGET",
+    "ref": "",
+    "opt_in_file": ".engineering-assets.yml",
+    "opted_in": true
+  },
+  "selection": {
+    "packs": [
+      "base"
+    ],
+    "complete": true,
+    "unresolved": [],
+    "sources": {
+      "base": [
+        ".engineering-assets.yml"
+      ]
+    }
+  },
+  "entries": [
+    {
+      "path": ".github/pull_request_template.md",
+      "state": "missing",
+      "action": "create",
+      "pack": "base",
+      "from": "",
+      "to": "da9823e8fe7223ced65fd1d888c4086c5663d588",
+      "mode": "100644",
+      "detail": "",
+      "after_deletes": false
+    },
+    {
+      "path": "AGENTS.md",
+      "state": "missing",
+      "action": "create",
+      "pack": "base",
+      "from": "",
+      "to": "f14d69790c939769881dcc505507364b7d1f2f55",
+      "mode": "100644",
+      "detail": "",
+      "after_deletes": false
+    },
+    {
+      "path": "docs/guide.md",
+      "state": "missing",
+      "action": "create",
+      "pack": "base",
+      "from": "",
+      "to": "b05b6d090e03924f92073d05c2f7471dfc33dc66",
+      "mode": "100644",
+      "detail": "",
+      "after_deletes": false
+    }
+  ],
+  "summary": {
+    "missing": 3,
+    "current": 0,
+    "outdated": 0,
+    "local": 0,
+    "ignored": 0,
+    "retired": 0,
+    "retired_local": 0,
+    "unsafe": 0,
+    "orphaned": 0,
+    "changes": 3,
+    "done": 0,
+    "skipped": 0,
+    "failed": 0
+  },
+  "warnings": []
+}

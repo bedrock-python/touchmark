@@ -1,0 +1,5 @@
+# error: providers[0].id: required
+version: 1
+id: acme-eng
+providers:
+  - type: github

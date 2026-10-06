@@ -1,0 +1,13 @@
+touchmark distribute --dry-run · hub acme-eng (github.com/712345678) @ $COMMIT · touchmark dev
+gh  localhost  read acme-write[bot]  write acme-write[bot]: ok  resolve complete
+
+  open     2  gh:acme/api, gh:acme/billing
+  skipped  1  gh:acme/web (not-opted-in)
+
+Changes across the targets
+  add  AGENTS.md      2 targets
+  add  docs/guide.md  2 targets
+
+Warnings
+  hub head not checked: a local run cannot read the tip of the hub's default branch
+Cost  gh ≈ 8 writes (<1 min) · 1 run

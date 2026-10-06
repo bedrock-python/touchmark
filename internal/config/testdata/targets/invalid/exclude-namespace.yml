@@ -1,0 +1,3 @@
+# error: exclude[0]: "acme": a repository path needs an owner and a name
+version: 1
+exclude: [acme]

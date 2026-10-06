@@ -1,0 +1,5 @@
+# error: expected true or false, got null
+version: 1
+targets:
+  - org: acme
+    forks:

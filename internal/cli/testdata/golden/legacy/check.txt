@@ -1,0 +1,6 @@
+touchmark check · hub $HUB @ $COMMIT
+packs: base
+warnings:
+  hub.yml: not found; legacy hub, every setting has its default
+  targets.yml: repos: legacy format, read as targets: entries; convert it to version: 1 with targets:
+ok, 2 warnings

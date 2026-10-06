@@ -1,0 +1,5 @@
+# error: pr: unknown key "label"
+version: 1
+id: acme-eng
+pr:
+  label: [engineering-assets]

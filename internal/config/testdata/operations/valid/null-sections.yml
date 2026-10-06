@@ -1,0 +1,5 @@
+version: 1
+recreate:
+forget_declines:
+allow_mass_close:
+adopt_unmarked:

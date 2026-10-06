@@ -1,0 +1,5 @@
+# error: pr.intro_file: invalid repository path: bad segment
+version: 1
+id: acme-eng
+pr:
+  intro_file: docs/../../secret.md

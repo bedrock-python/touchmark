@@ -1,0 +1,3 @@
+# error: adopt_unmarked.until: required
+version: 1
+adopt_unmarked: {}

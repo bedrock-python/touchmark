@@ -1,0 +1,10 @@
+# Every operation, with a full commit id.
+version: 1
+recreate:                  # rebuild a paused branch; commits by others on it are dropped
+  - target: gh:acme/api
+    head: 4b1d9e0c5f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c   # acts while the branch head is this commit
+forget_declines:           # propose again what the target closed
+  - target: gh:acme/docs
+    pr: 44                 # touchmark writes revoked into #44
+allow_mass_close: { max: 400, until: 2026-10-01 }
+adopt_unmarked: { until: 2026-10-15 }   # take over a multi-gitter setup's pull requests

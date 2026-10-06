@@ -1,0 +1,9 @@
+touchmark status · hub acme-eng @ $COMMIT · target acme/svc
+packs: python-library (.engineering-assets.yml)
+warning: .engineering-assets.yml: pack "python-lib" was renamed to "python-library"; using "python-library"
+
+  delete  retired   only-old.md   python-library  no longer shipped by pack python-library
+  update  outdated  pyproject.md  python-library
+
+outdated 1 · retired 1
+2 changes to apply: run touchmark apply

@@ -1,0 +1,2 @@
+version: 1
+adopt_unmarked: {until: 2028-02-29}

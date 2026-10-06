@@ -1,0 +1,6 @@
+version: 1
+id: acme-eng
+platform: gitea
+base_url: https://git.example.com
+writer: touchmark-bot
+sign: always

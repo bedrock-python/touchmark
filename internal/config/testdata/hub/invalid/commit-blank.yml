@@ -1,0 +1,5 @@
+# error: commit.message: must not be blank
+version: 1
+id: acme-eng
+commit:
+  message: "   "

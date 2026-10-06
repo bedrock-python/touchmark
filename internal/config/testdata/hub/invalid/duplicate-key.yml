@@ -1,0 +1,4 @@
+# error: already defined
+version: 1
+id: acme-eng
+id: other-eng

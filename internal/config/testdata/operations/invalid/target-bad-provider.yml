@@ -1,0 +1,5 @@
+# error: forget_declines[0].target: "GH:acme/docs": provider id "GH"
+version: 1
+forget_declines:
+  - target: GH:acme/docs
+    pr: 44

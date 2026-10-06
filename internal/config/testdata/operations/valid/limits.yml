@@ -1,0 +1,5 @@
+version: 1
+forget_declines:
+  - target: gh:acme/docs
+    pr: 9223372036854775807
+allow_mass_close: {max: 2147483647, until: 9999-12-31}

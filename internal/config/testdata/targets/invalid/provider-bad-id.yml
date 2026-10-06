@@ -1,0 +1,5 @@
+# error: targets[0].provider: provider id "Corp"
+version: 1
+targets:
+  - repo: acme/billing
+    provider: Corp

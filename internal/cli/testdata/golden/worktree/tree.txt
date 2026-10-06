@@ -1,0 +1,5 @@
+.engineering-assets.yml  version: 1
+.github/pull_request_template.md  base PR template v1
+AGENTS.md  base AGENTS.md uncommitted
+NEW.md  base NEW.md uncommitted
+docs/guide.md  base guide v1

@@ -1,0 +1,39 @@
+name: Links
+
+# The docs point at the platforms' documentation and at other projects, and
+# those move. Once a week, every link is asked whether it still answers; a
+# pull request is not held up on somebody else's outage.
+on:
+  schedule:
+    - cron: "23 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Every link in the docs answers
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # docs/changelog.md, which the agents page links to, is the site's copy
+      # of CHANGELOG.md, made at build time as docs.yml makes it.
+      - name: The changelog page
+        run: cp CHANGELOG.md docs/changelog.md
+
+      - uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+        with:
+          lycheeVersion: v0.24.2
+          args: >-
+            --no-progress
+            --exclude-all-private
+            --exclude-path site
+            README.md CHANGELOG.md CONTRIBUTING.md 'docs/**/*.md'
+          fail: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

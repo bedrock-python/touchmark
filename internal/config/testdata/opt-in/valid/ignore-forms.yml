@@ -1,0 +1,7 @@
+# Forms people write; they are normalised when matched.
+version: 1
+ignore:
+  - ./docs/
+  - '.\scripts\'
+  - "  prompts/review.md  "
+  - "**/*.md"

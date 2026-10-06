@@ -1,0 +1,15 @@
+# Every override of a provider's pacing.
+version: 1
+id: acme-eng
+providers:
+  - id: gh
+    type: github
+    writer: "acme-touchmark[bot]"
+    limits:
+      writes_per_minute: 30
+      writes_per_hour: 300
+      reads: 4
+      git_reads: 2
+      reads_per_minute: 600
+      comments_per_minute: 20
+      min_interval: 1500ms

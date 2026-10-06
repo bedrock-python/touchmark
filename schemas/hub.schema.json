@@ -1,0 +1,333 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/bedrock-python/touchmark/master/schemas/hub.schema.json",
+  "title": "touchmark hub.yml",
+  "description": "Settings of an engineering-assets hub: its id, the sync branch, commit and pull request settings, delivery limits, providers and pack metadata. Format v1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id"],
+  "properties": {
+    "version": {
+      "description": "Format version. Only 1 exists; when absent, 1 is assumed with a warning.",
+      "type": "integer",
+      "const": 1
+    },
+    "id": {
+      "description": "Short slug naming this hub, used in the sync branch name and in pull request markers. The template's placeholder \"change-me\" fails `touchmark check`.",
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 40,
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+    },
+    "branch": {
+      "description": "Sync branch in every target. Default: touchmark/<id>.",
+      "$ref": "#/$defs/branch"
+    },
+    "branch_aliases": {
+      "description": "Former sync branch names. Open pull requests on them are still recognised as this hub's own.",
+      "type": ["array", "null"],
+      "items": { "$ref": "#/$defs/branch" }
+    },
+    "previous_fingerprints": {
+      "description": "Former fingerprints of this hub (host/numeric-repository-id), after the hub moved.",
+      "type": ["array", "null"],
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9.-]+(:[0-9]{1,5})?/[0-9]+$"
+      }
+    },
+    "opt_in_file": {
+      "description": "Path of the opt-in file in targets. Default: .engineering-assets.yml.",
+      "$ref": "#/$defs/relativePath"
+    },
+    "commit": {
+      "description": "Commit settings. The commit author is always the provider's writer account.",
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "description": "Commit message. Default: \"chore: sync engineering assets\". Must not start with Draft: or WIP:, which turns a GitLab merge request into a draft.",
+          "type": "string",
+          "pattern": "[^\t\n\u000b\f\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]",
+          "not": {
+            "pattern": "^[\t\n\u000b\f\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]*([Dd][Rr][Aa][Ff][Tt]:|\\[[Dd][Rr][Aa][Ff][Tt]\\]|\\([Dd][Rr][Aa][Ff][Tt]\\)|[Ww][Ii][Pp]:|\\[[Ww][Ii][Pp]\\])"
+          }
+        },
+        "author": {
+          "description": "Removed in v1 and ignored with a warning: commits are always authored by the writer account.",
+          "deprecated": true,
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "properties": {
+            "name": { "type": "string" },
+            "email": { "type": "string" }
+          }
+        }
+      }
+    },
+    "pr": {
+      "description": "Pull request settings. After creation, the title, draft state and labels belong to people.",
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "description": "Title of new pull requests. Default: \"chore: sync engineering assets\". Must not start with Draft: or WIP:, which makes a GitLab or Gitea pull request a draft: set draft instead.",
+          "type": "string",
+          "not": {
+            "pattern": "^[\t\n\u000b\f\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]*([Dd][Rr][Aa][Ff][Tt]:|\\[[Dd][Rr][Aa][Ff][Tt]\\]|\\([Dd][Rr][Aa][Ff][Tt]\\)|[Ww][Ii][Pp]:|\\[[Ww][Ii][Pp]\\])"
+          },
+          "pattern": "[^\t\n\u000b\f\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]"
+        },
+        "labels": {
+          "description": "Labels of new pull requests. Default: [engineering-assets]; [] for none.",
+          "type": ["array", "null"],
+          "items": {
+            "type": "string",
+            "maxLength": 50,
+            "pattern": "^[^,]*[^,\t\n\u000b\f\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff][^,]*$"
+          }
+        },
+        "draft": {
+          "description": "Open new pull requests as drafts. Default: false.",
+          "type": "boolean"
+        },
+        "intro_file": {
+          "description": "Hub file whose text opens every pull request body.",
+          "$ref": "#/$defs/relativePath"
+        },
+        "link_hub": {
+          "description": "Whether the body links to the hub. auto leaves the links out when the hub is private and the target public. Default: auto.",
+          "enum": ["auto", "always", "never"]
+        }
+      }
+    },
+    "limits": {
+      "description": "Guards against mass actions.",
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "max_new_prs_per_run": {
+          "description": "New pull requests per run; the rest are deferred to the next run. Default: 100.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_close_fraction": {
+          "description": "If a run would close more than max(5, this fraction of the hub's open pull requests), it closes none. Default: 0.1.",
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "memory": {
+      "description": "Memory of pull requests closed without merging.",
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "auto_close_cooldown": {
+          "description": "How long content closed by a bot waits before it is proposed again, in days or hours. Default: 30d.",
+          "type": "string",
+          "pattern": "^[1-9][0-9]{0,4}[dh]$"
+        }
+      }
+    },
+    "security": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "write_isolation": {
+          "description": "Where the write key lives. platform: in the hub's CI platform, checked by a probe; external: issued by an external vault over OIDC; none: risk accepted, needs a reason. Default: platform.",
+          "enum": ["platform", "external", "none"]
+        },
+        "reason": {
+          "description": "Why the write key cannot be isolated. Required with write_isolation: none.",
+          "type": "string"
+        },
+        "private_targets_in_public_hub": {
+          "description": "What a public hub does with non-public targets: skip them, or deliver and let their names reach public CI logs. Default: skip.",
+          "enum": ["skip", "deliver"]
+        }
+      },
+      "if": {
+        "required": ["write_isolation"],
+        "properties": { "write_isolation": { "const": "none" } }
+      },
+      "then": {
+        "required": ["reason"],
+        "properties": { "reason": { "pattern": "[^\t\n\u000b\f\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]" } }
+      }
+    },
+    "providers": {
+      "description": "Platforms this hub delivers to. Targets refer to them by id.",
+      "type": ["array", "null"],
+      "items": { "$ref": "#/$defs/provider" }
+    },
+    "sensitive_paths": {
+      "description": "Patterns added to the built-in list of paths highlighted in pull requests.",
+      "type": ["array", "null"],
+      "items": { "$ref": "#/$defs/pattern" }
+    },
+    "packs": {
+      "description": "Optional metadata of packs, by pack name.",
+      "type": ["object", "null"],
+      "propertyNames": { "$ref": "#/$defs/packName" },
+      "additionalProperties": { "$ref": "#/$defs/packMeta" }
+    },
+    "writer": {
+      "description": "Single-provider shorthand: the writer account, as the platform names it (on GitHub the App's bot, <slug>[bot]). Without platform, the provider's type and URL come from the CI environment, or locally from the hub's origin remote. Not allowed with providers.",
+      "$ref": "#/$defs/account"
+    },
+    "sign": {
+      "description": "Single-provider shorthand: commit signing. Not allowed with providers.",
+      "$ref": "#/$defs/sign"
+    },
+    "platform": {
+      "description": "Single-provider shorthand: the provider type, which is also its id. Not allowed with providers.",
+      "$ref": "#/$defs/providerType"
+    },
+    "base_url": {
+      "description": "Single-provider shorthand: the provider URL, for self-managed instances. Needs platform; not allowed with providers.",
+      "$ref": "#/$defs/url"
+    }
+  },
+  "dependentRequired": {
+    "base_url": ["platform"]
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": ["providers"],
+        "properties": { "providers": { "type": "array", "minItems": 1 } }
+      },
+      "then": {
+        "properties": { "writer": false, "sign": false, "platform": false, "base_url": false }
+      }
+    },
+    {
+      "if": {
+        "required": ["platform"],
+        "properties": { "platform": { "enum": ["gitea", "forgejo"] } }
+      },
+      "then": { "required": ["base_url"] }
+    }
+  ],
+  "$defs": {
+    "packName": {
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+    },
+    "packMeta": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "description": { "type": "string" },
+        "requires": {
+          "description": "Packs that must come before this one. They are added to every target that gets this pack.",
+          "type": ["array", "null"],
+          "items": { "$ref": "#/$defs/packName" }
+        },
+        "formerly": {
+          "description": "Former names of this pack. Their history counts as this pack's own.",
+          "type": ["array", "null"],
+          "items": { "$ref": "#/$defs/packName" }
+        }
+      }
+    },
+    "providerId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,31}$"
+    },
+    "providerType": {
+      "enum": ["github", "gitlab", "gitea", "forgejo"]
+    },
+    "sign": {
+      "description": "auto: sign where it costs nothing and where target rules require it; always: sign every commit. Default: auto.",
+      "enum": ["auto", "always"]
+    },
+    "url": {
+      "type": "string",
+      "pattern": "^(https://[A-Za-z0-9.-]+(:[0-9]{1,5})?|http://(localhost|127\\.0\\.0\\.1|\\[::1\\])(:[0-9]{1,5})?)(/[^?#\t\n\u000b\f\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]*)?$"
+    },
+    "account": {
+      "type": "string",
+      "maxLength": 255,
+      "pattern": "^[^\t\n\u000b\f\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+$"
+    },
+    "branch": {
+      "type": "string",
+      "pattern": "^[^\\x00-\\x20~^:?*\\[\\\\\\x7f]+$"
+    },
+    "relativePath": {
+      "description": "Path relative to the repository root, with '/' separators.",
+      "type": "string",
+      "pattern": "^[^/\\\\:]([^\\\\:]*[^/\\\\:])?$"
+    },
+    "pattern": {
+      "description": "Path or glob relative to the repository root; ** matches any number of directories.",
+      "type": "string",
+      "pattern": "[^\t\n\u000b\f\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff/\\\\]"
+    },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type"],
+      "properties": {
+        "id": {
+          "description": "Name targets.yml uses for this provider, and the <ID> of its TOUCHMARK_<ID>_* variables.",
+          "$ref": "#/$defs/providerId"
+        },
+        "type": { "$ref": "#/$defs/providerType" },
+        "url": {
+          "description": "Web URL of the instance. Default for github: https://github.com; for gitlab: https://gitlab.com. Required for gitea and forgejo.",
+          "$ref": "#/$defs/url"
+        },
+        "api_url": {
+          "description": "API URL, when it cannot be derived from url.",
+          "$ref": "#/$defs/url"
+        },
+        "ca_file": {
+          "description": "Hub file with extra CA certificates for this instance.",
+          "$ref": "#/$defs/relativePath"
+        },
+        "writer": {
+          "description": "The account that writes to targets, as the platform names it: on GitHub the App's bot, <slug>[bot]; on GitLab, Gitea and Forgejo the username of the service account or bot user.",
+          "$ref": "#/$defs/account"
+        },
+        "known_authors": {
+          "description": "Former writer accounts whose pull requests still count as this hub's own.",
+          "type": ["array", "null"],
+          "items": { "$ref": "#/$defs/account" }
+        },
+        "automation_accounts": {
+          "description": "Accounts whose closing of a pull request is automatic, not a team's decision.",
+          "type": ["array", "null"],
+          "items": { "$ref": "#/$defs/account" }
+        },
+        "sign": { "$ref": "#/$defs/sign" },
+        "limits": {
+          "description": "Overrides of the platform's rate defaults; 0 keeps the default.",
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "properties": {
+            "writes_per_minute": { "description": "Writes in any minute (HTTP writes and pushes).", "type": "integer", "minimum": 0 },
+            "writes_per_hour": { "description": "Writes in any hour.", "type": "integer", "minimum": 0 },
+            "reads": { "description": "Targets inspected at once.", "type": "integer", "minimum": 0 },
+            "git_reads": { "description": "Git fetches at once.", "type": "integer", "minimum": 0 },
+            "reads_per_minute": { "description": "API reads in any minute.", "type": "integer", "minimum": 0 },
+            "comments_per_minute": { "description": "Comments in any minute.", "type": "integer", "minimum": 0 },
+            "min_interval": {
+              "description": "Least time between two writes, in milliseconds or seconds, e.g. 250ms or 1s.",
+              "type": "string",
+              "pattern": "^[1-9][0-9]{0,5}(ms|s)$"
+            }
+          }
+        }
+      },
+      "if": {
+        "properties": { "type": { "enum": ["gitea", "forgejo"] } }
+      },
+      "then": { "required": ["url"] }
+    }
+  }
+}

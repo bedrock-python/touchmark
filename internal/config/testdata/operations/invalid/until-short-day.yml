@@ -1,0 +1,3 @@
+# error: adopt_unmarked.until: "2026-10-1" must be a date written YYYY-MM-DD
+version: 1
+adopt_unmarked: {until: 2026-10-1}

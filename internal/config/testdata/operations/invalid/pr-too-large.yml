@@ -1,0 +1,5 @@
+# error: cannot unmarshal
+version: 1
+forget_declines:
+  - target: gh:acme/docs
+    pr: 9223372036854775808

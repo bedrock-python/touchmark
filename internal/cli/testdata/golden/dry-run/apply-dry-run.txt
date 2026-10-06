@@ -1,0 +1,9 @@
+touchmark apply --dry-run · hub acme-eng @ $COMMIT · target acme/svc
+packs: base (.engineering-assets.yml)
+
+  create  missing  .github/pull_request_template.md  base
+  create  missing  AGENTS.md                         base
+  create  missing  docs/guide.md                     base
+
+missing 3
+dry run: 3 changes would be applied

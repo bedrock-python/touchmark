@@ -1,0 +1,3 @@
+# warning: no version, assuming 1
+targets:
+  - repo: acme/billing

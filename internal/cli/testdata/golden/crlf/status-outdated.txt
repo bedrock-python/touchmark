@@ -1,0 +1,7 @@
+touchmark status · hub acme-eng @ $COMMIT · target acme/svc
+packs: base (.engineering-assets.yml)
+
+  update  outdated  AGENTS.md  base
+
+current 2 · outdated 1
+1 change to apply: run touchmark apply

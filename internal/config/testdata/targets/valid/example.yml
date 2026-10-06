@@ -1,0 +1,15 @@
+# One entry of each kind: repo, group and org.
+version: 1
+defaults:
+  packs: [agents]
+targets:
+  - repo: acme/billing              # one repository
+    packs: [python-service]
+  - group: acme/platform            # GitLab: a group with its subgroups
+    topics: [python]
+    packs: [python-service]
+  - org: acme                       # GitHub: an organisation
+    topics: [library]
+    packs: [python-library]
+exclude:
+  - acme/legacy-monolith

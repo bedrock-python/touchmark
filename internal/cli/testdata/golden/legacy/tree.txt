@@ -1,0 +1,2 @@
+.engineering-assets.yml  packs: [base]
+AGENTS.md  base AGENTS.md v1

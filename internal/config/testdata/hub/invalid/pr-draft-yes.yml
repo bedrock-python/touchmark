@@ -1,0 +1,5 @@
+# error: expected true or false, got a string
+version: 1
+id: acme-eng
+pr:
+  draft: yes

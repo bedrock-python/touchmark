@@ -1,0 +1,6 @@
+# error: more than one YAML document
+version: 1
+id: acme-eng
+---
+version: 1
+id: other-eng

@@ -1,0 +1,6 @@
+# error: providers[0].url: required for gitea
+version: 1
+id: acme-eng
+providers:
+  - id: gitea
+    type: gitea

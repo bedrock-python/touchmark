@@ -1,0 +1,2 @@
+# error: packs: expected a list, got a string
+packs: claude

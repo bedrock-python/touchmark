@@ -1,0 +1,3 @@
+# The pre-v1 format: no version.
+packs: [python-service]
+ignore: [AGENTS.md]

@@ -1,0 +1,177 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/bedrock-python/touchmark/master/schemas/doctor.schema.json",
+  "title": "touchmark doctor report",
+  "description": "The report of touchmark doctor (doctor/v1): the checks of each provider's write identity, of every target of targets.yml, and of the hub (write isolation; with --hub-token, where the write key lives). A check the write identity cannot read is unknown, never ok. A non-public target of a public hub is only counted: its entry has no path, no repository id and no check details.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "command", "engine", "hub", "strict", "hub_token", "hub_checks", "providers", "targets", "warnings", "summary"],
+  "properties": {
+    "schema": {
+      "description": "Report format: doctor/v1.",
+      "const": "doctor/v1"
+    },
+    "command": { "const": "doctor" },
+    "engine": {
+      "description": "touchmark's version.",
+      "type": "string"
+    },
+    "hub": { "$ref": "#/$defs/hub" },
+    "strict": {
+      "description": "The run had --strict: a check that warns or is unknown, or an incomplete resolve, exits with code 3.",
+      "type": "boolean"
+    },
+    "hub_token": {
+      "description": "doctor --hub-token read, with a maintainer's token, where the hub keeps its secrets.",
+      "type": "boolean"
+    },
+    "hub_checks": {
+      "description": "The checks of the hub itself.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/check" }
+    },
+    "providers": {
+      "description": "The hub's providers, in hub.yml order.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/provider" }
+    },
+    "targets": {
+      "description": "Every target, sorted by provider and path; targets a public hub does not name come last within their provider.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/target" }
+    },
+    "warnings": {
+      "description": "Warnings about the run as a whole.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "summary": {
+      "description": "Checks per status, every status present.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ok", "warn", "fail", "unknown"],
+      "properties": {
+        "ok": { "$ref": "#/$defs/count" },
+        "warn": { "$ref": "#/$defs/count" },
+        "fail": { "$ref": "#/$defs/count" },
+        "unknown": { "$ref": "#/$defs/count" }
+      }
+    }
+  },
+  "$defs": {
+    "count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "providerId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,31}$"
+    },
+    "hub": {
+      "description": "The hub the run read.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "fingerprint", "commit"],
+      "properties": {
+        "id": {
+          "description": "hub.yml's id.",
+          "type": "string",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+        },
+        "fingerprint": {
+          "description": "The hub's host and immutable repository id, e.g. github.com/712345678.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9.-]+(:[0-9]{1,5})?/[0-9]+$"
+        },
+        "commit": {
+          "description": "Full commit id: 40 or 64 lowercase hex digits.",
+          "type": "string",
+          "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"
+        }
+      }
+    },
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["check", "status"],
+      "properties": {
+        "check": {
+          "description": "What was checked, e.g. access, token-expiry, rules, markers, hub-hidden, write-isolation, key-location.",
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "status": { "enum": ["ok", "warn", "fail", "unknown"] },
+        "detail": {
+          "description": "What the check found; absent for a target the report does not name.",
+          "type": "string"
+        }
+      }
+    },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "host", "resolve_complete", "checks"],
+      "properties": {
+        "id": { "$ref": "#/$defs/providerId" },
+        "type": { "enum": ["github", "gitlab", "gitea", "forgejo"] },
+        "host": {
+          "description": "The provider's host, with a port when it has one.",
+          "type": "string",
+          "minLength": 1
+        },
+        "writer": {
+          "description": "Login of the writer hub.yml names.",
+          "type": "string"
+        },
+        "self": {
+          "description": "Login the write credential acts as.",
+          "type": "string"
+        },
+        "resolve_complete": {
+          "description": "Every organisation and group of targets.yml was listed in full.",
+          "type": "boolean"
+        },
+        "missing": {
+          "description": "Repositories targets.yml names that the platform does not know, as <provider>:<path>.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "error": {
+          "description": "Why the provider could not be checked.",
+          "type": "string"
+        },
+        "checks": {
+          "description": "The checks of the write identity.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/check" }
+        }
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "host", "repo_id", "path", "checks"],
+      "properties": {
+        "provider": { "$ref": "#/$defs/providerId" },
+        "host": { "type": "string", "minLength": 1 },
+        "repo_id": {
+          "description": "The repository's immutable id on the platform; empty for a target the report does not name.",
+          "type": "string"
+        },
+        "path": {
+          "description": "The repository's canonical path; empty for a target the report does not name.",
+          "type": "string"
+        },
+        "skipped": {
+          "description": "Why the target was not checked: archived, disabled, empty, mirror, pending-deletion, prs-disabled, sha256, not-opted-in, unsafe-opt-in, or deferred:<reason> (the run could not check the target; an unknown check says why).",
+          "type": "string",
+          "minLength": 1
+        },
+        "checks": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/check" }
+        }
+      }
+    }
+  }
+}

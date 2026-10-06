@@ -1,0 +1,3 @@
+# error: adopt_unmarked.until: "next week" must be a date
+version: 1
+adopt_unmarked: {until: next week}

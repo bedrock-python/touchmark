@@ -1,0 +1,6 @@
+# error: providers[0].id: provider id "corp_gl"
+version: 1
+id: acme-eng
+providers:
+  - id: corp_gl
+    type: gitlab

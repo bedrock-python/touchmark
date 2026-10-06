@@ -1,0 +1,6 @@
+# '#' inside quotes is content, not a comment.
+version: 1
+ignore:
+  - "docs/#drafts/**"
+  - 'notes #1.md' # a comment after the value
+  - a#b

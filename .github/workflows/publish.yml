@@ -1,0 +1,516 @@
+# The publication of a release (docs/project/release.md). Release Please
+# (release-please.yml) keeps a release pull request open on master; merging
+# it creates the tag vX.Y.Z and its GitHub release, with Release Please's
+# notes. A tag made with GITHUB_TOKEN starts no workflow, so this one runs
+# when the Release Please run of a push to master completes (workflow_run,
+# as in the org's other repositories), finds a release tag on the commit
+# that run saw, and publishes it:
+#
+#   check   the tag, with master's scripts, never the tag's own: vX.Y.Z,
+#           its commit on master, the version of .release-please-manifest.json
+#           and of action.yml at that commit
+#   assets  goreleaser: the archives and their SBOMs, uploaded to the
+#           release with checksums.txt, which cosign signs (keyless); one
+#           build provenance attestation for every file checksums.txt lists
+#   image   the image, built from the release's own Linux archives once
+#           checksums.txt's signature checks out (scripts/release/
+#           build-image.sh), pushed by digest, untagged, with BuildKit's
+#           SBOM and provenance; checked (scripts/release/check-image.sh)
+#   scan    known vulnerabilities in that digest (trivy), with read access
+#           only: a red job to act on, which holds nothing back, since the
+#           tag exists already
+#   attest  a build provenance attestation of the digest, pushed to the
+#           registry next to it: the one the Action checks
+#   tags    cosign signs the digest; then X.Y.Z, X.Y and latest name it
+#   verify  what a hub gets, on amd64 and arm64: the signature, the
+#           attestation from GitHub and from the registry, the tags, the
+#           SBOM and provenance, the version inside; the release's files
+#           against the signed checksums.txt; then, anonymously as a hub
+#           pulls, the Action of the tag, run for real, and plan and
+#           distribute from the image against a live Gitea
+#
+# Every job after check works on the commit check resolved, by its id, and
+# stops when the checkout is anything else. No image tag names the image
+# until it passed its checks and is attested and signed; the git tag, and
+# with it the Action at vX.Y.Z, exist from the start. A failure in verify is
+# a red release run to read, not an unpublished release. Run workflow on
+# master with a tag publishes it again: every job can run twice
+# (goreleaser replaces the files; the image is rebuilt, pushed by digest
+# again, and its tags move to the new digest).
+#
+# The actions are pinned by commit, goreleaser, cosign and syft by version,
+# binfmt, BuildKit and BuildKit's SBOM scanner by digest, and nothing comes
+# from a cache: what they run ends up in what cosign signs. Each job gets
+# the least it needs: only assets, attest and tags can request an OIDC token,
+# and no third-party scanner runs in a job that can.
+name: Publish
+
+on:
+  workflow_run:
+    workflows: ["Release Please"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish (e.g. v0.1.0)"
+        required: true
+
+permissions: {}
+
+# One run at a time per release: keyed by the commit Release Please saw, or
+# by the tag of a run started by hand. A single group for every run would
+# let GitHub cancel a pending release run when two more runs queue behind it.
+concurrency:
+  group: publish-${{ github.event.workflow_run.head_sha || inputs.tag }}
+  cancel-in-progress: false
+
+env:
+  GOTOOLCHAIN: local
+  # The Go of the release builds: the newest the test matrix covers.
+  GO_VERSION: '1.26.x'
+  IMAGE: ghcr.io/bedrock-python/touchmark
+  # Who signs and attests a release: this workflow, run on master.
+  SIGNER_WORKFLOW: bedrock-python/touchmark/.github/workflows/publish.yml
+  SIGNER_REF: refs/heads/master
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  check:
+    name: Check release tag
+    # A push to master in this repository only: a pull request from a fork
+    # can add a workflow named "Release Please" too.
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'master' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      commit: ${{ steps.tag.outputs.commit }}
+      version: ${{ steps.tag.outputs.version }}
+      minor: ${{ steps.tag.outputs.minor }}
+      latest: ${{ steps.tag.outputs.latest }}
+      latest_minor: ${{ steps.tag.outputs.latest_minor }}
+    steps:
+      # The workflow's own commit, the tip of master, never the tag: a tag
+      # can name any commit, and check-version.sh is what refuses one that
+      # is not on master, so it must not come from the tag.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0     # the tags, and master for the ancestry check
+          persist-credentials: false
+
+      - name: Resolve tag
+        id: tag
+        env:
+          EVENT: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          REF: ${{ github.ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          # The certificates of every signature name the ref this workflow
+          # runs on, and hubs accept master's only.
+          if [ "$REF" != "refs/heads/$DEFAULT_BRANCH" ]; then
+            echo "::error::Publish runs on $DEFAULT_BRANCH, not on $REF"
+            exit 1
+          fi
+          re='^v[0-9]+\.[0-9]+\.[0-9]+$'
+          if [ "$EVENT" = workflow_dispatch ]; then
+            if ! [[ $INPUT_TAG =~ $re ]]; then
+              echo "::error::the tag must be vX.Y.Z"
+              exit 1
+            fi
+            tag=$INPUT_TAG
+          else
+            tag=$(git tag --points-at "$HEAD_SHA" | grep -E "$re" | head -1 || true)
+            if [ -z "$tag" ]; then
+              echo "No release tag on $HEAD_SHA — skipping publish."
+              exit 0
+            fi
+          fi
+          echo "Will publish $tag"
+          RELEASE_BRANCH="origin/$DEFAULT_BRANCH" bash scripts/release/check-version.sh "$tag" | tee -a "$GITHUB_OUTPUT"
+
+  assets:
+    name: Archives, SBOMs and checksums
+    needs: check
+    if: needs.check.outputs.tag != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write           # upload the files to the release
+      id-token: write           # cosign keyless signing and the attestation
+      attestations: write
+      artifact-metadata: write
+    env:
+      TAG: ${{ needs.check.outputs.tag }}
+      COMMIT: ${{ needs.check.outputs.commit }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.check.outputs.commit }}
+          fetch-depth: 0     # goreleaser reads the tags
+          persist-credentials: false
+
+      - name: The checkout is the tag's commit
+        run: |
+          test "$(git rev-parse HEAD)" = "$COMMIT" && test "$(git rev-parse "refs/tags/$TAG^{commit}")" = "$COMMIT" ||
+            { echo "::error::HEAD or $TAG is not $COMMIT"; exit 1; }
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          # A release never builds from a cache another run could have written.
+          cache: false
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.3
+
+      - uses: anchore/sbom-action/download-syft@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+        with:
+          syft-version: v1.54.0
+
+      # The release exists (Release Please made it): goreleaser keeps its
+      # notes and adds the files (.goreleaser.yaml).
+      - name: goreleaser release
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          distribution: goreleaser
+          version: v2.18.2
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GORELEASER_CURRENT_TAG: ${{ env.TAG }}
+
+      # One provenance attestation for every file of the release: the
+      # archives and their SBOMs, by checksums.txt.
+      - name: Attest the release files
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-checksums: dist/checksums.txt
+
+  image:
+    name: The image, pushed by digest
+    needs: [check, assets]
+    if: needs.check.outputs.tag != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read            # the release's files
+      packages: write           # push the image
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
+    env:
+      TAG: ${{ needs.check.outputs.tag }}
+      COMMIT: ${{ needs.check.outputs.commit }}
+    steps:
+      # The Dockerfile and the scripts of the tag's commit, and the commit
+      # for the labels.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.check.outputs.commit }}
+          persist-credentials: false
+
+      - name: The checkout is the tag's commit
+        run: |
+          test "$(git rev-parse HEAD)" = "$COMMIT" ||
+            { echo "::error::HEAD is not $COMMIT"; exit 1; }
+
+      - name: Download the release's Linux archives
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir "$RUNNER_TEMP/release" \
+            --pattern 'touchmark_*_linux_*.tar.gz' --pattern checksums.txt --pattern checksums.txt.sigstore.json
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.3
+
+      # The image holds the archives' binary, so the archives are checked
+      # first: listed in a checksums.txt that this workflow signed on master.
+      - name: Verify checksums.txt
+        run: |
+          cosign verify-blob --bundle "$RUNNER_TEMP/release/checksums.txt.sigstore.json" \
+            --certificate-identity "https://github.com/$SIGNER_WORKFLOW@$SIGNER_REF" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "$RUNNER_TEMP/release/checksums.txt"
+
+      # The arm64 half of the image runs its RUN steps under the binfmt
+      # handler setup-qemu installs, inside the BuildKit setup-buildx starts:
+      # both are pinned by digest and taken from no cache, since what they
+      # run ends up in the image cosign signs (their defaults are
+      # binfmt:latest, the floating buildx-stable-1 and an Actions cache any
+      # run on master can write). ci.yml's release-snapshot job uses the same pins.
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        with:
+          image: docker.io/tonistiigi/binfmt:qemu-v10.2.3@sha256:400a4873b838d1b89194d982c45e5fb3cda4593fbfd7e08a02e76b03b21166f0
+          platforms: arm64
+          cache-image: false
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          driver-opts: image=docker.io/moby/buildkit:v0.33.1@sha256:cec9f139f45e93c5c69c60f8b07cfad9f43f4ef6b6a6cd917527fea5ff2e3dea
+          cache-binary: false
+
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push by digest
+        id: push
+        run: bash scripts/release/build-image.sh "$RUNNER_TEMP/release" "$IMAGE" "$TAG" | tee -a "$GITHUB_OUTPUT"
+
+      - name: Check the image
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: bash scripts/release/check-image.sh "$IMAGE@$DIGEST" "$TAG"
+
+  scan:
+    name: Known vulnerabilities in the image
+    needs: [check, image]
+    if: needs.check.outputs.tag != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # The scanner is third-party code that downloads its own binary: it runs
+    # here, with read access to the package and nothing else, never in a
+    # job that can request an OIDC token or push.
+    permissions:
+      packages: read      # the image, while the package is private
+    env:
+      DIGEST: ${{ needs.image.outputs.digest }}
+    steps:
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # As the org's images are scanned: a CRITICAL or HIGH vulnerability
+      # with a fix turns this job red. It holds nothing back: the tag and
+      # the release exist already, the same base image is in every earlier
+      # release, and a blocked image would leave the Action at the tag
+      # broken for good. CI's release-snapshot job scans the same build on
+      # the release pull request and every night, and blocks there; a red
+      # scan here is fixed by a patch release (docs/project/release.md).
+      # The scanner's database comes fresh, from no cache.
+      - name: Scan the image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE }}@${{ env.DIGEST }}
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '1'
+          version: v0.70.0
+          cache: 'false'
+          format: table
+          output: trivy.txt
+
+      - name: The findings
+        if: always()
+        run: |
+          [ -f trivy.txt ] || exit 0
+          cat trivy.txt
+          { echo '### Known vulnerabilities (CRITICAL, HIGH, with a fix)'; echo '```'; cat trivy.txt; echo '```'; } >>"$GITHUB_STEP_SUMMARY"
+
+  attest:
+    name: Attest the image
+    needs: [check, image]
+    if: needs.check.outputs.tag != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      packages: write           # push the attestation next to the image
+      id-token: write           # the attestation
+      attestations: write
+      artifact-metadata: write  # the storage record of the image's attestation
+    steps:
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # The attestation the Action checks before it runs the image
+      # (scripts/action/run.sh): pushed to the registry next to the image,
+      # and kept by GitHub.
+      - name: Attest the image
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ needs.image.outputs.digest }}
+          push-to-registry: true
+
+  tags:
+    name: Sign and tag the image
+    needs: [check, image, attest]
+    if: needs.check.outputs.tag != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      packages: write   # the signature and the tags
+      id-token: write   # cosign keyless signing
+    env:
+      DIGEST: ${{ needs.image.outputs.digest }}
+      VERSION: ${{ needs.check.outputs.version }}
+      MINOR: ${{ needs.check.outputs.minor }}
+      LATEST: ${{ needs.check.outputs.latest }}
+      LATEST_MINOR: ${{ needs.check.outputs.latest_minor }}
+    steps:
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.3
+
+      # Signed keylessly with this workflow's identity: cosign verify can
+      # then prove the image was built by this repository's publish workflow
+      # on master, and not by anyone holding a leaked token.
+      - name: Sign
+        run: cosign sign --yes "$IMAGE@$DIGEST"
+
+      # Carbon copies of the signed index: the digest, and with it the
+      # signature and the attestations, stay. X.Y and latest move only to
+      # the newest release of their line, so publishing an older one again
+      # leaves them.
+      - name: Tag
+        run: |
+          set -euo pipefail
+          tags=("$VERSION")
+          if [ "$LATEST_MINOR" = true ]; then tags+=("$MINOR"); fi
+          if [ "$LATEST" = true ]; then tags+=(latest); fi
+          for t in "${tags[@]}"; do
+            docker buildx imagetools create --prefer-index=false --tag "$IMAGE:$t" "$IMAGE@$DIGEST"
+            got=$(docker buildx imagetools inspect "$IMAGE:$t" --format '{{ .Manifest.Digest }}')
+            if [ "$got" != "$DIGEST" ]; then
+              echo "::error::$IMAGE:$t names $got, not $DIGEST"
+              exit 1
+            fi
+            echo "$IMAGE:$t = $DIGEST"
+          done
+
+  verify:
+    name: The published release, verified (${{ matrix.os }})
+    needs: [check, image, tags]
+    if: needs.check.outputs.tag != ''
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: read      # the image, while the package is private
+      attestations: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm]
+    env:
+      TAG: ${{ needs.check.outputs.tag }}
+      DIGEST: ${{ needs.image.outputs.digest }}
+      VERSION: ${{ needs.check.outputs.version }}
+      MINOR: ${{ needs.check.outputs.minor }}
+      LATEST: ${{ needs.check.outputs.latest }}
+      LATEST_MINOR: ${{ needs.check.outputs.latest_minor }}
+      COMMIT: ${{ needs.check.outputs.commit }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      # The tag's commit, for its action.yml and scripts.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.check.outputs.commit }}
+          persist-credentials: false
+
+      - name: The checkout is the tag's commit
+        run: |
+          test "$(git rev-parse HEAD)" = "$COMMIT" ||
+            { echo "::error::HEAD is not $COMMIT"; exit 1; }
+
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.3
+
+      - name: Signed and attested by this workflow, on master
+        run: |
+          set -euo pipefail
+          ref="$IMAGE@$DIGEST"
+          cosign verify "$ref" \
+            --certificate-identity "https://github.com/$SIGNER_WORKFLOW@$SIGNER_REF" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com >/dev/null
+          policy=(--repo "$GITHUB_REPOSITORY" --signer-workflow "$SIGNER_WORKFLOW" --source-ref "$SIGNER_REF" --deny-self-hosted-runners)
+          gh attestation verify "oci://$ref" "${policy[@]}" >/dev/null
+          gh attestation verify "oci://$ref" --bundle-from-oci "${policy[@]}" >/dev/null
+          echo "$ref: signed, attested (GitHub and the registry)"
+
+      - name: The tags, the version inside, the SBOM and the provenance
+        run: |
+          set -euo pipefail
+          tags=("$VERSION")
+          if [ "$LATEST_MINOR" = true ]; then tags+=("$MINOR"); fi
+          if [ "$LATEST" = true ]; then tags+=(latest); fi
+          for t in "${tags[@]}"; do
+            got=$(docker buildx imagetools inspect "$IMAGE:$t" --format '{{ .Manifest.Digest }}')
+            test "$got" = "$DIGEST" || { echo "::error::$IMAGE:$t names $got, not $DIGEST"; exit 1; }
+          done
+          bash scripts/release/check-image.sh "$IMAGE:$VERSION" "$TAG"
+          docker buildx imagetools inspect "$IMAGE@$DIGEST" --format '{{ json .SBOM }}' | grep -q '"SPDX"'
+          docker buildx imagetools inspect "$IMAGE@$DIGEST" --format '{{ json .Provenance }}' | grep -q '"SLSA"'
+
+      - name: The release's files against the signed checksums.txt
+        if: runner.arch == 'X64'
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/release"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir "$dir"
+          cosign verify-blob --bundle "$dir/checksums.txt.sigstore.json" \
+            --certificate-identity "https://github.com/$SIGNER_WORKFLOW@$SIGNER_REF" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "$dir/checksums.txt"
+          (cd "$dir" && sha256sum --check --strict --quiet checksums.txt)
+          files=$(find "$dir" -type f ! -name checksums.txt ! -name checksums.txt.sigstore.json | wc -l)
+          listed=$(wc -l <"$dir/checksums.txt")
+          # 6 archives and 6 SBOMs, every one of them in checksums.txt.
+          test "$files" -eq 12 && test "$listed" -eq 12 ||
+            { echo "::error::the release has $files files, checksums.txt lists $listed, want 12"; exit 1; }
+          gh attestation verify "$dir/touchmark_${VERSION}_linux_amd64.tar.gz" --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$SIGNER_WORKFLOW" --source-ref "$SIGNER_REF" --deny-self-hosted-runners >/dev/null
+
+      # From here on as a hub pulls: anonymously. The first push creates the
+      # package private, and these steps fail until it is made public
+      # (docs/project/release.md, "Before the first release").
+      - name: Log out of ghcr.io
+        run: docker logout ghcr.io
+
+      # The Action of this tag, as a hub runs it: it resolves its version's
+      # tag, verifies the attestation and runs the image by digest.
+      - name: The Action of the tag
+        uses: ./
+        with:
+          command: version
+
+      # plan and distribute from the published image against a live Gitea.
+      - name: scripts/release/image-e2e.sh
+        if: runner.arch == 'X64'
+        run: bash scripts/release/image-e2e.sh "$IMAGE@$DIGEST"

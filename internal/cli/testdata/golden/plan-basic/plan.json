@@ -1,0 +1,298 @@
+{
+  "schema": "report/v1",
+  "command": "plan",
+  "engine": "dev",
+  "hub": {
+    "id": "acme-eng",
+    "fingerprint": "github.com/712345678",
+    "commit": "$COMMIT",
+    "pr": 41
+  },
+  "outcome": "completed",
+  "strict": false,
+  "scope": {
+    "mode": "packs",
+    "packs": [
+      "base",
+      "python"
+    ],
+    "base": "eb87ee0ff66877aa7e22ae1cd18650e43f7abfe7",
+    "processed": 11,
+    "total": 11
+  },
+  "providers": [
+    {
+      "id": "gh",
+      "type": "github",
+      "host": "github.com",
+      "reader": "acme-read[bot]",
+      "writer": "acme-write[bot]",
+      "write_check": "not checked",
+      "resolve_complete": true
+    },
+    {
+      "id": "corp",
+      "type": "gitlab",
+      "host": "gitlab.example.com",
+      "reader": "tm-reader",
+      "writer": "tm-writer",
+      "write_check": "not checked",
+      "resolve_complete": true
+    }
+  ],
+  "targets": [
+    {
+      "provider": "corp",
+      "host": "gitlab.example.com",
+      "repo_id": "1003",
+      "path": "platform/api",
+      "outcome": "opened",
+      "key": "sha256:dac170b41b824b11ae9669885a2b95f1a3212b1a34aca7be7e97fd52a383fb4e",
+      "packs": [
+        "base",
+        "python"
+      ],
+      "changes": {
+        "create": 3,
+        "update": 0,
+        "delete": 0,
+        "chmod": 0
+      },
+      "writes": 2
+    },
+    {
+      "provider": "gh",
+      "host": "github.com",
+      "repo_id": "",
+      "path": "",
+      "outcome": "skipped",
+      "reason": "private-in-public-hub",
+      "changes": {
+        "create": 0,
+        "update": 0,
+        "delete": 0,
+        "chmod": 0
+      },
+      "writes": 0
+    },
+    {
+      "provider": "gh",
+      "host": "github.com",
+      "repo_id": "1006",
+      "path": "acme/api",
+      "outcome": "unchanged",
+      "pr": {
+        "number": 1,
+        "url": "https://github.com/acme/api/pull/1",
+        "state": "open"
+      },
+      "key": "sha256:d2a463a555041e006cba7d364937041d427ddb310a93ff8567df028c4a1bb157",
+      "packs": [
+        "base"
+      ],
+      "changes": {
+        "create": 2,
+        "update": 0,
+        "delete": 0,
+        "chmod": 0
+      },
+      "writes": 0
+    },
+    {
+      "provider": "gh",
+      "host": "github.com",
+      "repo_id": "1010",
+      "path": "acme/archive",
+      "outcome": "skipped",
+      "reason": "archived",
+      "changes": {
+        "create": 0,
+        "update": 0,
+        "delete": 0,
+        "chmod": 0
+      },
+      "writes": 0
+    },
+    {
+      "provider": "gh",
+      "host": "github.com",
+      "repo_id": "1005",
+      "path": "acme/billing",
+      "outcome": "opened",
+      "key": "sha256:d2a463a555041e006cba7d364937041d427ddb310a93ff8567df028c4a1bb157",
+      "packs": [
+        "base"
+      ],
+      "changes": {
+        "create": 2,
+        "update": 0,
+        "delete": 0,
+        "chmod": 0
+      },
+      "writes": 4
+    },
+    {
+      "provider": "gh",
+      "host": "github.com",
+      "repo_id": "1011",
+      "path": "acme/cli",
+      "outcome": "blocked",
+      "reason": "branch-in-use",
+      "pr": {
+        "number": 1,
+        "url": "https://github.com/acme/cli/pull/1",
+        "state": "open"
+      },
+      "key": "sha256:d2a463a555041e006cba7d364937041d427ddb310a93ff8567df028c4a1bb157",
+      "packs": [
+        "base"
+      ],
+      "changes": {
+        "create": 2,
+        "update": 0,
+        "delete": 0,
+        "chmod": 0
+      },
+      "writes": 0
+    },
+    {
+      "provider": "gh",
+      "host": "github.com",
+      "repo_id": "1012",
+      "path": "acme/docs",
+      "outcome": "opened",
+      "key": "sha256:d2a463a555041e006cba7d364937041d427ddb310a93ff8567df028c4a1bb157",
+      "packs": [
+        "base"
+      ],
+      "changes": {
+        "create": 2,
+        "update": 0,
+        "delete": 0,
+        "chmod": 0
+      },
+      "writes": 3
+    },
+    {
+      "provider": "gh",
+      "host": "github.com",
+      "repo_id": "1008",
+      "path": "acme/old",
+      "outcome": "closed",
+      "reason": "no-diff",
+      "pr": {
+        "number": 1,
+        "url": "https://github.com/acme/old/pull/1",
+        "state": "open"
+      },
+      "packs": [
+        "base"
+      ],
+      "changes": {
+        "create": 0,
+        "update": 0,
+        "delete": 0,
+        "chmod": 0
+      },
+      "writes": 3
+    },
+    {
+      "provider": "gh",
+      "host": "github.com",
+      "repo_id": "1007",
+      "path": "acme/sdk",
+      "outcome": "updated",
+      "reason": "content",
+      "pr": {
+        "number": 1,
+        "url": "https://github.com/acme/sdk/pull/1",
+        "state": "open"
+      },
+      "key": "sha256:dac170b41b824b11ae9669885a2b95f1a3212b1a34aca7be7e97fd52a383fb4e",
+      "packs": [
+        "base",
+        "python"
+      ],
+      "changes": {
+        "create": 3,
+        "update": 0,
+        "delete": 0,
+        "chmod": 0
+      },
+      "writes": 2
+    },
+    {
+      "provider": "gh",
+      "host": "github.com",
+      "repo_id": "1015",
+      "path": "acme/tools",
+      "outcome": "opened",
+      "key": "sha256:d2a463a555041e006cba7d364937041d427ddb310a93ff8567df028c4a1bb157",
+      "packs": [
+        "base"
+      ],
+      "changes": {
+        "create": 2,
+        "update": 0,
+        "delete": 0,
+        "chmod": 0
+      },
+      "orphaned": [
+        "docs/python.md"
+      ],
+      "writes": 4
+    },
+    {
+      "provider": "gh",
+      "host": "github.com",
+      "repo_id": "1009",
+      "path": "acme/web",
+      "outcome": "skipped",
+      "reason": "not-opted-in",
+      "changes": {
+        "create": 0,
+        "update": 0,
+        "delete": 0,
+        "chmod": 0
+      },
+      "writes": 0
+    }
+  ],
+  "ops": [],
+  "warnings": [],
+  "summary": {
+    "blocked": 1,
+    "closed": 1,
+    "declined": 0,
+    "deferred": 0,
+    "failed": 0,
+    "opened": 4,
+    "skipped": 3,
+    "unchanged": 1,
+    "updated": 1
+  },
+  "sweep": {
+    "ran": false,
+    "complete": false,
+    "failed": false
+  },
+  "cost": {
+    "corp": 2,
+    "gh": 16
+  },
+  "estimate": {
+    "new_prs": 4,
+    "max_new_prs_per_run": 100,
+    "runs": 1,
+    "providers": {
+      "corp": {
+        "writes": 2,
+        "seconds": 1
+      },
+      "gh": {
+        "writes": 16,
+        "seconds": 15
+      }
+    }
+  }
+}

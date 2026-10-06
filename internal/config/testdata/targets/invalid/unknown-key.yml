@@ -1,0 +1,4 @@
+# error: unknown key "target"
+version: 1
+target:
+  - repo: acme/billing

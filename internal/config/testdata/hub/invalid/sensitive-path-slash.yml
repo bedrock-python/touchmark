@@ -1,0 +1,4 @@
+# error: sensitive_paths[0]: pattern "/" is empty
+version: 1
+id: acme-eng
+sensitive_paths: ["/"]

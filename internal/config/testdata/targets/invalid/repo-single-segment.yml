@@ -1,0 +1,4 @@
+# error: targets[0].repo: "billing": a repository path needs an owner and a name
+version: 1
+targets:
+  - repo: billing

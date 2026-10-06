@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/bedrock-python/touchmark/master/schemas/opt-in.schema.json",
+  "title": "touchmark opt-in file",
+  "description": "The opt-in file of a target repository (.engineering-assets.yml by default). Its presence is the repository's consent; it may be empty. Format v1.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "description": "Format version. Only 1 exists.",
+      "type": "integer",
+      "const": 1
+    },
+    "packs": {
+      "description": "Packs to add to those the hub assigns. Packs the hub assigns cannot be removed here.",
+      "type": ["array", "null"],
+      "items": {
+        "type": "string",
+        "maxLength": 64,
+        "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+      }
+    },
+    "ignore": {
+      "description": "Paths the hub must never create, update or delete here. A path without glob characters covers everything beneath it; ** matches any number of directories. At most 1000 patterns.",
+      "type": ["array", "null"],
+      "maxItems": 1000,
+      "items": {
+        "type": "string",
+        "pattern": "[^\t\n\u000b\f\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff/\\\\]"
+      }
+    }
+  }
+}

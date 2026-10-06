@@ -1,0 +1,4 @@
+# error: opt_in_file: invalid repository path: inside .git
+version: 1
+id: acme-eng
+opt_in_file: .git/engineering-assets.yml

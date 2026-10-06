@@ -1,0 +1,8 @@
+# error: providers[0].api_url
+version: 1
+id: acme-eng
+providers:
+  - id: corp
+    type: gitlab
+    url: https://gitlab.example.com
+    api_url: https://gitlab.example.com/api/v4?private=1

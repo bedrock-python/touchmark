@@ -1,0 +1,5 @@
+# error: limits.max_close_fraction: must be greater than 0
+version: 1
+id: acme-eng
+limits:
+  max_close_fraction: 1.5

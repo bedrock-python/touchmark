@@ -1,0 +1,5 @@
+# error: recreate[0].head: expected a string, got a number
+version: 1
+recreate:
+  - target: gh:acme/api
+    head: 1234567890123456789012345678901234567890

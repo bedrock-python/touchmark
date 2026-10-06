@@ -1,0 +1,98 @@
+[project]
+site_name = "touchmark"
+site_description = "Keep shared files in sync across many repositories through pull requests, without overwriting what a team has made its own"
+site_author = "Alex Shalaev"
+repo_name = "bedrock-python/touchmark"
+repo_url = "https://github.com/bedrock-python/touchmark"
+edit_uri = "edit/master/docs/"
+copyright = "Copyright &copy; 2026 Alex Shalaev"
+docs_dir = "docs"
+site_dir = "site"
+
+extra_css = ["assets/stylesheets/copy-page.css", "assets/stylesheets/admonitions.css"]
+extra_javascript = ["assets/javascripts/copy-page.js"]
+
+nav = [
+    { "Home" = "index.md" },
+    { "For AI agents" = "agents.md" },
+    { "Getting started" = [
+        { "Installation" = "getting-started/installation.md" },
+        { "A hub on GitHub" = "getting-started/github.md" },
+        { "A hub on GitLab" = "getting-started/gitlab.md" },
+        { "A hub on Gitea or Forgejo" = "getting-started/gitea-forgejo.md" },
+        { "Opt a repository in" = "getting-started/opt-in.md" },
+    ] },
+    { "Concepts" = [
+        { "How it works" = "concepts/overview.md" },
+        { "Ownership by provenance" = "concepts/ownership.md" },
+        { "Packs and opt-in" = "concepts/packs.md" },
+        { "Delivery and the sync branch" = "concepts/delivery.md" },
+        { "Memory of declined pull requests" = "concepts/memory.md" },
+        { "Security model" = "concepts/security.md" },
+    ] },
+    { "How-to guides" = [
+        { "Set up a hub's platform" = "guide/setup.md" },
+        { "Write packs" = "guide/packs.md" },
+        { "Run it in CI" = "guide/ci.md" },
+        { "Deliver to several platforms" = "guide/providers.md" },
+        { "One-off operations" = "guide/operations.md" },
+        { "Check the write account" = "guide/doctor.md" },
+        { "Use it on your machine" = "guide/local.md" },
+        { "Migrate from multi-gitter" = "guide/migrate.md" },
+        { "Troubleshoot" = "guide/troubleshooting.md" },
+        { "FAQ" = "guide/faq.md" },
+    ] },
+    { "Reference" = [
+        { "Commands" = "reference/commands.md" },
+        { "hub.yml" = "reference/hub.md" },
+        { "targets.yml" = "reference/targets.md" },
+        { "The opt-in file" = "reference/opt-in.md" },
+        { "operations.yml" = "reference/operations.md" },
+        { "Environment variables" = "reference/environment.md" },
+        { "Exit codes" = "reference/exit-codes.md" },
+        { "Reports" = "reference/output.md" },
+        { "The GitHub Action" = "reference/action.md" },
+        { "Glossary" = "reference/glossary.md" },
+    ] },
+    { "Project" = [
+        { "Threat model" = "project/threat-model.md" },
+        { "Releases" = "project/release.md" },
+        { "End-to-end tests" = "project/e2e.md" },
+    ] },
+    { "Changelog" = "changelog.md" },
+]
+
+[project.theme]
+custom_dir = "overrides"
+features = [
+    "content.code.annotate",
+    "content.code.copy",
+    "content.code.select",
+    "content.tabs.link",
+    "content.tooltips",
+    "navigation.footer",
+    "navigation.indexes",
+    "navigation.instant",
+    "navigation.instant.prefetch",
+    "navigation.path",
+    "navigation.sections",
+    "navigation.tabs",
+    "navigation.tabs.sticky",
+    "navigation.top",
+    "navigation.tracking",
+    "search.highlight",
+    "search.share",
+    "search.suggest",
+    "toc.follow",
+    "toc.integrate",
+]
+
+[[project.theme.palette]]
+scheme = "slate"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to light mode"
+
+[[project.theme.palette]]
+scheme = "default"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to dark mode"

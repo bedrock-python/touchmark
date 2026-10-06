@@ -1,0 +1,7 @@
+# '#' inside quotes is content, not a comment.
+version: 1
+id: acme-eng
+commit:
+  message: "chore: sync #42"
+pr:
+  title: 'sync # engineering assets' # a comment after the value

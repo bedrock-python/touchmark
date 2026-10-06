@@ -1,0 +1,6 @@
+# error: packs: pack name "Claude"
+version: 1
+id: acme-eng
+packs:
+  Claude:
+    requires: [agents]

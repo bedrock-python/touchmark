@@ -1,0 +1,19 @@
+# touchmark is a Go module. This file only pins the documentation toolchain,
+# the same zensical the other bedrock-python repositories build their sites
+# with: `uv sync --no-dev --group docs` installs it, and docs.yml and
+# `make docs-build` run it. Nothing here is built or published as a package.
+[project]
+name = "touchmark-docs"
+version = "0.0.0"
+description = "The documentation toolchain of touchmark; not a Python package"
+requires-python = ">=3.11"
+dependencies = []
+
+[dependency-groups]
+docs = [
+    "zensical>=0.0.37",
+]
+
+[tool.uv]
+package = false
+link-mode = "copy"

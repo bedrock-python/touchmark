@@ -1,0 +1,629 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  # Nightly: what can break without a push to this repository (a new
+  # advisory, a new vulnerability in the image's base, GitHub's API
+  # descriptions, the hub template, every supported Gitea and Forgejo), and
+  # the long runs of distribute.
+  schedule:
+    - cron: '41 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A push to a pull request while the previous run is still going restarts it;
+# the old one is answering a question nobody is asking any more. A run on
+# master is left to finish. The nightly and manual runs, which take hours,
+# keep to groups of their own, so that a push to master never waits for them.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # Test the Go version the matrix names, never one go.mod would download.
+  GOTOOLCHAIN: local
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  lint:
+    # Everything that runs no test, first: the jobs of the required check
+    # wait for it. golangci-lint and govulncheck run at the versions of the
+    # Makefile (make check).
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.x'
+          cache: true
+
+      - name: gofmt
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "::error::gofmt -l reports unformatted files"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      # go vet checks the files of one platform at a time: here those of every
+      # platform a release ships for, with and without the tag e2e of the live
+      # tests, so that a change that breaks them fails on the pull request,
+      # not at night.
+      - name: go vet
+        run: |
+          set -euo pipefail
+          for goos in linux darwin windows; do
+            echo "::group::GOOS=$goos"
+            GOOS=$goos go vet ./...
+            GOOS=$goos go vet -tags e2e ./...
+            echo "::endgroup::"
+          done
+
+      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.14.0
+
+      # The docs toolchain's lock file, as the org's lint jobs check theirs:
+      # a uv.lock out of step with pyproject.toml fails here, not after the
+      # merge, where docs.yml's uv sync would resolve it again.
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+      - name: uv lock --check
+        run: uv lock --check
+
+      # The workflows parse, and their run: scripts pass the shellcheck that
+      # actionlint bundles.
+      - name: actionlint
+        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 -color
+
+      # Every script of the repository, with the shellcheck of the same image.
+      - name: shellcheck
+        run: |
+          docker run --rm -v "$PWD:/repo" -w /repo --entrypoint shellcheck \
+            rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 \
+            -x scripts/*/*.sh
+
+      # .hadolint.yaml says which rule is off and why.
+      - name: Dockerfile lint
+        run: docker run --rm -v "$PWD:/repo" -w /repo hadolint/hadolint:v2.15.1@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d hadolint Dockerfile
+
+  test:
+    name: test (${{ matrix.os }}, go ${{ matrix.go }})
+    needs: lint
+    if: github.event_name != 'schedule'
+    runs-on: ${{ matrix.os }}
+    # The simulations of distribute and the lifecycle tests of the CLI run
+    # real git against the fake's git server: under the race detector each of
+    # the two packages takes minutes, more than go test's default limit of
+    # ten minutes per package on a busy 4-vCPU runner.
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        go: ['1.25.x', '1.26.x']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ matrix.go }}
+          cache: true
+
+      # The race detector needs cgo; one OS is enough to catch races. The
+      # heavy tests run on Linux only (TOUCHMARK_HEAVY_TESTS). The newest Go
+      # on Linux also measures the coverage of the whole suite and holds it
+      # to the gate of make test (COVERAGE_MIN in the Makefile).
+      - name: go test -race, the coverage and its gate
+        if: runner.os == 'Linux' && matrix.go == '1.26.x'
+        run: make test
+
+      - name: go test -race
+        if: runner.os == 'Linux' && matrix.go != '1.26.x'
+        run: go test -race -timeout 45m ./...
+
+      - name: go test
+        if: runner.os != 'Linux'
+        run: go test -timeout 45m ./...
+
+      - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        if: runner.os == 'Linux' && matrix.go == '1.26.x'
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.out
+          disable_search: true
+        continue-on-error: true
+
+  contracts:
+    # The contract checks, on every pull request: the GitHub driver's
+    # GraphQL documents against the public schemas of github.com and GHES
+    # 3.19 (through the fake's subset, TestSchemaSubset), and its REST
+    # routes and query parameters against github/rest-api-description
+    # (TestRESTContracts). The files are downloaded fresh, so that a change
+    # on GitHub's side fails here, not in a live run; a failed download
+    # fails the job (curl -f, set -e) instead of skipping the tests.
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.x'
+          cache: true
+
+      - name: GitHub's schemas and REST descriptions
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/github-contracts"
+          mkdir -p "$dir"
+          curl -fsSL --retry 3 -o "$dir/fpt.graphql" https://docs.github.com/public/fpt/schema.docs.graphql
+          curl -fsSL --retry 3 -o "$dir/ghes.graphql" https://docs.github.com/public/ghes-3.19/schema.docs-enterprise.graphql
+          rest=https://raw.githubusercontent.com/github/rest-api-description/main/descriptions
+          curl -fsSL --retry 3 -o "$dir/api.github.com.json" "$rest/api.github.com/api.github.com.json"
+          curl -fsSL --retry 3 -o "$dir/ghes-3.19.json" "$rest/ghes-3.19/ghes-3.19.json"
+          {
+            echo "GHFAKE_SCHEMA=$dir/fpt.graphql"
+            echo "GHFAKE_SCHEMA_GHES=$dir/ghes.graphql"
+            echo "GHFAKE_REST_DESCRIPTION=$dir/api.github.com.json"
+            echo "GHFAKE_REST_DESCRIPTION_GHES=$dir/ghes-3.19.json"
+          } >> "$GITHUB_ENV"
+
+      # -v and the grep make sure the checks ran rather than skipped.
+      - name: go test (contracts)
+        run: |
+          set -euo pipefail
+          go test -count=1 -v -run '^(TestSchemaSubset|TestGraphQLContracts|TestRESTContracts)$' \
+            ./internal/platform/github/ ./internal/platform/github/ghfake/ | tee contracts.log
+          if grep -q -- '--- SKIP' contracts.log; then
+            echo "::error::a contract check skipped"
+            exit 1
+          fi
+
+  govulncheck:
+    # Known vulnerabilities in the code paths touchmark reaches, in its two
+    # dependencies and in the standard library of the Go it is built with
+    # (docs/project/threat-model.md). Nightly too: a new advisory fails a run
+    # without a push.
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.x'
+          cache: true
+
+      # Run outside the module's dependencies: go run with a version never
+      # touches go.mod. The version is the Makefile's (make check).
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+
+  template:
+    # The hub template, bedrock-python/engineering-assets-template, whose
+    # own repository runs no workflows (docs/project/release.md, "After a release"):
+    # its scripts/validate.sh with touchmark from this commit (check on a
+    # fresh copy, actionlint, and with --public no pointer to notes a public
+    # reader cannot open), and the dry run of its GitHub workflow against
+    # the fake, job by job (TestTemplateWorkflow). Its GitLab and Gitea
+    # pipelines run in the live harnesses (docs/project/e2e.md, "The hub template").
+    # Nightly too: a change to the template fails here without a push to
+    # touchmark. Until the template repository is public, the job says so
+    # and checks nothing.
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Is the template public?
+        id: template
+        run: |
+          if git ls-remote --exit-code https://github.com/bedrock-python/engineering-assets-template HEAD >/dev/null 2>&1; then
+            echo "public=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::bedrock-python/engineering-assets-template is not public yet: the template checks are skipped"
+            echo "public=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.template.outputs.public == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - if: steps.template.outputs.public == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: bedrock-python/engineering-assets-template
+          path: .ci/template
+          persist-credentials: false
+
+      - if: steps.template.outputs.public == 'true'
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.x'
+          cache: true
+
+      - name: scripts/validate.sh of the template
+        if: steps.template.outputs.public == 'true'
+        run: |
+          set -euo pipefail
+          go build -o "$RUNNER_TEMP/bin/touchmark" ./cmd/touchmark
+          TOUCHMARK="$RUNNER_TEMP/bin/touchmark" bash .ci/template/scripts/validate.sh --public
+
+      # -v and the grep make sure the dry run ran rather than skipped.
+      - name: go test -run TestTemplateWorkflow
+        if: steps.template.outputs.public == 'true'
+        run: |
+          set -euo pipefail
+          TOUCHMARK_E2E_TEMPLATE="$PWD/.ci/template" go test -count=1 -v -run '^TestTemplateWorkflow$' ./internal/e2e/github/ | tee template.log
+          if grep -q -- '--- SKIP' template.log; then
+            echo "::error::TestTemplateWorkflow skipped"
+            exit 1
+          fi
+
+  release-snapshot:
+    # The release without publishing anything (docs/project/release.md):
+    # the scripts of the release and of the Action by their tests;
+    # goreleaser check and a snapshot of every release file; the image as
+    # publish.yml builds it, from the snapshot's Linux archives
+    # (scripts/release/build-image.sh), pushed by digest to a registry on
+    # the runner, checked (scripts/release/check-image.sh) and scanned, and the
+    # Dockerfile's own build from source; then the Action, run from this
+    # tree against that registry, with a stand-in gh that accepts the
+    # attestation check (a snapshot has none) and records what the Action
+    # asked it. Nightly too: the scan then sees a new vulnerability in the
+    # base image before a release does.
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      registry:
+        image: registry:3.1.2@sha256:ddf754342cfc8acc51a56d5d0ab6af06826461864460636d8bd5c546dab2a7b8
+        ports:
+          - 5000:5000
+    env:
+      # The version the snapshot stamps (GORELEASER_CURRENT_TAG) and the
+      # Action runs: any version but the 0.0.0 the Action refuses.
+      TAG: v0.0.1-ci
+      LOCAL_IMAGE: localhost:5000/touchmark
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.x'
+          cache: true
+
+      - name: The Action's step and the release scripts
+        run: |
+          set -euo pipefail
+          bash scripts/action/run_test.sh
+          bash scripts/release/tools_test.sh
+
+      - uses: anchore/sbom-action/download-syft@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+        with:
+          syft-version: v1.54.0
+
+      # The same binfmt and BuildKit as publish.yml, pinned by digest and
+      # without the Actions cache, so that CI tests what a release uses. The
+      # builder shares the runner's network to push to the registry on
+      # localhost.
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        with:
+          image: docker.io/tonistiigi/binfmt:qemu-v10.2.3@sha256:400a4873b838d1b89194d982c45e5fb3cda4593fbfd7e08a02e76b03b21166f0
+          platforms: arm64
+          cache-image: false
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          driver-opts: |
+            image=docker.io/moby/buildkit:v0.33.1@sha256:cec9f139f45e93c5c69c60f8b07cfad9f43f4ef6b6a6cd917527fea5ff2e3dea
+            network=host
+          cache-binary: false
+
+      - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          distribution: goreleaser
+          version: v2.18.2
+          args: check
+
+      # --snapshot publishes nothing; keyless signing needs the publish
+      # workflow's identity, so it is skipped here.
+      - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          distribution: goreleaser
+          version: v2.18.2
+          args: release --snapshot --clean --skip=sign
+        env:
+          GORELEASER_CURRENT_TAG: ${{ env.TAG }}
+
+      - name: The image, as publish.yml builds it
+        id: image
+        run: bash scripts/release/build-image.sh dist "$LOCAL_IMAGE" "$TAG" | tee -a "$GITHUB_OUTPUT"
+
+      - name: Check the image
+        env:
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          bash scripts/release/check-image.sh "$LOCAL_IMAGE@$DIGEST" "$TAG"
+          docker buildx imagetools inspect "$LOCAL_IMAGE@$DIGEST" --format '{{ json .SBOM }}' | grep -q '"SPDX"'
+          docker buildx imagetools inspect "$LOCAL_IMAGE@$DIGEST" --format '{{ json .Provenance }}' | grep -q '"SLSA"'
+          # The Dockerfile's own build from source, which docs and
+          # contributors use, passes the same checks.
+          docker buildx build --load -t touchmark:source --build-arg VERSION="$TAG" .
+          bash scripts/release/check-image.sh touchmark:source "$TAG"
+
+      # Known vulnerabilities in the image publish.yml would push, Alpine's
+      # packages and the binary's modules, as the org's images are scanned:
+      # a CRITICAL or HIGH one with a fix fails the check. This is the scan
+      # that blocks: publish.yml scans the release's image the same way, but
+      # only reports, since the release's tag exists by then.
+      - name: Scan the image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.LOCAL_IMAGE }}@${{ steps.image.outputs.digest }}
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '1'
+          version: v0.70.0
+          cache: 'false'
+
+      # The Action resolves its version's tag: tag the digest as the tags
+      # job of publish.yml does, and give a copy of the Action this image
+      # and version. The stand-in gh accepts only the attestation check of
+      # that digest with the signer's policy, and only with a token.
+      - name: A copy of the Action for the local image
+        env:
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          version=${TAG#v}
+          docker buildx imagetools create --prefer-index=false --tag "$LOCAL_IMAGE:$version" "$LOCAL_IMAGE@$DIGEST"
+          mkdir -p .ci/action/scripts/action "$RUNNER_TEMP/fake-gh"
+          cp scripts/action/run.sh .ci/action/scripts/action/
+          sed -e "s|^        TM_IMAGE: .*|        TM_IMAGE: $LOCAL_IMAGE|" \
+            -e "s|^        TM_VERSION: .*|        TM_VERSION: \"$version\"|" action.yml >.ci/action/action.yml
+          grep -n 'TM_IMAGE:\|TM_VERSION:' .ci/action/action.yml
+          want="attestation verify oci://$LOCAL_IMAGE@$DIGEST --bundle-from-oci --repo bedrock-python/touchmark"
+          want="$want --signer-workflow github.com/bedrock-python/touchmark/.github/workflows/publish.yml"
+          want="$want --source-ref refs/heads/master --deny-self-hosted-runners"
+          printf '%s\n' "$want" >"$RUNNER_TEMP/fake-gh/want"
+          cat >"$RUNNER_TEMP/fake-gh/gh" <<'EOF'
+          #!/usr/bin/env bash
+          echo "gh $*" >>"$RUNNER_TEMP/gh.log"
+          [ -n "${GH_TOKEN:-}" ] || { echo "stand-in gh: no GH_TOKEN" >&2; exit 4; }
+          [ "$*" = "$(cat "$RUNNER_TEMP/fake-gh/want")" ] || { echo "stand-in gh: unexpected $*" >&2; exit 1; }
+          EOF
+          chmod +x "$RUNNER_TEMP/fake-gh/gh"
+          echo "$RUNNER_TEMP/fake-gh" >>"$GITHUB_PATH"
+          # A hub that check accepts.
+          git init -q -b master .ci/hub
+          printf 'version: 1\nid: ci-smoke\n' >.ci/hub/hub.yml
+          printf 'version: 1\ndefaults:\n  packs: [base]\ntargets:\n  - repo: acme/demo\n' >.ci/hub/targets.yml
+          mkdir -p .ci/hub/packs/base
+          printf 'This file is shipped by the ci-smoke hub.\nIt is long enough to prove where it came from.\n' \
+            >.ci/hub/packs/base/SHARED.md
+          git -C .ci/hub add -A
+          git -C .ci/hub -c user.name=ci -c user.email=ci@example.invalid commit -q -m hub
+
+      - name: The Action, version
+        uses: ./.ci/action
+        with:
+          command: version
+
+      - name: The Action, check
+        uses: ./.ci/action
+        with:
+          command: check
+          hub: .ci/hub
+          format: json
+
+      - name: The Action verified the image it ran
+        run: |
+          set -euo pipefail
+          cat "$RUNNER_TEMP/gh.log"
+          test "$(grep -c '^gh attestation verify ' "$RUNNER_TEMP/gh.log")" = 2
+
+  fuzz:
+    needs: lint
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.x'
+          cache: true
+
+      # Every Fuzz* target in every package runs for 30 seconds.
+      - name: go test -fuzz
+        run: |
+          set -euo pipefail
+          for pkg in $(go list ./...); do
+            listed="$(go test -list '^Fuzz' "$pkg")"
+            for target in $(printf '%s\n' "$listed" | grep '^Fuzz' || true); do
+              echo "::group::$pkg $target"
+              go test -run '^$' -fuzz "^${target}\$" -fuzztime 30s "$pkg"
+              echo "::endgroup::"
+            done
+          done
+
+      - name: Upload failing fuzz inputs
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fuzz-failures
+          path: '**/testdata/fuzz/**'
+          if-no-files-found: ignore
+
+  # A dependency a pull request adds or bumps is looked up before it is
+  # merged: a known vulnerability of high severity fails the check.
+  dependency-review:
+    name: New dependencies carry no known vulnerability
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+
+  # The jobs below are outside the required check: the live forges, nightly
+  # and on every push, and the long runs of distribute, nightly. A pull request
+  # labelled e2e-gitlab runs the GitLab ones (e2e-gitlab.yml).
+
+  e2e-forge:
+    # The live e2e tests (internal/e2e) against Gitea and Forgejo in Docker:
+    # the platform conformance suite on the gitea driver, plan and distribute
+    # end to end, and the platform facts the driver relies on. The latest
+    # Gitea and Forgejo on every pull request and push, every supported
+    # version (Gitea 1.26 and 1.27, Forgejo 15 LTS and 16) nightly and by
+    # hand. docs/project/e2e.md explains how to run them locally.
+    name: e2e (${{ matrix.image }})
+    runs-on: ubuntu-latest
+    # The job pulls golang:1.26 (1.3 GB) and the forge, boots the forge (at
+    # most 3 minutes), seeds it and builds the tests with the race detector
+    # from a cold cache before go test starts with its own limit of
+    # TOUCHMARK_E2E_TEST_TIMEOUT. The job's limit leaves that much room, so
+    # that a hung run ends by go test's timeout, with its goroutine dump, not
+    # by the runner killing the job. The timeout's panic never returns to
+    # TestMain, so a watchdog there prints the FINDINGS gathered so far a
+    # minute before it.
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJSON((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && '["docker.gitea.com/gitea:1.26.4","docker.gitea.com/gitea:1.27.3","codeberg.org/forgejo/forgejo:15.0.9","codeberg.org/forgejo/forgejo:16.0.5"]' || '["docker.gitea.com/gitea:1.27.3","codeberg.org/forgejo/forgejo:16.0.5"]') }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The script starts the forge, seeds it and runs go test in
+      # golang:1.26 next to it; it removes everything it created on exit.
+      - name: scripts/e2e/gitea.sh
+        env:
+          IMAGE: ${{ matrix.image }}
+          TOUCHMARK_E2E_TEST_TIMEOUT: 25m
+        run: bash scripts/e2e/gitea.sh "$IMAGE"
+
+  property:
+    # TestPropertyDistribute at full size: 10 000 scenarios, seeds 1 to
+    # 10 000, in four shards. The default run of the test job covers the
+    # first 100.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    name: property (shard ${{ matrix.shard }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.x'
+          cache: true
+
+      - name: go test -run TestPropertyDistribute
+        env:
+          SHARD: ${{ matrix.shard }}
+          SCENARIOS: '2500'
+        run: |
+          set -euo pipefail
+          export TOUCHMARK_PROPERTY_SCENARIOS="$SCENARIOS"
+          export TOUCHMARK_PROPERTY_SEED="$((1 + SHARD * SCENARIOS))"
+          go test -count=1 -timeout 230m -run '^TestPropertyDistribute$' ./internal/distribute/
+
+  scale:
+    # The scale test at twice the test job's size, nightly: distribute
+    # over 10 000 targets of the fake on a GitHub and a GitLab
+    # that rate limit, fail and time out, run after run until the fleet is
+    # done (TestScale), and the plan of a hub pull request that changes one
+    # pack over the same fleet (TestPlanScopeScale), under the race
+    # detector. The test job runs both at 5000 targets.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.x'
+          cache: true
+
+      - name: go test -run 'TestScale|TestPlanScopeScale'
+        env:
+          TOUCHMARK_SCALE_TARGETS: '10000'
+        run: go test -race -count=1 -timeout 50m -run '^(TestScale|TestPlanScopeScale)$' ./internal/distribute/
+
+  # Sentinel job — use this as the single required status check in branch protection.
+  all-checks-passed:
+    name: All checks passed
+    if: always()
+    needs: [lint, test, contracts, govulncheck, template, release-snapshot, fuzz, dependency-review]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Every job in needs must succeed. Skipped passes only for a job whose
+      # own if: leaves this event out: the nightly run has no test or fuzz,
+      # and only a pull request has dependency-review. Anything else, a job
+      # skipped by a wrong if: included, fails the check.
+      - name: Every job it needs succeeded
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+          MAY_SKIP: >-
+            ${{ github.event_name == 'schedule' && 'test fuzz dependency-review'
+            || github.event_name != 'pull_request' && 'dependency-review' || '' }}
+        run: |
+          jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<<"$NEEDS"
+          jq -e --arg may_skip "$MAY_SKIP" '
+            ($may_skip | split(" ")) as $skip
+            | all(to_entries[];
+                .value.result == "success"
+                or (.value.result == "skipped" and (.key as $job | any($skip[]; . == $job))))
+          ' <<<"$NEEDS" >/dev/null || {
+            echo "::error::a job the check needs did not succeed"
+            exit 1
+          }

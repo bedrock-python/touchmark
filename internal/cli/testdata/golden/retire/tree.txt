@@ -1,0 +1,6 @@
+.engineering-assets.yml  version: 1
+.github/pull_request_template.md  base PR template v1
+AGENTS.md  base AGENTS.md v1
+NOTES.md  our notes
+docs/guide.md  base guide v1
+tools/mine.md  the target's own file

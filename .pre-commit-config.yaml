@@ -1,0 +1,51 @@
+# The hooks of the other bedrock-python repositories, for Go. The fixtures
+# under testdata/ are bytes the tests compare or feed in (goldens without a
+# final newline, configurations that must fail to parse), so the fixers and
+# the YAML check leave them alone.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-case-conflict
+      - id: check-toml
+      - id: check-yaml
+        exclude: (^|/)testdata/
+      - id: trailing-whitespace
+        exclude: (^|/)testdata/
+      - id: check-merge-conflict
+      - id: end-of-file-fixer
+        exclude: (^|/)testdata/
+      - id: check-added-large-files
+      - id: no-commit-to-branch
+        args: ["--branch", "master"]
+
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v4.4.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+
+  - repo: local
+    hooks:
+      - id: gofmt
+        name: gofmt
+        entry: gofmt -l -w
+        language: system
+        types: [go]
+
+      - id: go-vet
+        name: go vet
+        entry: go vet ./...
+        require_serial: true
+        language: system
+        types: [go]
+        pass_filenames: false
+
+      # The live e2e tests build only with the tag e2e.
+      - id: go-vet-e2e
+        name: go vet -tags e2e
+        entry: go vet -tags e2e ./...
+        require_serial: true
+        language: system
+        types: [go]
+        pass_filenames: false

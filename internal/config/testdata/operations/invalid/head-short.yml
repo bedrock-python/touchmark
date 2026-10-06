@@ -1,0 +1,5 @@
+# error: recreate[0].head: "4b1d9e0" must be a full commit id
+version: 1
+recreate:
+  - target: gh:acme/api
+    head: 4b1d9e0

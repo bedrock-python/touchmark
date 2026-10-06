@@ -1,0 +1,5 @@
+# error: commit.message: must not start with Draft: or WIP:
+version: 1
+id: acme-eng
+commit:
+  message: "[DRAFT] sync"

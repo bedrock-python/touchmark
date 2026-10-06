@@ -1,0 +1,159 @@
+package marker
+
+import (
+	"bytes"
+	"errors"
+	"reflect"
+	"strings"
+	"testing"
+)
+
+// seedLines returns marker lines for the fuzz corpora: the golden vectors,
+// a gzip bomb and damaged variants.
+func seedLines(t testing.TB) []string {
+	var lines []string
+	for _, v := range goldenVectors() {
+		line := mustEncode(t, v.m)
+		lines = append(lines, line, line[:len(line)/2], strings.Replace(line, "v1", "v2", 1), line+"\r")
+	}
+	lines = append(lines,
+		lineWithData(gz(t, bytes.Repeat([]byte{' '}, 8<<20))),
+		lineWithJSON(t, sampleJSON(t)+" "),
+		lineWithJSON(t, "{}"),
+		"<!-- touchmark:v1 -->",
+		"<!-- touchmark:v1 hub= fp= stream= key= data= -->",
+	)
+	return lines
+}
+
+// FuzzParse checks that Parse never panics on any line, and that whatever
+// it accepts encodes back to a line that parses to the same marker (changes
+// may be dropped when the re-encoded payload is larger than the limits of
+// the encoder, which are stricter than those of the parser).
+func FuzzParse(f *testing.F) {
+	for _, line := range seedLines(f) {
+		f.Add(line)
+	}
+	f.Fuzz(func(t *testing.T, line string) {
+		m, err := Parse(line)
+		if err != nil {
+			return
+		}
+		if m.FP16 != FP16(m.Data.FP) || m.Hub != m.Data.Hub || m.Stream != m.Data.Stream {
+			t.Fatalf("header does not match the data: %s", describeMarker(m))
+		}
+		again, err := Encode(m)
+		if err != nil {
+			if !errors.Is(err, errTooLarge) {
+				t.Fatalf("Encode of a parsed marker: %v", err)
+			}
+			return
+		}
+		back, err := Parse(again)
+		if err != nil {
+			t.Fatalf("Parse(Encode(Parse(line))): %v", err)
+		}
+		if !reflect.DeepEqual(back, m) && !reflect.DeepEqual(back, dropped(m)) {
+			t.Fatalf("round trip differs\n got %s\nwant %s", describeMarker(back), describeMarker(m))
+		}
+		if twice := mustEncode(t, back); twice != again {
+			t.Fatal("Encode is not stable across a round trip")
+		}
+	})
+}
+
+// FuzzEncode builds markers from fuzzed fields: whatever Encode accepts must
+// parse back to the marker it wrote.
+func FuzzEncode(f *testing.F) {
+	f.Add("acme-eng", ourFP, "sync", "agents", "AGENTS.md", "77ab", "100644", "8f3c", "chore: sync", false, 3)
+	f.Add("a", "h:1/2", "adopt", "", "x", "", "", "ff", "", true, 0)
+	f.Add("hub", "github.com/1", "sync", "p", "", "", "100755", "0", "t", true, 6000)
+	f.Fuzz(func(t *testing.T, hub, fp, stream, pack, path, from, mode, to, title string, ack bool, n int) {
+		m := Marker{Key: key1, Data: Data{
+			V: Version, Stream: stream, Hub: hub, FP: fp, Engine: "0.2.0",
+			Packs: []string{pack}, TitleSet: title, Ack: ack, ChangesComplete: true,
+			LabelsSet: []string{title},
+		}}
+		n = min(max(n, 0), MaxChanges+1)
+		for i := range n {
+			m.Data.Changes = append(m.Data.Changes, Change{Path: path + strings.Repeat("/x", i%3), From: from, Mode: mode, To: to})
+		}
+		if n%2 == 1 {
+			m.Data.Closed = &Closed{By: "touchmark", Reason: title}
+			m.Data.RecreateFor = &pack
+		}
+		line, err := Encode(m)
+		if err != nil {
+			return
+		}
+		if len(line) > MaxLine {
+			t.Fatalf("line of %d bytes", len(line))
+		}
+		got, err := Parse(line)
+		if err != nil {
+			t.Fatalf("Parse(Encode(m)): %v\nline %.300q", err, line)
+		}
+		if !reflect.DeepEqual(got, written(m)) && !reflect.DeepEqual(got, dropped(m)) {
+			t.Fatalf("round trip differs\n got %s\nwant %s", describeMarker(got), describeMarker(written(m)))
+		}
+	})
+}
+
+// FuzzFind checks that Find and Strip never panic, that a marker of ours
+// appended as the last line always wins, and that Strip removes every
+// marker line and nothing else.
+func FuzzFind(f *testing.F) {
+	for _, line := range seedLines(f) {
+		f.Add("text\n" + line + "\n")
+	}
+	f.Add("a\r\n<!-- touchmark:v1 hub=acme-eng fp=" + FP16(ourFP) + " x -->\r\nb")
+	f.Add("<!-- touchmark:\n<!-- touchmark:v1 \n<!-- touchmark:v1 fp=")
+	fps := []string{ourFP, prevFP}
+	last := mustEncode(f, markerOf(key2, prevFP))
+	want, err := Parse(last)
+	if err != nil {
+		f.Fatal(err)
+	}
+	f.Fuzz(func(t *testing.T, body string) {
+		m, status := Find(body, fps)
+		switch status {
+		case Found:
+			if m.Data.FP != ourFP && m.Data.FP != prevFP {
+				t.Fatalf("found a marker of %q", m.Data.FP)
+			}
+			if m.FP16 != FP16(m.Data.FP) {
+				t.Fatal("found a marker whose header does not match its data")
+			}
+		case None, Invalid, Foreign:
+			if !reflect.DeepEqual(m, Marker{}) {
+				t.Fatalf("status %v with a marker", status)
+			}
+		default:
+			t.Fatalf("status %v", status)
+		}
+
+		stripped := Strip(body)
+		if Strip(stripped) != stripped {
+			t.Fatal("Strip is not idempotent")
+		}
+		for line := range strings.SplitSeq(stripped, "\n") {
+			if strings.HasPrefix(line, commentPrefix) {
+				t.Fatalf("Strip left a marker line: %.80q", line)
+			}
+		}
+		if _, status := Find(stripped, fps); status != None && len(stripped) <= scanLimit {
+			t.Fatalf("Find after Strip = %v, want none", status)
+		}
+
+		if len(body) > scanLimit/2 {
+			return
+		}
+		appended := body + "\n" + last
+		if got, status := Find(appended, fps); status != Found || !reflect.DeepEqual(got, want) {
+			t.Fatalf("appended marker: status %v", status)
+		}
+		if Strip(appended) != stripped {
+			t.Fatalf("Strip(body + marker) = %q, want %q", Strip(appended), stripped)
+		}
+	})
+}

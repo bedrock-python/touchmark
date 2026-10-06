@@ -1,0 +1,9 @@
+# error: providers[1].id: duplicate provider id "gh"
+version: 1
+id: acme-eng
+providers:
+  - id: gh
+    type: github
+  - id: gh
+    type: github
+    url: https://github.example.com

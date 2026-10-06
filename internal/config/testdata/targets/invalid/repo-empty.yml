@@ -1,0 +1,4 @@
+# error: targets[0].repo: "": empty path
+version: 1
+targets:
+  - repo: ""

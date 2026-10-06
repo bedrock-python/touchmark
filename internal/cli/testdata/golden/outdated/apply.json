@@ -1,0 +1,101 @@
+{
+  "command": "apply",
+  "dry_run": false,
+  "hub": {
+    "dir": "$HUB",
+    "id": "acme-eng",
+    "commit": "$COMMIT"
+  },
+  "target": {
+    "root": "$TARGET",
+    "ref": "acme/svc",
+    "opt_in_file": ".engineering-assets.yml",
+    "opted_in": true
+  },
+  "selection": {
+    "packs": [
+      "base"
+    ],
+    "complete": true,
+    "unresolved": [],
+    "sources": {
+      "base": [
+        ".engineering-assets.yml"
+      ]
+    }
+  },
+  "entries": [
+    {
+      "path": ".github/pull_request_template.md",
+      "state": "missing",
+      "action": "create",
+      "pack": "base",
+      "from": "",
+      "to": "da9823e8fe7223ced65fd1d888c4086c5663d588",
+      "mode": "100644",
+      "detail": "",
+      "after_deletes": false
+    },
+    {
+      "path": "AGENTS.md",
+      "state": "outdated",
+      "action": "update",
+      "pack": "base",
+      "from": "a518023d047aa414783230a696ea1ed1cf7c8b21",
+      "to": "6653bfdc250f14e108817ace7bc53af6c77e287e",
+      "mode": "100644",
+      "detail": "",
+      "after_deletes": false
+    },
+    {
+      "path": "docs/guide.md",
+      "state": "missing",
+      "action": "create",
+      "pack": "base",
+      "from": "",
+      "to": "b05b6d090e03924f92073d05c2f7471dfc33dc66",
+      "mode": "100644",
+      "detail": "",
+      "after_deletes": false
+    }
+  ],
+  "results": [
+    {
+      "path": ".github/pull_request_template.md",
+      "action": "create",
+      "state": "missing",
+      "outcome": "done",
+      "detail": ""
+    },
+    {
+      "path": "AGENTS.md",
+      "action": "update",
+      "state": "outdated",
+      "outcome": "done",
+      "detail": ""
+    },
+    {
+      "path": "docs/guide.md",
+      "action": "create",
+      "state": "missing",
+      "outcome": "done",
+      "detail": ""
+    }
+  ],
+  "summary": {
+    "missing": 2,
+    "current": 0,
+    "outdated": 1,
+    "local": 0,
+    "ignored": 0,
+    "retired": 0,
+    "retired_local": 0,
+    "unsafe": 0,
+    "orphaned": 0,
+    "changes": 3,
+    "done": 3,
+    "skipped": 0,
+    "failed": 0
+  },
+  "warnings": []
+}

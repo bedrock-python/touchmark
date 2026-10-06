@@ -136,6 +136,10 @@ type Input struct {
 	// OptInFile is the target's opt-in file name (hub.yml opt_in_file), used
 	// in the hints about ignore; "" reads "the opt-in file".
 	OptInFile string
+	// Assumed is set when the target has no opt-in file and the hub
+	// subscribes it (opt_in: assumed in targets.yml): a paragraph after the
+	// hub line says how to choose packs or ignore files, and how to opt out.
+	Assumed bool
 	// Blocks.
 	PreviouslyDeclined []int64
 	Paused             bool
@@ -180,7 +184,8 @@ const (
 	numLists
 )
 
-// Render returns the body (in order: intro and hub line; ⚠ sensitive paths,
+// Render returns the body (in order: intro and hub line; the paragraph of a
+// target the hub subscribed without an opt-in file; ⚠ sensitive paths,
 // never cut; the changes table ordered sensitive, deletes, updates, creates,
 // at most 100 rows then "and N more"; local files; blocks; controls;
 // footnote; marker last). It fits the body into Caps.MaxBody by shortening
@@ -246,7 +251,7 @@ type renderer struct {
 	declined []int64
 
 	// Fixed parts.
-	intro, head, sensitive, declinedBlock, updateBlock, nothingBlock, controls, footnote string
+	intro, head, assumed, sensitive, declinedBlock, updateBlock, nothingBlock, controls, footnote string
 	// lists are indexed by listChanges, listLocal and listPending; nil for
 	// a section the body does not have.
 	lists [numLists]*cuttable
@@ -286,6 +291,7 @@ func newRenderer(in Input) (*renderer, error) {
 	r.declined = prNumbers(in.PreviouslyDeclined)
 
 	r.head = r.hubLine(hub)
+	r.assumed = r.assumedBlock()
 	r.sensitive = r.sensitiveSection()
 	r.declinedBlock = r.previouslyDeclined()
 	r.updateBlock = r.updateBranch()
@@ -388,10 +394,11 @@ func (p piece) render() string {
 }
 
 // pieces are the parts of the body in order, each list showing its n rows.
-func (r *renderer) pieces(n [numLists]int) [12]piece {
+func (r *renderer) pieces(n [numLists]int) [13]piece {
 	return [...]piece{
 		{text: r.intro},
 		{text: r.head},
+		{text: r.assumed},
 		{text: r.sensitive},
 		{list: r.lists[listChanges], rows: n[listChanges]},
 		{list: r.lists[listLocal], rows: n[listLocal]},
@@ -554,6 +561,21 @@ func (r *renderer) hubLine(hub hubRef) string {
 	}
 	b.WriteString(".")
 	return b.String()
+}
+
+// assumedBlock is the paragraph of a target the hub subscribed without an
+// opt-in file: how to choose packs or ignore files, and how to opt out.
+func (r *renderer) assumedBlock() string {
+	if !r.in.Assumed {
+		return ""
+	}
+	name, file, it := "opt-in file", "an opt-in file", "one"
+	if r.in.OptInFile != "" {
+		name, file, it = Code(r.in.OptInFile), Code(r.in.OptInFile), "it"
+	}
+	return "The hub subscribed this repository, which has no " + name + ". " +
+		"To add packs or keep files out of the sync, add " + file + " with `packs` or `ignore`; " +
+		"to stop these " + r.noun + "s, add " + it + " with `enabled: false`."
 }
 
 // sensitiveSection is the ⚠ section: the sensitive rows of the table and of

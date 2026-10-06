@@ -1,0 +1,4 @@
+# error: defaults.opt_in: "Assumed" must be one of required, assumed
+version: 1
+defaults:
+  opt_in: Assumed

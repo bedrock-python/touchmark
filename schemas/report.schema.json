@@ -34,7 +34,7 @@
     },
     "scope": { "$ref": "#/$defs/scope" },
     "assume_opt_in": {
-      "description": "plan --assume-opt-in: every target counts as opted in, for this report only.",
+      "description": "plan --assume-opt-in: for this report only, every target without an opt-in file, or whose opt-in file is not a regular file or is too large, counts as opted in; one whose opt-in file says enabled: false stays opted out.",
       "type": "boolean"
     },
     "providers": {
@@ -226,8 +226,12 @@
           "items": { "type": "string" }
         },
         "opt_in_assumed": {
-          "description": "plan --assume-opt-in planned the target as if it had an empty opt-in file: it has none, or one that is not a regular file.",
+          "description": "The target was processed as if it had an empty opt-in file: it has none, or, with plan --assume-opt-in, one that is not a regular file or is too large. opt_in_assumed_by says why.",
           "type": "boolean"
+        },
+        "opt_in_assumed_by": {
+          "description": "Why opt_in_assumed is set: targets.yml (an entry with opt_in: assumed selects the target, for real) or --assume-opt-in (plan's flag, for the report only).",
+          "enum": ["targets.yml", "--assume-opt-in"]
         },
         "changes": { "$ref": "#/$defs/changes" },
         "orphaned": {
@@ -275,7 +279,7 @@
           "if": { "properties": { "outcome": { "const": "skipped" } } },
           "then": {
             "required": ["reason"],
-            "properties": { "reason": { "enum": ["not-opted-in", "archived", "disabled", "empty", "mirror", "pending-deletion", "prs-disabled", "sha256", "unsafe-opt-in", "private-in-public-hub", "superseded"] } }
+            "properties": { "reason": { "enum": ["not-opted-in", "opted-out", "archived", "disabled", "empty", "mirror", "pending-deletion", "prs-disabled", "sha256", "unsafe-opt-in", "private-in-public-hub", "superseded"] } }
           }
         },
         {

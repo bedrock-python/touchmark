@@ -1,0 +1,5 @@
+# error: targets[0].opt_in: "optional" must be one of required, assumed
+version: 1
+targets:
+  - repo: acme/billing
+    opt_in: optional

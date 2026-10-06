@@ -1,0 +1,4 @@
+# The repository opts out: enabled: false, its packs kept for later.
+version: 1
+enabled: false
+packs: [claude]

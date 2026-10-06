@@ -47,9 +47,11 @@ type SweepInput struct {
 	// so the target is missing under its old path while the sweep finds
 	// its pull requests under the new one.
 	Unresolved map[string]bool
-	// OptedOut holds "host/id" of the Active targets whose opt-in file is
-	// gone (skipped:not-opted-in): their own open PRs are closed with
-	// ReasonOptedOut. DecideTarget never runs for them.
+	// OptedOut holds "host/id" of the Active targets that are not opted in
+	// (skipped:not-opted-in: no opt-in file, and targets.yml does not
+	// subscribe them; skipped:opted-out: the file says enabled: false):
+	// their own open PRs are closed with ReasonOptedOut. DecideTarget never
+	// runs for them.
 	OptedOut map[string]bool
 	// Complete is set when the provider's resolve and the OpenPRsBy
 	// listing were both complete; otherwise nothing is swept.

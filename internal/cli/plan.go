@@ -106,11 +106,12 @@ func planFlags() (*flagSet, *options) {
 // In a hub pull request the plan processes only the targets of the packs
 // the pull request changes (planScope; every target with --all), and with
 // --comment keeps its report in one comment of the pull request
-// (postPlanComment). --assume-opt-in plans every target as opted in. In CI
-// it leaves the outputs distribute does (publish): the
-// step summary on GitHub Actions and Gitea, annotations of the first failed
-// and blocked targets on GitHub Actions, and touchmark-report.{json,md}
-// in the working directory for the job's artifact.
+// (postPlanComment). --assume-opt-in plans every target without an opt-in
+// file as opted in. In CI it leaves the outputs distribute does (publish):
+// the step summary on GitHub Actions and Gitea, annotations of the first
+// failed and blocked targets on GitHub Actions, and
+// touchmark-report.{json,md} in the working directory for the job's
+// artifact.
 func runPlan(ctx context.Context, e *env, o *options, p *planOptions) (err error) {
 	h, err := loadPlanHub(ctx, e, o)
 	if err != nil {
@@ -261,7 +262,7 @@ func loadPlanHub(ctx context.Context, e *env, o *options) (*hub, error) {
 	if err != nil {
 		return nil, err
 	}
-	if errs := h.readConfigs(ctx); len(errs) > 0 {
+	if errs := h.readConfigs(ctx, e); len(errs) > 0 {
 		return nil, configErrorf("%w\nrun touchmark check for details", joinedError(errors.Join(errs...)))
 	}
 	if h.cfg.Legacy || h.cfg.ID == "" {

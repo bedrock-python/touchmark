@@ -53,6 +53,7 @@ targets:
   # multi-gitter took these projects only with one of the topics "python", "go"; repo entries take no topics.
   - repo: acme/tools/cli
 # TODO: packs: which packs every target gets (defaults.packs, packs per entry); the opt-in files add theirs.
+# Targets need their own opt-in file, as they did with multi-gitter. To subscribe repositories without one, add opt_in: assumed under defaults or to an entry; a repository opts out with enabled: false in its opt-in file.
 exclude:
   - platform/legacy
 

@@ -10,7 +10,8 @@
     "root": "$TARGET",
     "ref": "acme/svc",
     "opt_in_file": ".engineering-assets.yml",
-    "opted_in": false
+    "opted_in": false,
+    "opt_in": "none"
   },
   "selection": null,
   "entries": [],

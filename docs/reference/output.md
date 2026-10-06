@@ -25,6 +25,7 @@ touchmark plan · hub acme-eng (github.com/712345678) @ 3f2a1c9 (PR #41) · touc
 gh    github.com          read acme-read[bot]  write acme-write[bot]: not checked  resolve complete
 corp  gitlab.example.com  read tm-reader       write tm-writer: not checked        resolve complete
 scope: packs base, python changed → 11 of 11 targets (--all for every target)
+opt_in: assumed: 2 targets without an opt-in file are opted in by targets.yml; an opt-in file with enabled: false opts one out
 
   open       4  corp:platform/api, gh:acme/billing, gh:acme/docs and 1 more
   update     1  gh:acme/sdk #1 (content)
@@ -48,7 +49,7 @@ text says *would*. Every target has one outcome:
 | `unchanged` | — |
 | `closed` | `no-diff`, `opted-out`, `target-dropped`, `duplicate` |
 | `declined` | — (the declined pull request is in `pr`) |
-| `skipped` | `not-opted-in`, `archived`, `disabled`, `empty`, `mirror`, `pending-deletion`, `prs-disabled`, `sha256`, `unsafe-opt-in`, `private-in-public-hub`, `superseded` |
+| `skipped` | `not-opted-in`, `opted-out`, `archived`, `disabled`, `empty`, `mirror`, `pending-deletion`, `prs-disabled`, `sha256`, `unsafe-opt-in`, `private-in-public-hub`, `superseded` |
 | `blocked` | `edited`, `branch-taken`, `branch-in-use`, `opt-in-invalid`, `marker-invalid`, `rules:<rule>`, `permission:<what>`, `cannot-sign`, `archived`, `mass-close` |
 | `deferred` | `rate-limit`, `deadline`, `rollout-limit`, `provider-down`, `interrupted`, `cooldown` |
 | `failed` | `transient`, `auth`, `access`, `git`, `integrity`, `race`, `secret-exposure`, `internal` |
@@ -79,7 +80,7 @@ and the branch head before and after.
 | `scope.base` | string | Full commit id: 40 or 64 lowercase hex digits. |
 | `scope.processed` | integer ≥ 0, required | The targets the plan processed in full. |
 | `scope.total` | integer ≥ 0, required | The targets the resolve found. |
-| `assume_opt_in` | boolean | plan --assume-opt-in: every target counts as opted in, for this report only. |
+| `assume_opt_in` | boolean | plan --assume-opt-in: for this report only, every target without an opt-in file, or whose opt-in file is not a regular file or is too large, counts as opted in; one whose opt-in file says enabled: false stays opted out. |
 | `providers` | list of objects, required | The hub's providers, in hub.yml order. |
 | `providers[].id` | string, required | — |
 | `providers[].type` | one of `github`, `gitlab`, `gitea`, `forgejo`, required | — |
@@ -103,7 +104,8 @@ and the branch head before and after.
 | `targets[].pr.state` | one of `open`, `closed`, `merged` | — |
 | `targets[].key` | string | Content key of the changes; absent when there are none. |
 | `targets[].packs` | list of strings | The packs the target gets, in layering order. |
-| `targets[].opt_in_assumed` | boolean | plan --assume-opt-in planned the target as if it had an empty opt-in file: it has none, or one that is not a regular file. |
+| `targets[].opt_in_assumed` | boolean | The target was processed as if it had an empty opt-in file: it has none, or, with plan --assume-opt-in, one that is not a regular file or is too large. opt_in_assumed_by says why. |
+| `targets[].opt_in_assumed_by` | one of `targets.yml`, `--assume-opt-in` | Why opt_in_assumed is set: targets.yml (an entry with opt_in: assumed selects the target, for real) or --assume-opt-in (plan's flag, for the report only). |
 | `targets[].changes` | object, required | The changes D holds, by action. |
 | `targets[].changes.create` | integer ≥ 0, required | — |
 | `targets[].changes.update` | integer ≥ 0, required | — |
@@ -209,7 +211,7 @@ hub, for each provider's write identity, and for each target. See
 | `targets[].host` | string, not empty, required | — |
 | `targets[].repo_id` | string, required | The repository's immutable id on the platform; empty for a target the report does not name. |
 | `targets[].path` | string, required | The repository's canonical path; empty for a target the report does not name. |
-| `targets[].skipped` | string, not empty | Why the target was not checked: archived, disabled, empty, mirror, pending-deletion, prs-disabled, sha256, not-opted-in, unsafe-opt-in, or deferred:&lt;reason&gt; (the run could not check the target; an unknown check says why). |
+| `targets[].skipped` | string, not empty | Why the target was not checked: archived, disabled, empty, mirror, pending-deletion, prs-disabled, sha256, not-opted-in, opted-out, unsafe-opt-in, or deferred:&lt;reason&gt; (the run could not check the target; an unknown check says why). |
 | `targets[].checks` | list of objects, required | — |
 | `targets[].checks[].check` | string, required | What was checked, e.g. access, token-expiry, rules, markers, hub-hidden, write-isolation, key-location. |
 | `targets[].checks[].status` | one of `ok`, `warn`, `fail`, `unknown`, required | — |
@@ -267,7 +269,10 @@ appears in it. See [Set up a hub's platform](../guide/setup.md).
 ## status and apply
 
 `--format json` prints the hub (its directory, `id` and commit), the target (its
-directory, its reference in `targets.yml`, its opt-in file and whether it opted in), the
+directory, its reference in `targets.yml`, its opt-in file, whether it opted in, and
+`opt_in`, which says why: `file`, the opt-in file is there; `assumed`, there is none and
+a `repo:` entry with `opt_in: assumed` subscribes it; `opted-out`, the file says
+`enabled: false`; `none`, neither), the
 pack selection and where each pack came from, one entry per managed path with its
 `state`, `action`, `pack` and blob ids, a `summary` counting each state, and `warnings`:
 
@@ -276,7 +281,8 @@ pack selection and where each pack came from, one entry per managed path with it
   "command": "status",
   "dry_run": false,
   "hub": { "dir": "/src/engineering-assets", "id": "acme-eng", "commit": "ffae0953c140298cf045e600f15710104e9d5d0d" },
-  "target": { "root": "/src/billing", "ref": "acme/billing", "opt_in_file": ".engineering-assets.yml", "opted_in": true },
+  "target": { "root": "/src/billing", "ref": "acme/billing", "opt_in_file": ".engineering-assets.yml", "opted_in": true,
+              "opt_in": "file" },
   "selection": { "packs": ["agents"], "complete": true, "unresolved": [], "sources": { "agents": ["defaults"] } },
   "entries": [
     { "path": "AGENTS.md", "state": "local", "action": "keep", "pack": "agents",

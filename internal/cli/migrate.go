@@ -1121,6 +1121,7 @@ func (p *migration) targetsYML() string {
 		w.line(1, "- repo: "+yamlString(r))
 	}
 	w.comment(0, "TODO: packs: which packs every target gets (defaults.packs, packs per entry); the opt-in files add theirs.")
+	w.comment(0, "Targets need their own opt-in file, as they did with multi-gitter. To subscribe repositories without one, add opt_in: assumed under defaults or to an entry; a repository opts out with enabled: false in its opt-in file.")
 	if len(p.exclude) > 0 {
 		w.line(0, "exclude:")
 		for _, r := range p.exclude {

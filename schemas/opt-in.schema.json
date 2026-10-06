@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/bedrock-python/touchmark/master/schemas/opt-in.schema.json",
   "title": "touchmark opt-in file",
-  "description": "The opt-in file of a target repository (.engineering-assets.yml by default). Its presence is the repository's consent; it may be empty. Format v1.",
+  "description": "The opt-in file of a target repository (.engineering-assets.yml by default). Its presence is the repository's consent, and its enabled: false the repository's refusal; it may be empty. Format v1.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -10,6 +10,10 @@
       "description": "Format version. Only 1 exists.",
       "type": "integer",
       "const": 1
+    },
+    "enabled": {
+      "description": "false opts the repository out, even when the hub subscribes it (opt_in: assumed in targets.yml): it gets nothing, and the hub's open pull requests here are closed. Default: true.",
+      "type": ["boolean", "null"]
     },
     "packs": {
       "description": "Packs to add to those the hub assigns. Packs the hub assigns cannot be removed here.",

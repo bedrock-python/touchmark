@@ -30,6 +30,10 @@
             "packs": {
               "description": "Packs every target gets, before the packs of its entries and its opt-in file.",
               "$ref": "#/$defs/packList"
+            },
+            "opt_in": {
+              "description": "The opt_in of every entry that sets none: required (the default) or assumed.",
+              "$ref": "#/$defs/optIn"
             }
           }
         },
@@ -39,9 +43,9 @@
           "items": { "$ref": "#/$defs/entry" }
         },
         "exclude": {
-          "description": "Repositories never delivered to, even when an entry selects them.",
+          "description": "Repositories never delivered to, even when an entry selects them: a repository as repo names one, or a pattern of repository paths in which * matches within one segment, ** any number of segments and ? one character (corp:platform/legacy/** covers a subgroup at any depth), compared ignoring case. A web URL works too, with * and ** but not ?. Quote a pattern that starts with *, which YAML reads as an alias.",
           "type": ["array", "null"],
-          "items": { "$ref": "#/$defs/ref" }
+          "items": { "$ref": "#/$defs/excludeEntry" }
         }
       }
     },
@@ -71,11 +75,12 @@
       "required": ["repo"],
       "properties": {
         "repo": {
-          "description": "One repository: owner/name or group/sub/project, optionally prefixed with a provider id and a colon.",
-          "$ref": "#/$defs/ref"
+          "description": "One repository: owner/name or group/sub/project, optionally prefixed with a provider id and a colon, or its web URL, such as https://gitlab.example.com/platform/api, whose provider is the one hub.yml lists at that url.",
+          "$ref": "#/$defs/repo"
         },
         "provider": { "$ref": "#/$defs/providerId" },
-        "packs": { "$ref": "#/$defs/packList" }
+        "packs": { "$ref": "#/$defs/packList" },
+        "opt_in": { "$ref": "#/$defs/optIn" }
       }
     },
     "orgEntry": {
@@ -84,14 +89,16 @@
       "required": ["org"],
       "properties": {
         "org": {
-          "description": "Every repository in a GitHub organisation or a GitLab, Gitea or Forgejo namespace (a synonym of group).",
+          "description": "Every repository in a GitHub organisation or a GitLab, Gitea or Forgejo namespace (a synonym of group), named by its path or its web URL.",
           "$ref": "#/$defs/namespace"
         },
         "provider": { "$ref": "#/$defs/providerId" },
         "topics": { "$ref": "#/$defs/topics" },
         "subgroups": { "$ref": "#/$defs/subgroups" },
         "forks": { "$ref": "#/$defs/forks" },
-        "packs": { "$ref": "#/$defs/packList" }
+        "match": { "$ref": "#/$defs/match" },
+        "packs": { "$ref": "#/$defs/packList" },
+        "opt_in": { "$ref": "#/$defs/optIn" }
       }
     },
     "groupEntry": {
@@ -100,14 +107,30 @@
       "required": ["group"],
       "properties": {
         "group": {
-          "description": "Every repository in a GitLab group, with its subgroups unless subgroups is false (a synonym of org).",
+          "description": "Every repository in a GitLab group, with its subgroups unless subgroups is false (a synonym of org), named by its path or its web URL.",
           "$ref": "#/$defs/namespace"
         },
         "provider": { "$ref": "#/$defs/providerId" },
         "topics": { "$ref": "#/$defs/topics" },
         "subgroups": { "$ref": "#/$defs/subgroups" },
         "forks": { "$ref": "#/$defs/forks" },
-        "packs": { "$ref": "#/$defs/packList" }
+        "match": { "$ref": "#/$defs/match" },
+        "packs": { "$ref": "#/$defs/packList" },
+        "opt_in": { "$ref": "#/$defs/optIn" }
+      }
+    },
+    "optIn": {
+      "description": "required (the default): a repository the entry selects gets nothing until it adds the opt-in file. assumed: it counts as opted in without one, with the packs targets.yml gives it, until its opt-in file says enabled: false. One entry with assumed is enough to subscribe a repository.",
+      "enum": ["required", "assumed"]
+    },
+    "match": {
+      "description": "Only repositories whose full path, without the provider, matches at least one of these patterns: * within one segment, ** any number of segments, ? one character, compared ignoring case, such as acme/svc-* or platform/**/api. Quote a pattern that starts with *, which YAML reads as an alias.",
+      "type": ["array", "null"],
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "maxLength": 512,
+        "pattern": "^([A-Za-z0-9_*?-][A-Za-z0-9_.*?-]*|\\.[A-Za-z0-9_*?-][A-Za-z0-9_.*?-]*|\\.\\.[A-Za-z0-9_.*?-]+)(/([A-Za-z0-9_*?-][A-Za-z0-9_.*?-]*|\\.[A-Za-z0-9_*?-][A-Za-z0-9_.*?-]*|\\.\\.[A-Za-z0-9_.*?-]+))+$"
       }
     },
     "topics": {
@@ -142,10 +165,29 @@
       "maxLength": 512,
       "pattern": "^([a-z][a-z0-9-]{0,31}:)?([A-Za-z0-9_-][A-Za-z0-9_.-]*|\\.[A-Za-z0-9_-][A-Za-z0-9_.-]*|\\.\\.[A-Za-z0-9_.-]+)(/([A-Za-z0-9_-][A-Za-z0-9_.-]*|\\.[A-Za-z0-9_-][A-Za-z0-9_.-]*|\\.\\.[A-Za-z0-9_.-]+))+$"
     },
+    "repo": {
+      "type": "string",
+      "maxLength": 512,
+      "anyOf": [
+        { "pattern": "^([a-z][a-z0-9-]{0,31}:)?([A-Za-z0-9_-][A-Za-z0-9_.-]*|\\.[A-Za-z0-9_-][A-Za-z0-9_.-]*|\\.\\.[A-Za-z0-9_.-]+)(/([A-Za-z0-9_-][A-Za-z0-9_.-]*|\\.[A-Za-z0-9_-][A-Za-z0-9_.-]*|\\.\\.[A-Za-z0-9_.-]+))+$" },
+        { "pattern": "^(https://[A-Za-z0-9.-]+(:[0-9]{1,5})?|http://(localhost|127\\.0\\.0\\.1|\\[::1\\])(:[0-9]{1,5})?)(/([A-Za-z0-9_-][A-Za-z0-9_.-]*|\\.[A-Za-z0-9_-][A-Za-z0-9_.-]*|\\.\\.[A-Za-z0-9_.-]+)){2,}/?$" }
+      ]
+    },
     "namespace": {
       "type": "string",
       "maxLength": 512,
-      "pattern": "^([a-z][a-z0-9-]{0,31}:)?([A-Za-z0-9_-][A-Za-z0-9_.-]*|\\.[A-Za-z0-9_-][A-Za-z0-9_.-]*|\\.\\.[A-Za-z0-9_.-]+)(/([A-Za-z0-9_-][A-Za-z0-9_.-]*|\\.[A-Za-z0-9_-][A-Za-z0-9_.-]*|\\.\\.[A-Za-z0-9_.-]+))*$"
+      "anyOf": [
+        { "pattern": "^([a-z][a-z0-9-]{0,31}:)?([A-Za-z0-9_-][A-Za-z0-9_.-]*|\\.[A-Za-z0-9_-][A-Za-z0-9_.-]*|\\.\\.[A-Za-z0-9_.-]+)(/([A-Za-z0-9_-][A-Za-z0-9_.-]*|\\.[A-Za-z0-9_-][A-Za-z0-9_.-]*|\\.\\.[A-Za-z0-9_.-]+))*$" },
+        { "pattern": "^(https://[A-Za-z0-9.-]+(:[0-9]{1,5})?|http://(localhost|127\\.0\\.0\\.1|\\[::1\\])(:[0-9]{1,5})?)(/([A-Za-z0-9_-][A-Za-z0-9_.-]*|\\.[A-Za-z0-9_-][A-Za-z0-9_.-]*|\\.\\.[A-Za-z0-9_.-]+))+/?$" }
+      ]
+    },
+    "excludeEntry": {
+      "type": "string",
+      "maxLength": 512,
+      "anyOf": [
+        { "pattern": "^([a-z][a-z0-9-]{0,31}:)?([A-Za-z0-9_*?-][A-Za-z0-9_.*?-]*|\\.[A-Za-z0-9_*?-][A-Za-z0-9_.*?-]*|\\.\\.[A-Za-z0-9_.*?-]+)(/([A-Za-z0-9_*?-][A-Za-z0-9_.*?-]*|\\.[A-Za-z0-9_*?-][A-Za-z0-9_.*?-]*|\\.\\.[A-Za-z0-9_.*?-]+))+$" },
+        { "pattern": "^(https://[A-Za-z0-9.-]+(:[0-9]{1,5})?|http://(localhost|127\\.0\\.0\\.1|\\[::1\\])(:[0-9]{1,5})?)(/([A-Za-z0-9_*-][A-Za-z0-9_.*-]*|\\.[A-Za-z0-9_*-][A-Za-z0-9_.*-]*|\\.\\.[A-Za-z0-9_.*-]+)){2,}/?$" }
+      ]
     }
   }
 }

@@ -171,26 +171,37 @@ func (r *run) inspect(ctx context.Context, t *target, by time.Time) *Work {
 // is decided, or a limited plan leaves the target out (scope.go): then no
 // snapshot is taken.
 //
+// A target that targets.yml subscribes (an entry that selects it has
+// opt_in: assumed) and that has no opt-in file is processed as if it had an
+// empty one: the packs of defaults and of its entries, nothing ignored. An
+// opt-in file that says enabled: false opts any target out:
+// skipped:opted-out, and the sweep closes its pull requests. When the API
+// found the opt-in file of a subscribed target and the tree does not hold
+// it, the file is read again at the tree's commit too: its deletion returns
+// the target to the subscription, and must not make it look not opted in,
+// which the sweep would take for an opt-out.
+//
 // A plan with Deps.AssumeOptIn plans a target without an opt-in file, or
 // with one that is not a regular file or is too large, as if it had an empty
-// one (for the report only); its report line says so (Assumed). Only a file
-// the API did not find and the tree holds is read again at the tree's
-// commit: an unsafe one stays assumed.
+// one (for the report only). Either way the report line says so (Assumed,
+// AssumedBy). Only a file the API did not find and the tree holds is read
+// again at the tree's commit: an unsafe one stays assumed.
 func (r *run) optInAndTree(ctx context.Context, t *target) (optIn *config.OptIn, sel config.Selection, tree *snapshot.Tree, ok bool) {
 	res := &t.res
 	assume := r.mode == ModePlan && r.d.AssumeOptIn
 	ref := ""
 	for attempt := 0; ; attempt++ {
 		file, err := r.readOptIn(ctx, t, ref)
-		// assumed: the plan takes an empty opt-in file; unsafe: because the
-		// API found one that is not a regular file or is too large.
+		// assumed: the run takes an empty opt-in file; unsafe: because the
+		// API found one that is not a regular file or is too large (plan
+		// --assume-opt-in only).
 		assumed, unsafe := false, false
 		switch {
 		case err == nil:
-		case isNotFound(err) && ctx.Err() == nil && assume:
+		case isNotFound(err) && ctx.Err() == nil && (t.assumed || assume):
 			assumed = true
 		case isNotFound(err) && ctx.Err() == nil:
-			res.Outcome, res.Reason = report.OutcomeSkipped, "not-opted-in"
+			res.Outcome, res.Reason = report.OutcomeSkipped, reasonNotOptedIn
 			r.leaveByHub(t, nil)
 			return nil, sel, nil, false
 		case errors.Is(err, platform.ErrNotRegular) || errors.Is(err, platform.ErrTooLarge):
@@ -215,6 +226,11 @@ func (r *run) optInAndTree(ctx context.Context, t *target) (optIn *config.OptIn,
 		if err != nil {
 			res.Outcome, res.Reason = report.OutcomeBlocked, "opt-in-invalid"
 			res.Warnings = append(res.Warnings, r.optIn+": "+strings.Join(flatten(err), "\n"))
+			r.leaveByHub(t, nil)
+			return nil, sel, nil, false
+		}
+		if o.Disabled() {
+			res.Outcome, res.Reason = report.OutcomeSkipped, reasonOptedOut
 			r.leaveByHub(t, nil)
 			return nil, sel, nil, false
 		}
@@ -249,8 +265,21 @@ func (r *run) optInAndTree(ctx context.Context, t *target) (optIn *config.OptIn,
 				res.Warnings = append(res.Warnings, err.Error())
 				return nil, sel, nil, false
 			}
+		case !inTree && assumed:
+			// Subscribed by targets.yml, and no opt-in file on either side.
+		case !inTree && t.assumed && attempt == 0 && tree.Commit != "":
+			// The file of a subscribed target went away in between: read it
+			// again at the snapshot's commit, where the subscription holds.
+			// (Without targets.yml's subscription, the snapshot's word is
+			// enough: the target is not opted in.)
+			ref = tree.Commit
+			continue
+		case !inTree && t.assumed:
+			res.Outcome, res.Reason = report.OutcomeFailed, "race"
+			res.Warnings = append(res.Warnings, fmt.Sprintf("%s read through the API is not in the snapshot", r.optIn))
+			return nil, sel, nil, false
 		case !inTree:
-			res.Outcome, res.Reason = report.OutcomeSkipped, "not-opted-in"
+			res.Outcome, res.Reason = report.OutcomeSkipped, reasonNotOptedIn
 			return nil, sel, nil, false
 		case !regular:
 			res.Outcome, res.Reason = report.OutcomeSkipped, "unsafe-opt-in"
@@ -273,10 +302,25 @@ func (r *run) optInAndTree(ctx context.Context, t *target) (optIn *config.OptIn,
 		for _, w := range warns {
 			res.Warnings = append(res.Warnings, w.String())
 		}
-		res.Assumed = assumed
+		res.Assumed, res.AssumedBy = assumed, ""
+		switch {
+		case assumed && t.assumed && !unsafe && !inTree:
+			res.AssumedBy = report.AssumedByHub
+		case assumed:
+			res.AssumedBy = report.AssumedByFlag
+		}
 		return o, s, tree, true
 	}
 }
+
+// Skip reasons of the opt-in step.
+const (
+	// reasonNotOptedIn: the target has no opt-in file, and targets.yml does
+	// not subscribe it.
+	reasonNotOptedIn = "not-opted-in"
+	// reasonOptedOut: the opt-in file says enabled: false.
+	reasonOptedOut = "opted-out"
+)
 
 // snapshot takes the snapshot of the target's default branch.
 func (r *run) snapshot(ctx context.Context, t *target) (*snapshot.Tree, bool) {

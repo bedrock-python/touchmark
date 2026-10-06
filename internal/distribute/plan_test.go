@@ -1170,6 +1170,61 @@ providers:
 	}
 }
 
+// An exclude entry without glob characters names one project: written for
+// a subgroup, it excludes none of the projects beneath it, and the run
+// warns, counting them; with /** it excludes them.
+func TestPlanExcludeNamespace(t *testing.T) {
+	p := fake.New("gitlab.example.com", fake.WithFlavor(fake.GitLab))
+	reader := p.AddAccount("tm-reader", platform.KindServiceAccount)
+	p.AddAccount("tm-writer", platform.KindServiceAccount)
+	for _, path := range []string{"platform/api", "platform/legacy/a", "platform/legacy/b", "platform/legacy-web"} {
+		r := p.AddRepo(platform.Repo{Path: path})
+		p.SetFile(r.ID, optInName, []byte("version: 1\n"), "")
+	}
+	if err := p.Err(); err != nil {
+		t.Fatal(err)
+	}
+	w := newWorld(t)
+	w.hubYML = `version: 1
+id: acme-eng
+providers:
+  - id: corp
+    type: gitlab
+    url: https://gitlab.example.com
+    writer: tm-writer
+`
+	hub, _, err := config.ParseHub([]byte(w.hubYML))
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan := func(exclude string) *report.Delivery {
+		t.Helper()
+		w.targetsYML = "version: 1\ndefaults:\n  packs: [base]\ntargets:\n  - group: platform\nexclude:\n  - " + exclude + "\n"
+		d := w.deps()
+		d.Providers = w.providers(hub, map[string]platform.Reader{"gitlab.example.com": p.Reader(reader)})
+		d.Snapshots = sources{"gitlab.example.com": p.Snapshots()}
+		return w.plan(d)
+	}
+	rep := plan("corp:platform/legacy")
+	if len(rep.Targets) != 4 {
+		t.Errorf("%d targets, want 4", len(rep.Targets))
+	}
+	warn := "targets.yml: exclude[0] (corp:platform/legacy) names one repository and excludes nothing beneath it, where 2 targets lie; " +
+		"to exclude a namespace, write corp:platform/legacy/**"
+	if !slices.Contains(rep.Warnings, warn) {
+		t.Errorf("warnings %q, want %q", rep.Warnings, warn)
+	}
+	rep = plan("corp:platform/legacy/**")
+	if len(rep.Targets) != 2 || slices.ContainsFunc(rep.Warnings, func(s string) bool { return strings.Contains(s, "exclude[0]") }) {
+		t.Errorf("with /**: %d targets, warnings %q", len(rep.Targets), rep.Warnings)
+	}
+	// A project that the entry does name is excluded, without a warning.
+	rep = plan("corp:platform/legacy-web")
+	if len(rep.Targets) != 3 || slices.ContainsFunc(rep.Warnings, func(s string) bool { return strings.Contains(s, "exclude[0]") }) {
+		t.Errorf("a project: %d targets, warnings %q", len(rep.Targets), rep.Warnings)
+	}
+}
+
 // The output does not depend on how many targets are inspected at once.
 func TestPlanDeterministic(t *testing.T) {
 	w := newWorld(t)

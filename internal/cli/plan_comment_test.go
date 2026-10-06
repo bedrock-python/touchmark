@@ -187,8 +187,8 @@ func TestPlanCommentGitLab(t *testing.T) {
 	}
 }
 
-// plan --assume-opt-in plans every target as opted in; the output says so
-// in every format.
+// plan --assume-opt-in plans every target without an opt-in file as opted
+// in; the output says so in every format.
 func TestPlanAssumeOptInOutput(t *testing.T) {
 	h := planHub(t)
 	w := newPlanWorld(t)

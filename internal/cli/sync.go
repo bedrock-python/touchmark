@@ -98,7 +98,7 @@ func (s *syncRun) load(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if errs := h.readConfigs(ctx); len(errs) > 0 {
+	if errs := h.readConfigs(ctx, s.e); len(errs) > 0 {
 		return configErrorf("%w\nrun touchmark check for details", joinedError(errors.Join(errs...)))
 	}
 	t, err := openTarget(ctx, s.e, s.o.dir)
@@ -109,6 +109,9 @@ func (s *syncRun) load(ctx context.Context) error {
 		return err
 	}
 	if err := t.resolveRef(ctx, s.o.repo, h); err != nil {
+		return err
+	}
+	if err := t.assume(h); err != nil {
 		return err
 	}
 	s.hub, s.tgt = h, t

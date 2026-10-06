@@ -44,11 +44,21 @@ var Reasons = map[Outcome][]string{
 	OutcomeUnchanged: nil,
 	OutcomeClosed:    {"no-diff", "opted-out", "target-dropped", "duplicate"},
 	OutcomeDeclined:  nil,
-	OutcomeSkipped:   {"not-opted-in", "archived", "disabled", "empty", "mirror", "pending-deletion", "prs-disabled", "sha256", "unsafe-opt-in", "private-in-public-hub", "superseded"},
+	OutcomeSkipped:   {"not-opted-in", "opted-out", "archived", "disabled", "empty", "mirror", "pending-deletion", "prs-disabled", "sha256", "unsafe-opt-in", "private-in-public-hub", "superseded"},
 	OutcomeBlocked:   {"edited", "branch-taken", "branch-in-use", "opt-in-invalid", "marker-invalid", "rules:*", "permission:*", "cannot-sign", "archived", "mass-close"},
 	OutcomeDeferred:  {"rate-limit", "deadline", "rollout-limit", "provider-down", "interrupted", "cooldown"},
 	OutcomeFailed:    {"transient", "auth", "access", "git", "integrity", "race", "secret-exposure", "internal"},
 }
+
+// Why a target counts as opted in without an opt-in file
+// (DeliveryTarget.AssumedBy).
+const (
+	// AssumedByHub: an entry of targets.yml that selects it has opt_in:
+	// assumed.
+	AssumedByHub = "targets.yml"
+	// AssumedByFlag: plan --assume-opt-in, for the report only.
+	AssumedByFlag = "--assume-opt-in"
+)
 
 // ReasonPrivate is the skip reason of a non-public target of a public hub.
 // Such a target is only counted: its report entry has no path and no
@@ -128,12 +138,18 @@ type DeliveryTarget struct {
 	PR       *PRRef  `json:"pr,omitempty"`
 	// Key is the content key of D, the hash of its (path, from, mode, to)
 	// changes, "" when D is empty.
-	Key      string       `json:"key,omitempty"`
-	Packs    []string     `json:"packs,omitempty"`
-	Assumed  bool         `json:"opt_in_assumed,omitempty"` // plan --assume-opt-in took an empty opt-in file for a missing or unsafe one
-	Changes  ChangeCounts `json:"changes"`
-	Orphaned []string     `json:"orphaned,omitempty"`
-	Warnings []string     `json:"warnings,omitempty"`
+	Key   string   `json:"key,omitempty"`
+	Packs []string `json:"packs,omitempty"`
+	// Assumed is set when the target was processed without an opt-in file,
+	// as if it had an empty one; AssumedBy says why: AssumedByHub (an entry
+	// of targets.yml with opt_in: assumed subscribes it) or AssumedByFlag
+	// (plan --assume-opt-in took an empty opt-in file for a missing or
+	// unsafe one).
+	Assumed   bool         `json:"opt_in_assumed,omitempty"`
+	AssumedBy string       `json:"opt_in_assumed_by,omitempty"`
+	Changes   ChangeCounts `json:"changes"`
+	Orphaned  []string     `json:"orphaned,omitempty"`
+	Warnings  []string     `json:"warnings,omitempty"`
 	// Writes is the estimated (plan) or actual (distribute) number of writes
 	// for this target: HTTP writes of the API and git pushes, as the
 	// throttle counts them, for the mutations that went

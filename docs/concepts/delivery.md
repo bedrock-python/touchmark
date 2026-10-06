@@ -85,7 +85,7 @@ One pull request per target, from the sync branch to the default branch.
 
 | Field | Belongs to | touchmark writes it |
 |---|---|---|
-| body | touchmark | when the changes it proposes change, and to record a decline, a close or a rebuild |
+| body | touchmark | when the changes it proposes change, and to record a decline, a close or a rebuild; also when a repository the hub subscribed (`opt_in: assumed`) gains or loses its opt-in file, which adds or drops the subscription paragraph |
 | title | people, after creation | at creation; later only if `pr.title` changed and nobody edited the title |
 | draft | people, after creation | at creation (`pr.draft`) |
 | labels | shared | at creation (`pr.labels`); later only labels it never set; never removes one |
@@ -94,6 +94,9 @@ One pull request per target, from the sync branch to the default branch.
 The body, in English:
 
 1. the text of `pr.intro_file`, then the hub, the hub commit and the packs;
+   for a repository the hub subscribed without an opt-in file, a paragraph on how to
+   choose packs or keep files out (add the opt-in file with `packs` or `ignore`) and how
+   to opt out (`enabled: false` in it). Never cut;
 2. **⚠ Sensitive paths**: changes to workflows, CI configuration, agent settings, skills,
    subagents, hooks, CODEOWNERS, `.gitattributes` and executable files (plus
    `sensitive_paths` from `hub.yml`). Never cut;
@@ -122,7 +125,7 @@ other pull request.
 | Reason | When |
 |---|---|
 | `no-diff` | the target already has everything; the branch is deleted |
-| `opted-out` | the opt-in file was deleted |
+| `opted-out` | the repository is no longer opted in: its opt-in file says `enabled: false`, or it has no opt-in file and the hub does not subscribe it (the file was deleted, or the hub dropped `opt_in: assumed`); the comment says which |
 | `target-dropped` | the target left `targets.yml` or entered `exclude` |
 | `duplicate` | two of touchmark's pull requests are open, on the branch and on an alias |
 

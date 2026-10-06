@@ -34,13 +34,19 @@ func runCheck(ctx context.Context, e *env, o *options) error {
 		Errors:   []string{},
 		Warnings: []string{},
 	}}
-	for _, err := range h.readConfigs(ctx) {
+	for _, err := range h.readConfigs(ctx, e) {
 		c.addErrors(flatten(err)...)
 	}
 	if err := h.readOperations(ctx); err != nil {
 		c.addErrors(flatten(err)...)
 	}
 	c.addWarnings(h.warnings...)
+	if h.ciOnlyURLs {
+		c.addWarnings(config.TargetsFile + ": its web URLs resolve against the implicit provider this CI names, as " + config.HubFile +
+			" lists no providers; outside CI that provider comes from the hub's origin remote only on github.com, a *.ghe.com host or gitlab.com, " +
+			"so a local check, status --hub or apply --hub of this hub fails, and so does a run in another platform's CI; list the instance under providers in " +
+			config.HubFile)
+	}
 	c.rep.Hub = h.report()
 	if err := h.readPacks(ctx); err != nil {
 		return err

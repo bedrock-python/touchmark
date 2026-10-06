@@ -1,0 +1,5 @@
+# error: targets[0].opt_in: expected a string, got null
+version: 1
+targets:
+  - repo: acme/billing
+    opt_in:

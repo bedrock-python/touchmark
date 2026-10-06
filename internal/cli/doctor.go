@@ -201,7 +201,7 @@ func loadDoctorHub(ctx context.Context, e *env, o *options) (*hub, error) {
 	if err != nil {
 		return nil, err
 	}
-	if errs := h.readConfigs(ctx); len(errs) > 0 {
+	if errs := h.readConfigs(ctx, e); len(errs) > 0 {
 		return nil, configErrorf("%w\nrun touchmark check for details", joinedError(errors.Join(errs...)))
 	}
 	if h.cfg.Legacy || h.cfg.ID == "" {

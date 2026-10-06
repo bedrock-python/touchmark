@@ -86,8 +86,9 @@ type ProviderEstimate struct {
 	TotalSeconds int64 `json:"total_seconds,omitempty"`
 }
 
-// planLines are the lines a plan's text output shows after the providers:
-// its scope and --assume-opt-in; none for other reports.
+// planLines are the lines the text output shows after the providers: a
+// plan's scope and --assume-opt-in, and how many targets targets.yml
+// subscribes without an opt-in file (opt_in: assumed).
 func (d *Delivery) planLines() []string {
 	var out []string
 	if s := d.Scope; s != nil {
@@ -96,7 +97,26 @@ func (d *Delivery) planLines() []string {
 	if d.Assumed {
 		out = append(out, "--assume-opt-in: "+d.assumeText())
 	}
+	if text := d.subscribedText(); text != "" {
+		out = append(out, "opt_in: assumed: "+text)
+	}
 	return out
+}
+
+// subscribedText says how many targets without an opt-in file targets.yml
+// subscribes (AssumedByHub); "" for none.
+func (d *Delivery) subscribedText() string {
+	n := 0
+	for _, t := range d.Targets {
+		if t.Assumed && t.AssumedBy == AssumedByHub {
+			n++
+		}
+	}
+	if n == 0 {
+		return ""
+	}
+	return fmt.Sprintf("%s without an opt-in file %s opted in by targets.yml; an opt-in file with enabled: false opts one out",
+		plural(n, "target"), pluralVerb(n))
 }
 
 // scopeText describes a plan's scope in one line.
@@ -124,16 +144,17 @@ func pluralWord(n int, word string) string {
 	return word + "s"
 }
 
-// assumeText describes --assume-opt-in: every target counts as opted in,
-// for this report only.
+// assumeText describes --assume-opt-in: for this report only, a target
+// without an opt-in file (or with one that is not a regular file or is too
+// large) counts as opted in; one whose file says enabled: false does not.
 func (d *Delivery) assumeText() string {
 	n := 0
 	for _, t := range d.Targets {
-		if t.Assumed {
+		if t.Assumed && t.AssumedBy != AssumedByHub {
 			n++
 		}
 	}
-	return fmt.Sprintf("every target counts as opted in, for this report only; %s without an opt-in file %s planned as if %s had an empty one",
+	return fmt.Sprintf("for this report only, a target without an opt-in file counts as opted in (one whose file says enabled: false stays opted out); %s %s planned as if %s had an empty one",
 		plural(n, "target"), pluralVerb(n), pluralPronoun(n))
 }
 
@@ -210,8 +231,8 @@ func approxDuration(seconds int64) string {
 	return fmt.Sprintf("~%d h %d min", h, m)
 }
 
-// mdPlanLines writes a plan's scope and --assume-opt-in to the Markdown
-// output.
+// mdPlanLines writes a plan's scope and --assume-opt-in, and the targets
+// targets.yml subscribes, to the Markdown output.
 func (d *Delivery) mdPlanLines(m *mdWriter) {
 	if s := d.Scope; s != nil {
 		m.line("")
@@ -220,6 +241,10 @@ func (d *Delivery) mdPlanLines(m *mdWriter) {
 	if d.Assumed {
 		m.line("")
 		m.line("**" + mdText("--assume-opt-in") + ":** " + mdText(d.assumeText()))
+	}
+	if text := d.subscribedText(); text != "" {
+		m.line("")
+		m.line("**" + mdText("opt_in: assumed") + ":** " + mdText(text))
 	}
 }
 

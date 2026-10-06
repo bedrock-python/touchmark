@@ -1,0 +1,5 @@
+# A null match selects every repository, as an absent one does.
+version: 1
+targets:
+  - org: acme
+    match:

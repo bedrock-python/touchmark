@@ -1,0 +1,4 @@
+# error: targets[0].repo: "https://github.com/acme/x?tab=readme" is not a repository URL
+version: 1
+targets:
+  - repo: https://github.com/acme/x?tab=readme

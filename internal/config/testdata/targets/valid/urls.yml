@@ -1,0 +1,14 @@
+# Web URLs of repositories and namespaces, with a trailing slash or .git;
+# ResolveURLs finds their providers later.
+version: 1
+targets:
+  - repo: https://github.com/acme/billing
+  - repo: https://gitlab.example.com/platform/api.git
+    packs: [base]
+  - repo: http://localhost:3000/acme/tools/
+  - org: https://github.com/acme
+  - provider: corp
+    group: https://gitlab.example.com:8443/gitlab/platform/
+exclude:
+  - https://github.com/acme/legacy
+  - https://gitlab.example.com/platform/legacy/**

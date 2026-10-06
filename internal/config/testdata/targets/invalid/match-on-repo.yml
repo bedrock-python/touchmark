@@ -1,0 +1,5 @@
+# error: targets[0].match: only with org or group
+version: 1
+targets:
+  - repo: acme/billing
+    match: [acme/*]

@@ -1,0 +1,4 @@
+# error: glob patterns go in exclude and match
+version: 1
+targets:
+  - group: platform/?

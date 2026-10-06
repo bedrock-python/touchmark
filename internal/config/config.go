@@ -174,10 +174,26 @@ type Targets struct {
 type Defaults struct {
 	Provider string   `yaml:"provider"`
 	Packs    []string `yaml:"packs"`
+	// OptIn is the opt_in of every entry that sets none: OptInRequired
+	// (the default when empty) or OptInAssumed.
+	OptIn string `yaml:"opt_in"`
 }
+
+// Values of opt_in in targets.yml.
+const (
+	// OptInRequired: a target the entry selects gets nothing until it has
+	// an opt-in file.
+	OptInRequired = "required"
+	// OptInAssumed: a target the entry selects counts as opted in without
+	// an opt-in file, with the packs targets.yml gives it.
+	OptInAssumed = "assumed"
+)
 
 // Entry is one item of targets.yml `targets:`. Exactly one of Repo, Org and
 // Group is set. Org and Group are synonyms (a namespace).
+//
+// Repo, Org and Group may be web URLs as written in the file; ResolveURLs
+// turns them into <provider>:<path>, which is what everything else reads.
 type Entry struct {
 	Repo      string   `yaml:"repo"`
 	Org       string   `yaml:"org"`
@@ -186,7 +202,12 @@ type Entry struct {
 	Topics    []string `yaml:"topics"`
 	Subgroups *bool    `yaml:"subgroups"`
 	Forks     bool     `yaml:"forks"`
-	Packs     []string `yaml:"packs"`
+	// Match keeps, of an org or group entry, the repositories whose full
+	// path matches one of these glob patterns.
+	Match []string `yaml:"match"`
+	Packs []string `yaml:"packs"`
+	// OptIn is OptInRequired, OptInAssumed, or "" for defaults.opt_in.
+	OptIn string `yaml:"opt_in"`
 }
 
 // OptIn is the target's opt-in file. Its presence is the consent; it may be
@@ -195,9 +216,16 @@ type OptIn struct {
 	Version int      `yaml:"version"`
 	Packs   []string `yaml:"packs"`
 	Ignore  []string `yaml:"ignore"`
+	// Enabled false opts the repository out, whatever targets.yml says;
+	// absent means true.
+	Enabled *bool `yaml:"enabled"`
 
 	Legacy bool `yaml:"-"` // no version key
 }
+
+// Disabled reports whether the opt-in file says enabled: false. A nil
+// opt-in is not disabled.
+func (o *OptIn) Disabled() bool { return o != nil && o.Enabled != nil && !*o.Enabled }
 
 // ParseHub decodes and validates hub.yml. data == nil means the file is
 // absent (legacy hub).
@@ -230,6 +258,12 @@ func ParseHub(data []byte) (*Hub, []Warning, error) {
 // ParseTargets decodes and validates targets.yml. data == nil means absent:
 // no targets, no defaults.
 //
+// A value of repo, org, group or exclude may be a web URL: its form is
+// checked here, and ResolveURLs, which knows the providers, rewrites it as
+// <provider>:<path>. Exclude entries are patterns that may hold the glob
+// characters * and ? (glob.go), as are the patterns of an org or group
+// entry's match; opt_in is required or assumed.
+//
 // The pre-v1 format, a bare `repos:` list without version, is converted
 // to Targets entries with Legacy set and a warning.
 func ParseTargets(data []byte) (*Targets, []Warning, error) {
@@ -240,7 +274,8 @@ func ParseTargets(data []byte) (*Targets, []Warning, error) {
 // ParseOptIn decodes and validates an opt-in file. An empty file is valid.
 //
 // Version is 1 after parsing; Legacy records that the file had no version
-// key (the pre-v1 format, or an empty file).
+// key (the pre-v1 format, or an empty file). enabled: false opts the
+// repository out (Disabled).
 func ParseOptIn(data []byte) (*OptIn, []Warning, error) {
 	o, warns, err := parseOptIn(data)
 	return o, cleanWarnings(warns), cleanErr(err)
@@ -295,12 +330,15 @@ type Selection struct {
 // yields an empty, complete selection with a warning. Unknown packs and
 // requires cycles are errors (known lists the packs the hub ships now).
 //
-// Only org/group entries that carry packs and whose namespace could contain
-// target count as unresolved; the others cannot change the result. A repo
-// entry or an exclude names target when the paths are equal ignoring case
-// and the providers are equal. Each side's provider is its own (entry
-// provider, then ref prefix), else targets.Defaults.Provider, else the hub's
-// only provider; when either side stays unknown, the path alone decides.
+// Only org/group entries that carry packs and whose namespace and match
+// patterns could contain target count as unresolved; the others cannot
+// change the result. A repo entry names target when the paths are equal
+// ignoring case and the providers are equal; an exclude entry covers it
+// when its pattern matches the path (an entry without glob characters is
+// an equal path) and the providers are equal. Each side's provider is its
+// own (entry provider, then ref prefix), else targets.Defaults.Provider,
+// else the hub's only provider; when either side stays unknown, the path
+// alone decides. targets must hold no URL: ResolveURLs rewrites them first.
 // A pack's former name (formerly) selects the pack, with a warning, when
 // that pack exists; a former name of a pack that is gone is unknown.
 func Select(hub *Hub, targets *Targets, optIn *OptIn, target Ref, known map[string]bool) (Selection, []Warning, error) {
@@ -340,8 +378,13 @@ func (h *Hub) OptInName() string {
 //
 // It also rejects the template's placeholder id, and requires every entry
 // to name a provider (itself or through defaults.provider) when the hub has
-// more than one. Former pack names in references, metadata for packs that
-// do not exist, and targets both listed and excluded are warnings.
+// more than one. targets must hold no URL: ResolveURLs rewrites them first,
+// and one left is an error. Former pack names in references, metadata for
+// packs that do not exist, targets both listed and excluded (by name or by
+// pattern), a match pattern no repository of its namespace can match, and
+// a repo entry's opt_in: required that an org or group entry with opt_in:
+// assumed overrides are warnings. An exclude pattern that covers no listed
+// repository is fine: it is there for org and group entries.
 func Check(hub *Hub, targets *Targets, known map[string]bool) ([]Warning, []error) {
 	return check(hub, targets, known)
 }

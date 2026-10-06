@@ -1,0 +1,17 @@
+# Glob patterns in exclude and match, and opt_in in defaults and entries.
+version: 1
+defaults:
+  opt_in: assumed
+targets:
+  - org: acme
+    match: [acme/svc-*, "acme/api-??"]
+    opt_in: required
+  - group: corp:platform
+    match:
+      - platform/**/api
+  - repo: acme/billing
+    opt_in: assumed
+exclude:
+  - acme/legacy-*
+  - corp:platform/legacy/**
+  - "**/sandbox"

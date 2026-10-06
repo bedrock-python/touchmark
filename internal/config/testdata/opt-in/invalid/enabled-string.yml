@@ -1,0 +1,2 @@
+# error: enabled: expected true or false, got a string
+enabled: "no"

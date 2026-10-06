@@ -47,9 +47,20 @@ func (r resolver) matchRepo(ref Ref, override string, target Ref) bool {
 	return sameProvider(r.provider(firstNonEmpty(override, ref.Provider)), r.provider(target.Provider))
 }
 
+// matchPattern reports whether the exclude pattern pat (parsePattern)
+// covers target: its path matches (glob.go) and the providers are
+// compatible, as in matchRepo.
+func (r resolver) matchPattern(pat Ref, target Ref) bool {
+	if !matchPath(pat.Path, target.Path) {
+		return false
+	}
+	return sameProvider(r.provider(pat.Provider), r.provider(target.Provider))
+}
+
 // mayContain reports whether the org or group entry e, whose namespace is
 // ns, could select target: the target lies in the namespace (directly, or
-// in a nested one when subgroups are included) on a compatible provider.
+// in a nested one when subgroups are included) on a compatible provider,
+// and its path passes the entry's match patterns.
 func (r resolver) mayContain(e *Entry, ns Ref, target Ref) bool {
 	if !sameProvider(r.provider(firstNonEmpty(e.Provider, ns.Provider)), r.provider(target.Provider)) {
 		return false
@@ -57,6 +68,9 @@ func (r resolver) mayContain(e *Entry, ns Ref, target Ref) bool {
 	prefix := strings.ToLower(ns.Path) + "/"
 	path := strings.ToLower(target.Path)
 	if !strings.HasPrefix(path, prefix) {
+		return false
+	}
+	if len(e.Match) > 0 && !matchAnyPath(e.Match, target.Path) {
 		return false
 	}
 	return includeSubgroups(e) || !strings.Contains(path[len(prefix):], "/")
@@ -221,11 +235,11 @@ func selectPacks(hub *Hub, targets *Targets, optIn *OptIn, target Ref, known map
 	}
 	r := resolver{hub: hub, targets: targets}
 	for i, ex := range targets.Exclude {
-		ref, err := ParseRef(ex)
+		pat, err := parsePattern(ex)
 		if err != nil {
 			return Selection{}, nil, fmt.Errorf("%s: exclude[%d]: %w", TargetsFile, i, err)
 		}
-		if r.matchRepo(ref, "", target) {
+		if r.matchPattern(pat, target) {
 			w := Warning{File: TargetsFile, Message: fmt.Sprintf("%s is excluded by exclude[%d] (%s)", target, i, ex)}
 			return Selection{Packs: []string{}, Complete: true, Sources: map[string][]string{}}, []Warning{w}, nil
 		}
@@ -267,6 +281,65 @@ func selectPacks(hub *Hub, targets *Targets, optIn *OptIn, target Ref, known map
 		Unresolved: unresolved,
 		Sources:    s.sources,
 	}, s.warns, nil
+}
+
+// Assumption is what targets.yml says, as a local run can tell, about a
+// target that has no opt-in file (Assume).
+type Assumption struct {
+	// Assumed is set when a repo: entry that names the target has opt_in:
+	// assumed (its own, or defaults.opt_in) and no exclude entry covers the
+	// target: it counts as opted in, as if it had an empty opt-in file.
+	Assumed bool
+	// Unresolved lists the org and group entries with opt_in: assumed whose
+	// namespace may hold the target, as "org: acme": only the platform's API
+	// tells whether they select it.
+	Unresolved []string
+}
+
+// Assume tells whether targets.yml subscribes target, which has no opt-in
+// file, in local mode: a repo: entry that names it (as Select matches
+// them) with opt_in: assumed makes it Assumed; an org or group entry with
+// opt_in: assumed whose namespace and match patterns may hold it is listed
+// in Unresolved, since a local run cannot resolve it. An excluded target is
+// neither. Nil hub and targets are a legacy hub and an empty targets.yml.
+func Assume(hub *Hub, targets *Targets, target Ref) (Assumption, error) {
+	if hub == nil {
+		hub = &Hub{Legacy: true}
+	}
+	var out Assumption
+	if targets == nil {
+		return out, nil
+	}
+	r := resolver{hub: hub, targets: targets}
+	for i, ex := range targets.Exclude {
+		pat, err := parsePattern(ex)
+		if err != nil {
+			return out, fmt.Errorf("%s: exclude[%d]: %w", TargetsFile, i, err)
+		}
+		if r.matchPattern(pat, target) {
+			return out, nil
+		}
+	}
+	for i := range targets.Targets {
+		e := &targets.Targets[i]
+		if targets.effectiveOptIn(e) != OptInAssumed {
+			continue
+		}
+		ref, err := entryRef(e)
+		if err != nil {
+			return Assumption{}, fmt.Errorf("%s: targets[%d]: %w", TargetsFile, i, err)
+		}
+		switch kind := entryKind(e); {
+		case kind == "repo":
+			out.Assumed = out.Assumed || r.matchRepo(ref, e.Provider, target)
+		case r.mayContain(e, ref, target):
+			out.Unresolved = append(out.Unresolved, kind+": "+selectorValue(e))
+		}
+	}
+	if out.Assumed {
+		out.Unresolved = nil
+	}
+	return out, nil
 }
 
 func selectorValue(e *Entry) string {

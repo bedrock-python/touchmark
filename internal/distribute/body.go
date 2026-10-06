@@ -43,7 +43,8 @@ func (r *run) content(w *Work, reads branchReads) (pairs []decide.Pair, hubCommi
 // fillBody fills the body input (Work.Body: the rows of what the branch
 // holds, and while paused what a rebuild would bring, D − C; the local
 // files; the hub's name, link and sensitive paths; the target's packs and
-// platform) and the marker data of D (Work.Marker). A paused branch without
+// platform, and whether targets.yml subscribed it without an opt-in file)
+// and the marker data of D (Work.Marker). A paused branch without
 // a commit of touchmark's (its Hc is gone: foreign) has no C: the body
 // claims nothing about what it holds, shows no table, and lists all of D as
 // what a rebuild would bring.
@@ -83,6 +84,7 @@ func (r *run) fillBody(w *Work, sel config.Selection, reads branchReads) {
 		Local:          local,
 		Sensitive:      slices.Clone(r.hub.SensitivePaths),
 		OptInFile:      r.optIn,
+		Assumed:        t.res.Assumed && t.res.AssumedBy == report.AssumedByHub,
 		GiteaWorkflows: giteaWorkflows(t.prov.cfg.Type, w.Tree, append(slices.Clone(rows), pending...)),
 		Caps:           t.prov.caps,
 	}

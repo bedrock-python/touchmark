@@ -1,0 +1,4 @@
+# error: exclude[0]: "acme*": a pattern covers a whole repository path
+version: 1
+exclude:
+  - acme*

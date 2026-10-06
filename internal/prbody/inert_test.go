@@ -66,7 +66,7 @@ func TestCheckText(t *testing.T) {
 	if Inert(body) != body {
 		t.Errorf("Inert changes a rendered body:\n%s", body)
 	}
-	for _, c := range []string{ClosedComment("no-diff"), DeclinedComment(3, []string{"@team/notes.md", "a/b.md"}, ".engineering-assets.yml"),
+	for _, c := range []string{ClosedComment("no-diff", "", ""), ClosedComment("opted-out", CauseDisabled, ".engineering-assets.yml"), DeclinedComment(3, []string{"@team/notes.md", "a/b.md"}, ".engineering-assets.yml"),
 		AutoDeclinedComment(4, []string{"@x.md"}, "", []string{"engineering-assets"})} {
 		if err := CheckText(c); err != nil {
 			t.Errorf("a comment fails CheckText: %v\n%s", err, c)

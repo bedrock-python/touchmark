@@ -36,8 +36,27 @@ type Target struct {
 	// when it could not be determined.
 	Ref       string `json:"ref"`
 	OptInFile string `json:"opt_in_file"`
-	OptedIn   bool   `json:"opted_in"`
+	// OptedIn is set when the target gets packs: OptIn is OptInFile or
+	// OptInAssumed.
+	OptedIn bool `json:"opted_in"`
+	// OptIn says why the target is opted in or not: one of the OptIn*
+	// values.
+	OptIn string `json:"opt_in"`
 }
+
+// Values of Target.OptIn.
+const (
+	// OptInFile: the target has the opt-in file.
+	OptInFile = "file"
+	// OptInAssumed: the target has no opt-in file, and a repo: entry of
+	// targets.yml with opt_in: assumed subscribes it.
+	OptInAssumed = "assumed"
+	// OptInDisabled: the opt-in file says enabled: false.
+	OptInDisabled = "opted-out"
+	// OptInNone: the target has no opt-in file, and no repo: entry
+	// subscribes it.
+	OptInNone = "none"
+)
 
 // Selection is the resolved pack list.
 type Selection struct {

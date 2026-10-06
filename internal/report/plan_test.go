@@ -37,7 +37,7 @@ func TestPlanLines(t *testing.T) {
 	}
 	for _, want := range []string{
 		"\nscope: pack python changed → 12 of 57 targets (--all for every target)\n",
-		"\n--assume-opt-in: every target counts as opted in, for this report only; 1 target without an opt-in file is planned as if it had an empty one\n",
+		"\n--assume-opt-in: for this report only, a target without an opt-in file counts as opted in (one whose file says enabled: false stays opted out); 1 target is planned as if it had an empty one\n",
 		"\nThis hub pull request changes, across the targets it affects\n" +
 			"  update  .claude/settings.json  SENSITIVE  15 targets\n" +
 			"  add     prompts/review.md                 12 targets\n" +
@@ -51,7 +51,7 @@ func TestPlanLines(t *testing.T) {
 	}
 	for _, want := range []string{
 		"\n**Scope:** pack python changed → 12 of 57 targets \\(\\-\\-all for every target\\)\n",
-		"\n**\\-\\-assume\\-opt\\-in:** every target counts as opted in",
+		"\n**\\-\\-assume\\-opt\\-in:** for this report only, a target without an opt\\-in file counts as opted in",
 		"\n**Cost:** gh ≈ 400 writes \\(\\~45 min\\)",
 		"<details><summary>This hub pull request changes, across the targets it affects (3)</summary>\n\n| Change | Path | Targets |\n|---|---|---:|\n" +
 			"| update ⚠ sensitive | `.claude/settings.json` | 15 |\n| add | `prompts/review.md` | 12 |\n| add | `docs/a\\|b.md` | 1 |\n",

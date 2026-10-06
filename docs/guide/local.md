@@ -65,6 +65,22 @@ that might match, `status` warns, and `apply` refuses until you name the packs:
 touchmark apply --hub ~/src/engineering-assets --packs agents,claude
 ```
 
+The same goes for a hub that subscribes repositories (`opt_in: assumed`). In a checkout
+without the opt-in file:
+
+- a `repo:` entry with `assumed` that names the target opts it in: `status` prints
+  `opted in by targets.yml (opt_in: assumed)`, and `apply` writes the packs of
+  `targets.yml`;
+- an `org:` or `group:` entry with `assumed` that might hold the target cannot be
+  resolved here: the target counts as not opted in, and `status` warns that `plan` has
+  the answer;
+- without `--repo` or an `origin` remote, touchmark cannot tell, and warns when
+  `targets.yml` subscribes anything.
+
+An opt-in file in the checkout settles it either way; with `enabled: false` in it,
+`status` prints `opted out` and `apply` writes nothing. In `--format json` the target's
+`opt_in` says which: `file`, `assumed`, `opted-out` or `none`.
+
 ## Try a pack before committing it
 
 ```sh

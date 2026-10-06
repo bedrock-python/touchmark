@@ -118,8 +118,8 @@ type Deps struct {
 	InCI bool
 	// Scope limits a plan in a hub pull request to the targets the pull
 	// request touches (scope.go); nil plans every target.
-	// AssumeOptIn plans every target as opted in (plan --assume-opt-in,
-	// optInAndTree). Only ModePlan reads them.
+	// AssumeOptIn plans every target without an opt-in file as opted in
+	// (plan --assume-opt-in, optInAndTree). Only ModePlan reads them.
 	Scope       *Scope
 	AssumeOptIn bool
 	// Now is the clock; time.Now when nil.
@@ -219,9 +219,12 @@ func HeadGuard(c hubch.Context) bool {
 // known_authors and automation_accounts (their stable ids feed
 // decide.Identity and the classes of closes); every targets.yml entry whose
 // provider is this one becomes a platform.Selector (repo: → Reader.Repo;
-// org/group → Resolve with topics, subgroups, forks); exclude removes
-// targets (same matching as config, by the canonical path and the path a
-// repo: entry wrote; a repo: entry excluded as written is never looked up);
+// org/group → Resolve with topics, subgroups, forks, keeping the
+// repositories whose path matches one of the entry's match patterns);
+// exclude removes targets (same matching as config, patterns included, by
+// the canonical path and the path a repo: entry wrote; a repo: entry
+// excluded as written is never looked up); web URLs in targets.yml are
+// resolved against the run's providers first (config.ResolveURLs);
 // targets are deduplicated by (Host, ID), and a repository two providers
 // reach is handled by the provider of its first entry in targets.yml, with
 // the target warning "duplicate-provider"; every target remembers the
@@ -269,10 +272,13 @@ func HeadGuard(c hubch.Context) bool {
 //     a chunk of 50 targets at once where the reader is a
 //     platform.BatchReader (optin.go; a file the batch cannot settle is read
 //     on its own): not found (platform.ClassOf gives ClassNotFound) →
-//     skipped:not-opted-in; ErrNotRegular or ErrTooLarge →
-//     skipped:unsafe-opt-in; parse error → blocked:opt-in-invalid. With
-//     AssumeOptIn a missing or irregular file is taken for an empty one
-//     (DeliveryTarget.Assumed).
+//     skipped:not-opted-in, unless an entry that selects the target has
+//     opt_in: assumed, which takes an empty file for it (DeliveryTarget
+//     Assumed, AssumedBy targets.yml); ErrNotRegular or ErrTooLarge →
+//     skipped:unsafe-opt-in; parse error → blocked:opt-in-invalid;
+//     enabled: false → skipped:opted-out, whose pull requests the sweep
+//     closes as a missing file's. With AssumeOptIn a missing or irregular
+//     file is taken for an empty one (AssumedBy --assume-opt-in).
 //  3. packs: config.SelectFor with the matched entries; unknown packs →
 //     blocked:opt-in-invalid with the message as a warning. A plan limited
 //     by Scope stops here for a target whose final pack list holds no pack
@@ -487,9 +493,12 @@ type target struct {
 	// written are the paths repo: entries wrote for it.
 	written []string
 	// entries are the targets.yml entries that matched it, providers the
-	// ids of every provider that found it (prov first).
+	// ids of every provider that found it (prov first). assumed is set when
+	// one of the entries has opt_in: assumed: the target counts as opted in
+	// without an opt-in file.
 	entries   []int
 	providers []string
+	assumed   bool
 	// first is the first entry that found it and its position in that
 	// entry's listing: its place in targets.yml order.
 	first  [2]int
@@ -512,6 +521,10 @@ type target struct {
 	// dropped marks a repository the sweep added: it is no target of the
 	// run any more.
 	dropped bool
+	// optOut is why the sweep closes the pull requests of a target that is
+	// not opted in (prbody.CauseDisabled, prbody.CauseNoOptIn), for the
+	// comment after each close; "" for any other target.
+	optOut string
 	// outOfScope marks a target a limited plan leaves out (scope.go): it
 	// stays a target of the run, without a report line. optIn is its opt-in
 	// file as a batch read it, until phase C takes it (optin.go).
@@ -628,6 +641,19 @@ func newRun(d Deps, mode Mode) (*run, error) {
 	r.inspectBy = inspectDeadline(r.now, d.Write.Deadline)
 	if r.targets == nil {
 		r.targets = &config.Targets{}
+	}
+	if r.targets.HasURLs() {
+		// The CLI resolves them as it reads targets.yml; a caller that did
+		// not gets them resolved against the run's providers.
+		rps := make([]config.ResolvedProvider, len(d.Providers))
+		for i, p := range d.Providers {
+			rps[i] = p.Config
+		}
+		targets, err := config.ResolveURLs(r.targets, rps)
+		if err != nil {
+			return nil, err
+		}
+		r.targets = targets
 	}
 	r.affected = r.scopePacks()
 	r.rep.Strict = d.Strict

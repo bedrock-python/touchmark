@@ -1,0 +1,4 @@
+# error: targets[0].repo: "http://github.com/acme/x" is not a repository URL
+version: 1
+targets:
+  - repo: http://github.com/acme/x

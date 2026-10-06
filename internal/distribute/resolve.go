@@ -42,6 +42,7 @@ func (r *run) resolve(ctx context.Context) ([]*target, error) {
 		if !slices.Contains(t.entries, s.Entry) {
 			t.entries = append(t.entries, s.Entry)
 		}
+		t.assumed = t.assumed || s.Assumed
 		if !slices.Contains(t.providers, p.cfg.ID) {
 			t.providers = append(t.providers, p.cfg.ID)
 		}
@@ -389,8 +390,9 @@ func (r *run) resolveRepo(ctx context.Context, p *provider, s config.Selector, a
 		platform.ClassOf(err) == platform.ClassAuth)
 }
 
-// resolveNamespace resolves an org: or group: entry and reports whether the
-// provider may go on resolving.
+// resolveNamespace resolves an org: or group: entry, keeping the
+// repositories its match patterns select, and reports whether the provider
+// may go on resolving.
 func (r *run) resolveNamespace(ctx context.Context, p *provider, s config.Selector, add addFunc) bool {
 	var res platform.Resolved
 	err := r.retry(ctx, p, func() error {
@@ -416,20 +418,27 @@ func (r *run) resolveNamespace(ctx context.Context, p *provider, s config.Select
 		r.warnf("provider %s: the listing of targets.yml targets[%d] (%s) is incomplete%s", p.cfg.ID, s.Entry, s.Namespace, why)
 	}
 	for i, repo := range res.Repos {
-		add(p, s, repo, i)
+		if s.Selects(repo.Path) {
+			add(p, s, repo, i)
+		}
 	}
 	return true
 }
 
 // filter drops excluded targets and, with Only, the targets it does not
 // name; marks the targets a public hub must not name; and adds the
-// warnings about duplicates and renames.
+// warnings about duplicates and renames, and about exclude entries that
+// name one repository while targets lie beneath them (beneathExcludes).
 func (r *run) filter(list []*target) []*target {
 	matched := make([]bool, len(r.d.Only))
 	var kept []*target
+	beneath := map[int]int{}
 	for _, t := range list {
 		if r.excluded(t) {
 			continue
+		}
+		for _, i := range config.ExcludedBeneath(r.hub, r.targets, t.prov.cfg.ID, t.repo.Path) {
+			beneath[i]++
 		}
 		if len(r.d.Only) > 0 {
 			hit := false
@@ -450,6 +459,7 @@ func (r *run) filter(list []*target) []*target {
 			r.warnf("--only %s matches no target", ref)
 		}
 	}
+	r.beneathExcludes(beneath)
 	for _, t := range kept {
 		if len(t.providers) > 1 {
 			others := strings.Join(t.providers[1:], ", ")
@@ -469,6 +479,27 @@ func (r *run) filter(list []*target) []*target {
 		}
 	}
 	return kept
+}
+
+// beneathExcludes warns about each exclude entry that names one repository
+// while n targets lie beneath it (beneath: entry index → n): it excludes
+// none of them, and a namespace takes "/**". The warning names the entry,
+// which targets.yml shows anyway, and counts the targets without naming
+// them.
+func (r *run) beneathExcludes(beneath map[int]int) {
+	for i := range r.targets.Exclude {
+		n := beneath[i]
+		if n == 0 {
+			continue
+		}
+		what := "1 target lies"
+		if n > 1 {
+			what = fmt.Sprintf("%d targets lie", n)
+		}
+		ex := r.targets.Exclude[i]
+		r.warnf("%s: exclude[%d] (%s) names one repository and excludes nothing beneath it, where %s; to exclude a namespace, write %s/**",
+			config.TargetsFile, i, ex, what, ex)
+	}
 }
 
 // excluded reports whether exclude names t on any provider that found it,

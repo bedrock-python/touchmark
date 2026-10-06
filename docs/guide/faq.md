@@ -50,8 +50,18 @@ Run `touchmark apply` in a checkout with the hub next to it, and commit the resu
 propose and is closed as `no-diff`.
 
 **How do we leave entirely?**
-Delete `.engineering-assets.yml`. touchmark closes its open pull request as `opted-out`
-and delivers nothing more. Files already merged stay.
+Put `enabled: false` in `.engineering-assets.yml`, or delete the file. touchmark closes
+its open pull request as `opted-out` and delivers nothing more. Files already merged
+stay. If the hub subscribed your repository (the sync pull request says so), deleting
+the file is not enough: the hub's subscription applies again, so add the file with
+`enabled: false`.
+
+**We never added an opt-in file. Why did we get a sync pull request?**
+The hub subscribed your repository (`opt_in: assumed` in its `targets.yml`), and the
+pull request's description says so. Treat it like any other: merge it, or close it and
+the same content won't come back. To choose packs or keep files, add
+`.engineering-assets.yml` with `packs` or `ignore`; to stop them, add it with
+`enabled: false`.
 
 ## For hub maintainers
 
@@ -59,7 +69,21 @@ and delivers nothing more. Files already merged stay.
 A public hub's CI logs are public, so touchmark skips private and internal targets there
 and prints only how many. A hub whose visibility the CI does not report counts as public.
 Set `security.private_targets_in_public_hub: deliver` to deliver to them anyway; their
-names will then appear in the logs. Repositories without the opt-in file are skipped too.
+names will then appear in the logs. Repositories without the opt-in file are skipped too
+(`not-opted-in`), unless an entry that selects them has `opt_in: assumed`, and so are
+repositories whose opt-in file says `enabled: false` (`opted-out`).
+
+**Can the hub subscribe repositories without asking each team?**
+Yes: `opt_in: assumed` on an entry of `targets.yml`, or in `defaults`. The repositories it
+selects get their packs without an opt-in file, and the first sync pull request tells the
+team how to choose packs or opt out. Narrow an organisation with `match` (`acme/svc-*`)
+and leave repositories out with `exclude` patterns (`corp:platform/legacy/**`). See
+[targets.yml](../reference/targets.md#opt-in).
+
+**Can targets.yml name a repository by its URL?**
+Yes: `repo: https://gitlab.example.com/platform/api` works, and so do `org`, `group` and
+`exclude`. touchmark finds the provider in `hub.yml` whose `url` the URL lies under and
+reports the target as `<provider>:<path>`. `check` fails on a URL no provider serves.
 
 **Can two packs ship the same path?**
 Yes. Packs are layered in order, and the later one wins.

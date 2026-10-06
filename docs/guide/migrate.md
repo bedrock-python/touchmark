@@ -75,8 +75,12 @@ cannot express, and 1 when an account it checked does not exist.
    on the same GitLab instance ([A hub on GitLab](../getting-started/gitlab.md)).
 2. Save the three files, resolve every `TODO`, move the files multi-gitter's script
    copied into packs under `packs/`, and assign them in `targets.yml`.
-3. Make sure every target has its opt-in file: multi-gitter delivered without consent,
-   touchmark does not.
+3. Decide how targets opt in. multi-gitter delivered without asking; touchmark waits
+   for each repository's opt-in file unless `targets.yml` subscribes it.
+   `defaults.opt_in: assumed` keeps multi-gitter's behaviour: every target gets its
+   packs without the file, and a team opts out with `enabled: false` in it. Without it,
+   add the opt-in file to every target first: the first `distribute` skips the others
+   (`not-opted-in`) and takes none of their multi-gitter merge requests over.
 4. Run `touchmark check`, open a merge request and read `plan`: it shows what
    `distribute` would do with each multi-gitter merge request, and the effect of the
    `adopt_unmarked` entry.
@@ -100,7 +104,7 @@ token's bot stays the author of its merge requests, and stays in `known_authors`
 
 | multi-gitter | touchmark |
 |---|---|
-| every selected repository gets the change | only repositories with `.engineering-assets.yml` |
+| every selected repository gets the change | repositories with `.engineering-assets.yml`, or those `targets.yml` subscribes (`opt_in: assumed`) |
 | a file a team changed is overwritten, or the script decides | a changed file is the team's, never touched again |
 | a closed merge request comes back on the next run | a declined merge request is remembered |
 | one body for the whole run | a body per target: what changes there, what is sensitive |

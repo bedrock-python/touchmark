@@ -450,6 +450,35 @@ func TestMatchSegmentsExhaustive(t *testing.T) {
 	}
 }
 
+// TestMatchSegments: MatchSegments takes its pattern as written, without
+// Match's trimming and without its subtree rule.
+func TestMatchSegments(t *testing.T) {
+	for _, tc := range []struct {
+		pattern, p string
+		want       bool
+	}{
+		{"docs", "docs", true},
+		{"docs", "docs/a.md", false},
+		{"./docs", "docs", false},
+		{"docs/", "docs", false},
+		{"a/**", "a/b/c", true},
+		{"**/c", "a/b/c", true},
+		{"a/*/c", "a/b/c", true},
+		{"a/?", "a/bb", false},
+	} {
+		if got := MatchSegments(tc.pattern, tc.p); got != tc.want {
+			t.Errorf("MatchSegments(%q, %q) = %v, want %v", tc.pattern, tc.p, got, tc.want)
+		}
+	}
+	for _, pat := range sequences([]string{"a", "*", "**"}, 3) {
+		for _, segs := range sequences([]string{"a", "b"}, 3) {
+			if got, want := MatchSegments(strings.Join(pat, "/"), strings.Join(segs, "/")), matchSegmentsRef(pat, segs); got != want {
+				t.Fatalf("MatchSegments(%q, %q) = %v, want %v", pat, segs, got, want)
+			}
+		}
+	}
+}
+
 func FuzzMatch(f *testing.F) {
 	f.Add("docs", "docs/a.md")
 	f.Add("**/x", "a/b/x")

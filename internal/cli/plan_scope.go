@@ -26,7 +26,8 @@ type planOptions struct {
 	all bool
 	// comment keeps plan's comment in the hub pull request (--comment).
 	comment bool
-	// assumeOptIn plans every target as opted in (--assume-opt-in).
+	// assumeOptIn plans every target without an opt-in file as opted in
+	// (--assume-opt-in).
 	assumeOptIn bool
 }
 

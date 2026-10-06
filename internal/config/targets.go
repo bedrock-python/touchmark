@@ -69,14 +69,28 @@ func validateTargets(t *Targets, doc document, p *problems) {
 		}
 	}
 	checkPackNames(p, "defaults.packs", t.Defaults.Packs)
+	checkEnum(p, doc, "defaults.opt_in", t.Defaults.OptIn, optInModes)
 	for i := range t.Targets {
 		checkEntry(&t.Targets[i], fmt.Sprintf("targets[%d]", i), doc, p)
 	}
 	for i, ex := range t.Exclude {
-		if _, err := ParseRef(ex); err != nil {
+		if err := checkExclude(ex); err != nil {
 			p.errorf(fmt.Sprintf("exclude[%d]", i), "%v", err)
 		}
 	}
+}
+
+// optInModes are the values of opt_in.
+var optInModes = []string{OptInRequired, OptInAssumed}
+
+// checkExclude validates an exclude entry: a reference or a glob pattern,
+// [<provider>:]<path>, or a web URL of either.
+func checkExclude(ex string) error {
+	if isURL(ex) {
+		return checkTargetURL(ex, urlExclude)
+	}
+	_, err := parsePattern(ex)
+	return err
 }
 
 func checkEntry(e *Entry, field string, doc document, p *problems) {
@@ -92,6 +106,7 @@ func checkEntry(e *Entry, field string, doc document, p *problems) {
 		}
 	}
 	checkPackNames(p, field+".packs", e.Packs)
+	checkEnum(p, doc, field+".opt_in", e.OptIn, optInModes)
 	switch len(kinds) {
 	case 0:
 		p.errorf(field, "needs one of repo, org or group")
@@ -102,14 +117,21 @@ func checkEntry(e *Entry, field string, doc document, p *problems) {
 		return
 	}
 	kind := kinds[0]
-	ref, err := selectorRef(e, kind)
-	if err != nil {
+	if v := selectorValue(e); isURL(v) {
+		k := urlNamespace
+		if kind == "repo" {
+			k = urlRepo
+		}
+		if err := checkTargetURL(v, k); err != nil {
+			p.errorf(field+"."+kind, "%v", err)
+		}
+	} else if ref, err := selectorRef(e, kind); err != nil {
 		p.errorf(field+"."+kind, "%v", err)
 	} else if ref.Provider != "" && e.Provider != "" && ref.Provider != e.Provider {
 		p.errorf(field, "provider %q contradicts the %q prefix of %s", e.Provider, ref.Provider, kind)
 	}
 	if kind == "repo" {
-		for _, k := range []string{"topics", "subgroups", "forks"} {
+		for _, k := range []string{"topics", "subgroups", "forks", "match"} {
 			if doc.has(field + "." + k) {
 				p.errorf(field+"."+k, "only with org or group")
 			}
@@ -121,11 +143,50 @@ func checkEntry(e *Entry, field string, doc document, p *problems) {
 			p.errorf(fmt.Sprintf("%s.topics[%d]", field, i), "must not be blank")
 		}
 	}
+	if e.Match != nil && len(e.Match) == 0 {
+		p.errorf(field+".match", "must not be empty; leave match out to select every repository of the %s", kind)
+	}
+	for i, pat := range e.Match {
+		if err := checkMatchPattern(pat); err != nil {
+			p.errorf(fmt.Sprintf("%s.match[%d]", field, i), "%v", err)
+		}
+	}
 }
 
 // entryRef parses the selector of e: a repository for repo, a namespace for
-// org and group.
+// org and group. A URL is an error: ResolveURLs rewrites it first.
 func entryRef(e *Entry) (Ref, error) { return selectorRef(e, entryKind(e)) }
+
+// effectiveOptIn returns the opt_in of entry e: its own, else
+// defaults.opt_in, else OptInRequired.
+func (t *Targets) effectiveOptIn(e *Entry) string {
+	switch {
+	case e.OptIn != "":
+		return e.OptIn
+	case t.Defaults.OptIn != "":
+		return t.Defaults.OptIn
+	}
+	return OptInRequired
+}
+
+// Assumed reports whether targets.yml subscribes a target that the entries
+// at indexes select (Selector.Entry; indexes outside Targets are left
+// out): one of them has opt_in: assumed, its own or through
+// defaults.opt_in. Any one is enough, whatever the others say and whatever
+// their kind: entries add up, as their packs do, and a repository a hub
+// subscribes through its organisation stays subscribed when another entry
+// names it to give it more packs. A nil targets assumes nothing.
+func (t *Targets) Assumed(indexes []int) bool {
+	if t == nil {
+		return false
+	}
+	for _, i := range indexes {
+		if i >= 0 && i < len(t.Targets) && t.effectiveOptIn(&t.Targets[i]) == OptInAssumed {
+			return true
+		}
+	}
+	return false
+}
 
 func selectorRef(e *Entry, kind string) (Ref, error) {
 	switch kind {

@@ -8,14 +8,18 @@ import (
 
 	"github.com/bedrock-python/touchmark/internal/decide"
 	"github.com/bedrock-python/touchmark/internal/platform"
+	"github.com/bedrock-python/touchmark/internal/prbody"
 	"github.com/bedrock-python/touchmark/internal/report"
 	"github.com/bedrock-python/touchmark/internal/throttle"
 )
 
 // sweepAll runs phase D: per provider, the own open pull requests of
-// repositories that are no longer targets (target-dropped) or whose opt-in
-// file is gone (opted-out) become sweep closes. It returns them as works, in
-// decide.Sweep's order, provider by provider, and fills the report's Sweep.
+// repositories that are no longer targets (target-dropped), or that are no
+// longer opted in (opted-out: the target has no opt-in file and targets.yml
+// does not subscribe it, or the file says enabled: false; target.optOut
+// keeps which, for the comment), become sweep closes. It returns them as
+// works, in decide.Sweep's order, provider by provider, and fills the
+// report's Sweep.
 //
 // A plan limited to the targets of some packs (scope.go) keeps only the
 // closes of the targets it processes: the targets it leaves out are active
@@ -45,8 +49,15 @@ func (r *run) sweepAll(ctx context.Context, kept []*target) []*Work {
 	for _, t := range kept {
 		key := t.host + "/" + t.repo.ID
 		active[key] = true
-		if !t.outOfScope && t.res.Outcome == report.OutcomeSkipped && t.res.Reason == "not-opted-in" {
-			optedOut[key] = t
+		if t.outOfScope || t.res.Outcome != report.OutcomeSkipped {
+			continue
+		}
+		// The skip reason says why, before the first close replaces it.
+		switch t.res.Reason {
+		case reasonNotOptedIn:
+			optedOut[key], t.optOut = t, prbody.CauseNoOptIn
+		case reasonOptedOut:
+			optedOut[key], t.optOut = t, prbody.CauseDisabled
 		}
 	}
 	var works []*Work

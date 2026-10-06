@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -348,14 +349,24 @@ func TestSchemaPatterns(t *testing.T) {
 			"/$defs/pattern/pattern":                                             patternPattern,
 		},
 		"targets": {
-			"/$defs/packName/pattern":     packNamePattern,
-			"/$defs/packName/maxLength":   maxPackNameLen,
-			"/$defs/providerId/pattern":   providerIDPattern,
-			"/$defs/ref/pattern":          refPattern,
-			"/$defs/ref/maxLength":        maxRefLen,
-			"/$defs/namespace/pattern":    namespacePattern,
-			"/$defs/namespace/maxLength":  maxRefLen,
-			"/$defs/topics/items/pattern": nonBlankPattern,
+			"/$defs/packName/pattern":             packNamePattern,
+			"/$defs/packName/maxLength":           maxPackNameLen,
+			"/$defs/providerId/pattern":           providerIDPattern,
+			"/$defs/ref/pattern":                  refPattern,
+			"/$defs/ref/maxLength":                maxRefLen,
+			"/$defs/repo/anyOf/0/pattern":         refPattern,
+			"/$defs/repo/anyOf/1/pattern":         repoURLPattern,
+			"/$defs/repo/maxLength":               maxRefLen,
+			"/$defs/namespace/anyOf/0/pattern":    namespacePattern,
+			"/$defs/namespace/anyOf/1/pattern":    namespaceURLPattern,
+			"/$defs/namespace/maxLength":          maxRefLen,
+			"/$defs/excludeEntry/anyOf/0/pattern": excludePattern,
+			"/$defs/excludeEntry/anyOf/1/pattern": excludeURLPattern,
+			"/$defs/excludeEntry/maxLength":       maxRefLen,
+			"/$defs/match/items/pattern":          matchPattern,
+			"/$defs/match/items/maxLength":        maxRefLen,
+			"/$defs/optIn/enum":                   optInModes,
+			"/$defs/topics/items/pattern":         nonBlankPattern,
 		},
 		"opt-in": {
 			"/properties/packs/items/pattern":   packNamePattern,
@@ -396,11 +407,19 @@ func TestSchemaPatterns(t *testing.T) {
 
 func lookup(doc any, ptr string) (any, bool) {
 	for _, tok := range strings.Split(strings.TrimPrefix(ptr, "/"), "/") {
-		m, ok := doc.(map[string]any)
-		if !ok {
-			return nil, false
-		}
-		if doc, ok = m[tok]; !ok {
+		switch v := doc.(type) {
+		case map[string]any:
+			var ok bool
+			if doc, ok = v[tok]; !ok {
+				return nil, false
+			}
+		case []any:
+			i, err := strconv.Atoi(tok)
+			if err != nil || i < 0 || i >= len(v) {
+				return nil, false
+			}
+			doc = v[i]
+		default:
 			return nil, false
 		}
 	}
@@ -429,6 +448,53 @@ func TestRefPatternsMatchParser(t *testing.T) {
 		_, err = parseRef(s, 1)
 		if got, want := err == nil, nsRe.MatchString(s) && len(s) <= maxRefLen; got != want {
 			t.Errorf("namespace %q ok=%v, schema ok=%v (%v)", s, got, want, err)
+		}
+	}
+}
+
+// TestTargetPatternsMatchParser checks that the schema's patterns of web
+// URLs, exclude entries and match patterns accept exactly what targets.yml
+// parsing accepts.
+func TestTargetPatternsMatchParser(t *testing.T) {
+	urls := []string{
+		"https://github.com/acme/billing", "https://github.com/acme/billing/", "https://github.com/acme/billing.git",
+		"https://gitlab.example.com:8443/platform/sub/api", "http://localhost:3000/acme/x", "http://127.0.0.1/acme/x",
+		"http://[::1]:3000/acme/x", "https://github.com/acme", "https://github.com", "https://github.com/",
+		"http://github.com/acme/x", "ftp://github.com/acme/x", "https://user:pass@github.com/acme/x",
+		"https://github.com/acme/x?tab=readme", "https://github.com/acme/x#readme", "https://github.com/acme/x?",
+		"https://github.com/acme//x", "https://github.com/acme/./x", "https://github.com/acme/../x",
+		"https://github.com/acme/my%20repo", "https://github.com/acme/my repo", "https://github.com:99999/acme/x",
+		"https://github.com/acme/*", "https://github.com/acme/legacy-*", "https://gitlab.example.com/platform/legacy/**",
+		"https://github.com/acme/x?y", "https://github.com/acme/[x]", "HTTPS://github.com/acme/x",
+		"https://github.com/acme/x//", "https:/github.com/acme/x", "https://gith_ub.com/acme/x",
+		"https://" + strings.Repeat("a", 480) + ".com/acme/x",
+	}
+	patterns := []string{
+		"acme/legacy", "acme/legacy-*", "acme/*", "corp:platform/legacy/**", "**/sandbox", "acme/?ld",
+		"acme/**/x", "acme", "acme/*/", "/acme/*", "acme//x", "acme/./x", "acme/../*", "acme/[ab]", "acme/x y",
+		"gh:acme/*", "*:acme/x", "GH:acme/*", "acme/.*", "acme/..*", "acme/x:y", `acme\*`,
+		strings.Repeat("a", 256) + "/" + strings.Repeat("*", 256),
+		strings.Repeat("a", 255) + "/" + strings.Repeat("*", 256),
+	}
+	repoURLs, nsURLs, exURLs := mustCompile(t, repoURLPattern), mustCompile(t, namespaceURLPattern), mustCompile(t, excludeURLPattern)
+	excludeRe, matchRe := mustCompile(t, excludePattern), mustCompile(t, matchPattern)
+	fits := func(re *regexp.Regexp, s string) bool { return re.MatchString(s) && len(s) <= maxRefLen }
+	for _, s := range urls {
+		for _, c := range []struct {
+			k  urlKind
+			re *regexp.Regexp
+		}{{urlRepo, repoURLs}, {urlNamespace, nsURLs}, {urlExclude, exURLs}} {
+			if got, want := checkTargetURL(s, c.k) == nil, fits(c.re, s); got != want {
+				t.Errorf("URL %q of kind %d: parser ok=%v, schema ok=%v", s, c.k, got, want)
+			}
+		}
+	}
+	for _, s := range append(patterns, urls...) {
+		if got, want := checkExclude(s) == nil, fits(excludeRe, s) || fits(exURLs, s); got != want {
+			t.Errorf("exclude %q: parser ok=%v, schema ok=%v (%v)", s, got, want, checkExclude(s))
+		}
+		if got, want := checkMatchPattern(s) == nil, fits(matchRe, s); got != want {
+			t.Errorf("match %q: parser ok=%v, schema ok=%v (%v)", s, got, want, checkMatchPattern(s))
 		}
 	}
 }

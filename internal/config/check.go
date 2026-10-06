@@ -38,9 +38,15 @@ func check(hub *Hub, targets *Targets, known map[string]bool) ([]Warning, []erro
 	c.packMeta()
 	c.formerly()
 	c.cycles()
+	if targets.HasURLs() {
+		c.errorf(TargetsFile, "holds web URLs that were not resolved to providers (ResolveURLs)")
+		return c.warns, c.errs
+	}
 	c.targetPacks()
 	c.providers()
 	c.exclude()
+	c.match()
+	c.optIn()
 	return c.warns, c.errs
 }
 
@@ -163,21 +169,29 @@ func (c *checker) providers() {
 		}
 	}
 	for i, ex := range c.targets.Exclude {
-		if r, err := ParseRef(ex); err == nil {
+		if r, err := parsePattern(ex); err == nil {
 			ref(fmt.Sprintf("exclude[%d]", i), r.Provider)
 		}
 	}
 }
 
 // exclude checks that exclude entries parse and warns about targets that are
-// both listed and excluded.
+// both listed and excluded. A pattern that covers no repository listed
+// explicitly is fine: it is there for the repositories of org and group
+// entries. On a platform without nested namespaces, an entry of more than
+// owner/name without a "**" (which may span nothing) can cover no
+// repository: a warning.
 func (c *checker) exclude() {
 	res := resolver{hub: c.hub, targets: c.targets}
 	for i, ex := range c.targets.Exclude {
-		exRef, err := ParseRef(ex)
+		pat, err := parsePattern(ex)
 		if err != nil {
 			c.errorf(TargetsFile, "exclude[%d]: %v", i, err)
 			continue
+		}
+		segs := strings.Split(pat.Path, "/")
+		if typ := c.flatType(res.provider(pat.Provider)); typ != "" && len(segs) > 2 && !slices.Contains(segs, "**") {
+			c.warnf(TargetsFile, "exclude[%d]: %s has %d path segments, and a %s repository path is owner/name, so it excludes nothing", i, ex, len(segs), typ)
 		}
 		for j := range c.targets.Targets {
 			e := &c.targets.Targets[j]
@@ -185,8 +199,96 @@ func (c *checker) exclude() {
 				continue
 			}
 			r, err := ParseRef(e.Repo)
-			if err == nil && res.matchRepo(r, e.Provider, exRef) {
+			if err != nil {
+				continue
+			}
+			r.Provider = firstNonEmpty(e.Provider, r.Provider)
+			if !res.matchPattern(pat, r) {
+				continue
+			}
+			if isGlob(pat.Path) {
+				c.warnf(TargetsFile, "exclude[%d]: %s also covers targets[%d] (%s); exclude wins", i, ex, j, e.Repo)
+			} else {
 				c.warnf(TargetsFile, "exclude[%d]: %s is also listed as targets[%d]; exclude wins", i, ex, j)
+			}
+		}
+	}
+}
+
+// match warns about a pattern of an org or group entry's match that no
+// repository of its namespace can match: it selects nothing. A namespace
+// on a platform without nested namespaces (flatType) holds no subgroups,
+// whatever subgroups says.
+func (c *checker) match() {
+	res := resolver{hub: c.hub, targets: c.targets}
+	for i := range c.targets.Targets {
+		e := &c.targets.Targets[i]
+		if entryKind(e) == "repo" {
+			continue
+		}
+		ns, err := entryRef(e)
+		if err != nil {
+			continue
+		}
+		typ := c.flatType(res.provider(firstNonEmpty(e.Provider, ns.Provider)))
+		for j, pat := range e.Match {
+			if checkMatchPattern(pat) == nil && !globUnder(pat, ns.Path, includeSubgroups(e) && typ == "") {
+				where := "under " + ns.Path
+				switch {
+				case !includeSubgroups(e):
+					where = "directly under " + ns.Path + " (subgroups: false)"
+				case typ != "" && globUnder(pat, ns.Path, true):
+					where = "directly under " + ns.Path + " (a " + typ + " namespace has no subgroups)"
+				}
+				c.warnf(TargetsFile, "targets[%d].match[%d]: %s matches no repository %s, so it selects nothing", i, j, pat, where)
+			}
+		}
+	}
+}
+
+// flatType returns the type of the provider with id when its platform has no
+// nested namespaces (github, gitea, forgejo): a repository path there is
+// owner/name. It returns "" for any other type, and for a provider hub.yml
+// does not list (the implicit one, whose type the CI tells).
+func (c *checker) flatType(id string) string {
+	for _, p := range c.hub.Providers {
+		if p.ID != id {
+			continue
+		}
+		switch p.Type {
+		case "github", "gitea", "forgejo":
+			return p.Type
+		}
+		return ""
+	}
+	return ""
+}
+
+// optIn warns about a repo entry whose opt_in: required says nothing: an
+// org or group entry with opt_in: assumed may select the same repository,
+// and one entry with assumed is enough to subscribe it (Targets.Assumed).
+func (c *checker) optIn() {
+	res := resolver{hub: c.hub, targets: c.targets}
+	for i := range c.targets.Targets {
+		e := &c.targets.Targets[i]
+		if entryKind(e) != "repo" || e.OptIn != OptInRequired {
+			continue
+		}
+		r, err := ParseRef(e.Repo)
+		if err != nil {
+			continue
+		}
+		r.Provider = firstNonEmpty(e.Provider, r.Provider)
+		for j := range c.targets.Targets {
+			o := &c.targets.Targets[j]
+			if entryKind(o) == "repo" || c.targets.effectiveOptIn(o) != OptInAssumed {
+				continue
+			}
+			ns, err := entryRef(o)
+			if err == nil && res.mayContain(o, ns, r) {
+				c.warnf(TargetsFile, "targets[%d]: opt_in: required does not hold %s back: targets[%d] (%s: %s) has opt_in: assumed and may select it, "+
+					"and one entry with assumed subscribes a repository; to have it opt in itself, leave it out of targets[%d] with match", i, e.Repo, j, entryKind(o), selectorValue(o), j)
+				break
 			}
 		}
 	}

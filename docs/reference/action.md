@@ -31,7 +31,7 @@ Each input is one flag; there is no free-form argument.
 | `strict` | `false` | plan, distribute, doctor: exit 3 on a blocked or deferred target, an incomplete resolve or a check that warns (--strict). true or false. |
 | `all` | `false` | plan: in a hub pull request, plan every target, not only those of the packs it changes (--all). true or false. |
 | `comment` | `false` | plan: keep the report in one comment of the hub pull request, through GITHUB_TOKEN (--comment). true or false. |
-| `assume-opt-in` | `false` | plan: report as if every target had opted in (--assume-opt-in). true or false. |
+| `assume-opt-in` | `false` | plan: report as if every target without an opt-in file had opted in (--assume-opt-in); enabled: false still opts a target out. true or false. |
 | `dry-run` | `false` | distribute: check everything with the write account and write nothing (--dry-run). true or false. |
 | `only` | — | plan, distribute, doctor: only these targets, comma-separated [PROVIDER:]PATH (--only). |
 | `deadline` | — | distribute: start no target after this duration, such as 50m (--deadline). Default: 5h30m on GitHub Actions. |

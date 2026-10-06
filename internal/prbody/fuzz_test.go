@@ -180,6 +180,7 @@ func FuzzDeclinedComment(f *testing.F) {
 	f.Add(int64(12), "AGENTS.md\x00docs/[draft].md\x00@x/y.md", optInName)
 	f.Add(int64(0), hostileSeed, "@opt`in")
 	f.Add(int64(-3), " \x00/\x00./a\x00a*b?c\x00\t tab", "")
+	f.Add(int64(12), "```\x00a````b.md", "0") // backticks in a path once closed the YAML block early
 	f.Fuzz(func(t *testing.T, pr int64, paths, optIn string) {
 		ps := splitN(paths, 300)
 		got := DeclinedComment(pr, ps, optIn)

@@ -50,7 +50,9 @@ tpl_source=${tpl_source:-}
 # TEXT; it fails when the container stops or the time is up.
 tpl_wait_log() {
 	local c=$1 text=$2 deadline=$((SECONDS + $3)) state
-	until docker logs "$c" 2>&1 | grep -qF -- "$text"; do
+	# The log is captured first: with pipefail, grep -q's early exit would
+	# fail docker logs on a broken pipe, and the wait would never end.
+	until grep -qF -- "$text" <<<"$(docker logs "$c" 2>&1)"; do
 		if state=$(docker inspect -f '{{.State.Running}}' "$c" 2>/dev/null) && [ "$state" != true ]; then
 			docker logs --tail 50 "$c" >&2 || true
 			die "$c stopped before it printed \"$text\""

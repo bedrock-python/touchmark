@@ -372,8 +372,12 @@ jobs:
         run: |
           set -euo pipefail
           bash scripts/release/check-image.sh "$LOCAL_IMAGE@$DIGEST" "$TAG"
-          docker buildx imagetools inspect "$LOCAL_IMAGE@$DIGEST" --format '{{ json .SBOM }}' | grep -q '"SPDX"'
-          docker buildx imagetools inspect "$LOCAL_IMAGE@$DIGEST" --format '{{ json .Provenance }}' | grep -q '"SLSA"'
+          # Captured first: grep -q stops reading at the first match, and
+          # under pipefail docker's broken pipe would fail the step.
+          sbom="$(docker buildx imagetools inspect "$LOCAL_IMAGE@$DIGEST" --format '{{ json .SBOM }}')"
+          grep -q '"SPDX"' <<<"$sbom"
+          provenance="$(docker buildx imagetools inspect "$LOCAL_IMAGE@$DIGEST" --format '{{ json .Provenance }}')"
+          grep -q '"SLSA"' <<<"$provenance"
           # The Dockerfile's own build from source, which docs and
           # contributors use, passes the same checks.
           docker buildx build --load -t touchmark:source --build-arg VERSION="$TAG" .
@@ -465,7 +469,9 @@ jobs:
           go-version: '1.26.x'
           cache: true
 
-      # Every Fuzz* target in every package runs for 30 seconds.
+      # Every Fuzz* target in every package runs for 30 seconds. Go's fuzzer
+      # sometimes ends a timed run with "context deadline exceeded" although
+      # no input failed: that is a warning; a failing input is an error.
       - name: go test -fuzz
         run: |
           set -euo pipefail
@@ -473,7 +479,16 @@ jobs:
             listed="$(go test -list '^Fuzz' "$pkg")"
             for target in $(printf '%s\n' "$listed" | grep '^Fuzz' || true); do
               echo "::group::$pkg $target"
-              go test -run '^$' -fuzz "^${target}\$" -fuzztime 30s "$pkg"
+              if ! go test -run '^$' -fuzz "^${target}\$" -fuzztime 30s "$pkg" > fuzz.log 2>&1; then
+                cat fuzz.log
+                if grep -q 'context deadline exceeded' fuzz.log && ! grep -q 'Failing input written to' fuzz.log; then
+                  echo "::warning::$pkg $target: the fuzzer stopped at its deadline with no failing input"
+                else
+                  exit 1
+                fi
+              else
+                cat fuzz.log
+              fi
               echo "::endgroup::"
             done
           done

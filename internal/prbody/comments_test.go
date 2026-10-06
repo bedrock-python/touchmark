@@ -317,15 +317,25 @@ func checkComment(t *testing.T, s string) {
 // yamlBlock returns the YAML inside the fenced block of a comment.
 func yamlBlock(t *testing.T, s string) string {
 	t.Helper()
-	_, rest, ok := strings.Cut(s, "```yaml\n")
-	if !ok {
-		t.Fatalf("no YAML block in\n%s", s)
-	}
-	block, _, ok := strings.Cut(rest, "```")
-	if !ok {
+	// The opening line is a fence of three or more backticks and "yaml";
+	// the block ends at a line holding that fence alone.
+	lines := strings.SplitAfter(s, "\n")
+	for i, line := range lines {
+		fence, ok := strings.CutSuffix(strings.TrimSuffix(line, "\n"), "yaml")
+		if !ok || len(fence) < 3 || strings.Trim(fence, "`") != "" {
+			continue
+		}
+		var b strings.Builder
+		for _, line := range lines[i+1:] {
+			if strings.TrimSuffix(line, "\n") == fence {
+				return b.String()
+			}
+			b.WriteString(line)
+		}
 		t.Fatalf("an open YAML block in\n%s", s)
 	}
-	return block
+	t.Fatalf("no YAML block in\n%s", s)
+	return ""
 }
 
 // yamlIgnore parses the YAML block of a comment.

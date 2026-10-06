@@ -96,11 +96,14 @@ func newServed(t *testing.T, root, name string) *served {
 	if _, err := g.Run(t.Context(), nil, "init", "-q", "--bare", "-b", "main", dir); err != nil {
 		t.Fatal(err)
 	}
-	// Appended rather than set with git config: three git runs fewer per
-	// repository, which counts on Windows.
+	// Appended rather than set with git config: fewer git runs per
+	// repository, which counts on Windows. No garbage collection runs behind
+	// a test's back (receive-pack starts one after a push, and on macOS it
+	// was still writing when the test removed its directory), and Git for
+	// Windows takes paths NTFS cannot hold, since nothing is checked out.
 	f, err := os.OpenFile(filepath.Join(dir, "config"), os.O_APPEND|os.O_WRONLY, 0)
 	if err == nil {
-		_, err = f.WriteString("[uploadpack]\n\tallowFilter = true\n\tallowAnySHA1InWant = true\n[http]\n\treceivepack = true\n")
+		_, err = f.WriteString("[core]\n\tprotectNTFS = false\n[uploadpack]\n\tallowFilter = true\n\tallowAnySHA1InWant = true\n[http]\n\treceivepack = true\n[receive]\n\tautogc = false\n[gc]\n\tauto = 0\n")
 		err = errors.Join(err, f.Close())
 	}
 	if err != nil {

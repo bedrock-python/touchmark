@@ -32,8 +32,11 @@ const (
 // repoConfig is appended to the config of every bare repository: partial
 // clones and fetches by id are served, pushes are accepted over HTTP,
 // refs/pull/* are hidden from pushes as on GitHub ("deny updating a hidden
-// ref"), and no garbage collection runs behind a test's back.
-const repoConfig = `[uploadpack]
+// ref"), no garbage collection runs behind a test's back, and Git for
+// Windows takes paths NTFS cannot hold, since nothing is checked out.
+const repoConfig = `[core]
+	protectNTFS = false
+[uploadpack]
 	allowFilter = true
 	allowAnySHA1InWant = true
 [http]

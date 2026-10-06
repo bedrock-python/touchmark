@@ -46,9 +46,12 @@ var (
 const gitTimeout = 2 * time.Minute
 
 // repoConfig is appended to the config of every bare repository: partial
-// clones and fetches by id are served, pushes are accepted over HTTP, and
-// no garbage collection runs behind a test's back.
-const repoConfig = `[uploadpack]
+// clones and fetches by id are served, pushes are accepted over HTTP, no
+// garbage collection runs behind a test's back, and Git for Windows takes
+// paths NTFS cannot hold (a tab, a quote), since nothing is checked out.
+const repoConfig = `[core]
+	protectNTFS = false
+[uploadpack]
 	allowFilter = true
 	allowAnySHA1InWant = true
 [http]

@@ -163,7 +163,7 @@
           "type": "string"
         },
         "skipped": {
-          "description": "Why the target was not checked: archived, disabled, empty, mirror, pending-deletion, prs-disabled, sha256, not-opted-in, unsafe-opt-in, or deferred:<reason> (the run could not check the target; an unknown check says why).",
+          "description": "Why the target was not checked: archived, disabled, empty, mirror, pending-deletion, prs-disabled, sha256, not-opted-in, opted-out, unsafe-opt-in, or deferred:<reason> (the run could not check the target; an unknown check says why).",
           "type": "string",
           "minLength": 1
         },

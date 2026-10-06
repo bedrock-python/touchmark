@@ -317,7 +317,7 @@ func (p *preparer) comment(s decide.Step) ([]writeAct, error) {
 	var text string
 	switch s.Reason {
 	case decide.OutcomeClosed:
-		text = prbody.ClosedComment(cmp.Or(p.closed[s.PR], x.w.Decision.Reason, x.res.Reason))
+		text = prbody.ClosedComment(cmp.Or(p.closed[s.PR], x.w.Decision.Reason, x.res.Reason), x.t.optOut, x.r.optIn)
 	case decide.OutcomeDeclined:
 		text = prbody.DeclinedComment(s.PR, x.declinedPaths(s.PR), x.r.optIn)
 	case decide.CommentAutoDeclined:

@@ -22,9 +22,9 @@ your-org/engineering-assets
    reports what each would receive: pull requests to open, update and close, the
    sensitive paths, the API writes it would cost. Nothing is written.
 2. **A maintainer merges it.** On the default branch, `touchmark distribute` runs with
-   the write account. For every target that has opted in and has a difference, it
-   builds one commit on the sync branch `touchmark/<id>` and opens or updates one pull
-   request. A second run on the same inputs writes nothing.
+   the write account. For every target that has opted in (or that the hub subscribes)
+   and has a difference, it builds one commit on the sync branch `touchmark/<id>` and
+   opens or updates one pull request. A second run on the same inputs writes nothing.
 3. **A person in each target reviews it.** They merge it, or edit files (which makes
    them the repository's own), or close it, which touchmark remembers as a decline.
 
@@ -40,8 +40,8 @@ before writing, and its report is the same as `plan`'s.
 | Phase | What happens |
 |---|---|
 | guards | git version, configuration, `check`, the write isolation probe, the hub's fingerprint; the hub's HEAD must be the tip of its default branch, or the run is `superseded` and writes nothing |
-| resolve | `targets.yml` becomes a list of repositories: organisations and groups listed, topics filtered, `exclude` applied, duplicates merged by repository id |
-| inspect | per target, in parallel: archived, empty or mirror repositories skipped; the opt-in file read; the target's tree fetched without blobs or a checkout; the decision made |
+| resolve | `targets.yml` becomes a list of repositories: web URLs matched to providers, organisations and groups listed, `topics` and `match` filtered, `exclude` patterns applied, duplicates merged by repository id |
+| inspect | per target, in parallel: archived, empty or mirror repositories skipped; the opt-in file read (an empty one assumed where `targets.yml` subscribes the target; `enabled: false` skips it); the target's tree fetched without blobs or a checkout; the decision made |
 | sweep | sync pull requests of this hub in repositories that are no longer targets are found, to be closed |
 | gate | the guards against mass actions: at most `limits.max_new_prs_per_run` new pull requests, and no mass close |
 | execute | `distribute` only: closes, then updates, then new pull requests, under each provider's write budget |

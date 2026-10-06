@@ -1,0 +1,4 @@
+# error: exclude[0]: "https://github.com/acme/x?" is not a repository URL like https://github.com/acme/legacy or a pattern
+version: 1
+exclude:
+  - https://github.com/acme/x?

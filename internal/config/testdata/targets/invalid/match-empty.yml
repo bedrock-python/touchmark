@@ -1,0 +1,5 @@
+# error: targets[0].match: must not be empty
+version: 1
+targets:
+  - org: acme
+    match: []

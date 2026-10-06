@@ -56,7 +56,7 @@ inputs:
     required: false
     default: "false"
   assume-opt-in:
-    description: "plan: report as if every target had opted in (--assume-opt-in). true or false."
+    description: "plan: report as if every target without an opt-in file had opted in (--assume-opt-in); enabled: false still opts a target out. true or false."
     required: false
     default: "false"
   dry-run:

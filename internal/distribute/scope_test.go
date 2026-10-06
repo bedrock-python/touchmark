@@ -309,7 +309,7 @@ func TestPlanAssumeOptIn(t *testing.T) {
 	if err := rep.WriteText(&text); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(text.String(), "--assume-opt-in: every target counts as opted in, for this report only; 2 targets without an opt-in file") {
+	if !strings.Contains(text.String(), "--assume-opt-in: for this report only, a target without an opt-in file counts as opted in (one whose file says enabled: false stays opted out); 2 targets are planned") {
 		t.Errorf("text:\n%s", text.String())
 	}
 

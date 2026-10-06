@@ -51,7 +51,8 @@ exception is visible in the target itself.
 ## Opt-in
 
 A target receives nothing until it has the opt-in file, `.engineering-assets.yml` at its
-root (`opt_in_file` in `hub.yml` renames it). An empty file is consent.
+root (`opt_in_file` in `hub.yml` renames it), or the hub subscribes it (below). An empty
+file is consent.
 
 ```yaml
 version: 1
@@ -68,9 +69,30 @@ ignore:
   directories.
 - Editing `packs` or `ignore` is a new choice of the team, so it lifts every decline the
   repository made: see [memory](memory.md).
+- `enabled: false` opts the repository out, whatever the hub says.
 
 The opt-in file belongs to each repository: `touchmark check` rejects a pack that ships
 it.
+
+### When the hub subscribes
+
+Consent by file suits a hub that offers packs to teams. A hub that keeps its own
+organisation's repositories in line can subscribe them instead: `opt_in: assumed` on an
+entry of `targets.yml` (or in its `defaults`) makes every repository the entry selects
+count as opted in without the file, as if it had an empty one.
+
+| The repository has | It gets |
+|---|---|
+| no opt-in file, and no entry that selects it says `assumed` | nothing (`skipped:not-opted-in`) |
+| no opt-in file, and an entry that selects it says `assumed` | the packs of `targets.yml`, nothing ignored |
+| an opt-in file | the packs of `targets.yml` and of the file, minus what it ignores |
+| an opt-in file with `enabled: false` | nothing (`skipped:opted-out`); its open sync pull request is closed |
+
+One entry with `assumed` is enough: entries add up, as their packs do. The consent moves,
+the choice does not: the first sync pull request of a subscribed repository says the hub
+subscribed it and how to opt out, and closing it is a decline like any other. Deleting
+the opt-in file of a subscribed repository returns it to the hub's subscription; only
+`enabled: false` opts it out. See [targets.yml](../reference/targets.md#opt-in).
 
 ## Renaming and retiring
 

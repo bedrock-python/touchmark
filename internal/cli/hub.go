@@ -19,6 +19,7 @@ import (
 	"github.com/bedrock-python/touchmark/internal/apply"
 	"github.com/bedrock-python/touchmark/internal/config"
 	"github.com/bedrock-python/touchmark/internal/gitx"
+	"github.com/bedrock-python/touchmark/internal/hubch"
 	"github.com/bedrock-python/touchmark/internal/provenance"
 	"github.com/bedrock-python/touchmark/internal/report"
 )
@@ -45,6 +46,11 @@ type hub struct {
 	// only check reads it.
 	ops      *config.Operations
 	warnings []string
+	// ciOnlyURLs is set when the web URLs of targets.yml resolved against
+	// the implicit provider the CI's environment names, on an instance an
+	// origin remote cannot name outside CI (config.OriginTellsProvider):
+	// local runs cannot resolve them.
+	ciOnlyURLs bool
 
 	manifest *provenance.Manifest
 	skipped  []string
@@ -124,9 +130,11 @@ func existingDir(dir string) (string, error) {
 	return abs, nil
 }
 
-// readConfigs reads and parses hub.yml and targets.yml. It returns every
-// problem found; cfg and targets stay nil for a file that failed.
-func (h *hub) readConfigs(ctx context.Context) []error {
+// readConfigs reads and parses hub.yml and targets.yml, and rewrites the
+// web URLs of targets.yml as <provider>:<path> (resolveURLs). It returns
+// every problem found; cfg and targets stay nil for a file that failed,
+// targets too when a URL did not resolve.
+func (h *hub) readConfigs(ctx context.Context, e *env) []error {
 	var errs []error
 	data, err := h.readConfig(ctx, config.HubFile)
 	if err == nil {
@@ -146,7 +154,32 @@ func (h *hub) readConfigs(ctx context.Context) []error {
 	if err != nil {
 		errs = append(errs, err)
 	}
+	if h.cfg != nil && h.targets.HasURLs() {
+		if err := h.resolveURLs(ctx, e.getenv); err != nil {
+			errs = append(errs, err)
+			h.targets = nil
+		}
+	}
 	return errs
+}
+
+// resolveURLs rewrites the web URLs of targets.yml as <provider>:<path>
+// (config.ResolveURLs) against the providers plan and distribute resolve:
+// those of hub.yml, or the implicit one, which the CI's environment or,
+// outside CI, the hub's origin remote names (on github.com, a *.ghe.com
+// host or gitlab.com only).
+func (h *hub) resolveURLs(ctx context.Context, getenv func(string) string) error {
+	rps, err := h.resolveProviders(ctx, hubch.Detect(getenv, os.ReadFile), getenv)
+	if err != nil {
+		return fmt.Errorf("%s: its web URLs are matched with the providers' urls, which are unknown: %w", config.TargetsFile, err)
+	}
+	targets, err := config.ResolveURLs(h.targets, rps)
+	if err != nil {
+		return err
+	}
+	h.targets = targets
+	h.ciOnlyURLs = len(rps) == 1 && rps[0].Implicit && !config.OriginTellsProvider(rps[0].Host)
+	return nil
 }
 
 // readOperations reads and parses .touchmark/operations.yml like

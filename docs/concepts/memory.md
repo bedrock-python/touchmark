@@ -33,6 +33,7 @@ covered by the target's declines. It does open one when anything is new:
 | #7: A created, B created | B was edited in the target (it is `local`) | a new pull request with A |
 | #7: A created, B created | B added to `ignore` | a new pull request with A |
 | #7: A created | a comment changed in the opt-in file | `declined`: the parsed file is the same |
+| #7: A created, in a repository the hub subscribed without an opt-in file | an empty opt-in file added | `declined`: the file is parsed the same as the empty one assumed |
 | #7: A created; #9: B created | nothing | `declined`: both pairs are covered |
 | #7: A created, B created | the pack changes B | a new pull request with A and the new B, saying *A was declined in #7* |
 | #7: A at v1 | A at v2 was merged, then the hub went back to v1 | a new pull request: `v2 → v1` is another pair |
@@ -67,7 +68,8 @@ To undo a decline:
 - **from the hub**, add a `forget_declines` entry to `.touchmark/operations.yml` and merge
   it through review (see [One-off operations](../guide/operations.md)).
 
-To refuse a file for good instead, add it to `ignore`, or delete the opt-in file to stop
+To refuse a file for good instead, add it to `ignore`, or set `enabled: false` in the opt-in
+file (deleting it works too, unless the hub subscribed the repository) to stop
 receiving anything.
 
 ## Limits

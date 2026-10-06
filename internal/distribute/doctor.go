@@ -60,8 +60,10 @@ type DoctorDeps struct {
 //     visible to it (it is a member).
 //
 // Per target: skipped with the reason of delivery (archived, disabled,
-// empty, mirror, pending-deletion, prs-disabled, sha256), not-opted-in or
-// unsafe-opt-in (the opt-in file read through the API), or
+// empty, mirror, pending-deletion, prs-disabled, sha256), not-opted-in
+// (no opt-in file, and targets.yml does not subscribe the target),
+// opted-out (the opt-in file says enabled: false) or unsafe-opt-in (the
+// opt-in file read through the API), or
 // deferred:<reason> with an unknown check when the provider's circuit is
 // open or the run ended (notChecked); else the checks
 // of platform.Checker for the repository and the sync branches (access,
@@ -340,14 +342,24 @@ func (r *run) doctorTarget(ctx context.Context, t *target) (dt report.DoctorTarg
 		return notChecked(dt, "interrupted", "the run was interrupted")
 	}
 	rd := &doctorReads{r: r, p: p}
+	var file platform.File
 	err := rd.read(ctx, func() error {
-		_, err := p.reader.ReadFile(ctx, t.repo, "", r.optIn, maxOptIn)
+		var err error
+		file, err = p.reader.ReadFile(ctx, t.repo, "", r.optIn, maxOptIn)
 		return err
 	})
 	switch {
 	case err == nil:
+		// A file that does not parse is delivery's business
+		// (blocked:opt-in-invalid); the writer's access is checked anyway.
+		if o, _, perr := config.ParseOptIn(file.Content); perr == nil && o.Disabled() {
+			dt.Skipped = reasonOptedOut
+			return dt
+		}
+	case isNotFound(err) && ctx.Err() == nil && t.assumed:
+		// targets.yml subscribes it: delivery writes to it without the file.
 	case isNotFound(err) && ctx.Err() == nil:
-		dt.Skipped = "not-opted-in"
+		dt.Skipped = reasonNotOptedIn
 		return dt
 	case errors.Is(err, platform.ErrNotRegular) || errors.Is(err, platform.ErrTooLarge):
 		dt.Skipped = "unsafe-opt-in"

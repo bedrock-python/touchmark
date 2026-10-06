@@ -1,0 +1,4 @@
+# error: targets[0].org: "ftp://github.com/acme" is not an organisation or group URL
+version: 1
+targets:
+  - org: ftp://github.com/acme

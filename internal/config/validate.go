@@ -30,16 +30,38 @@ const (
 	providerIDPattern = `^[a-z][a-z0-9-]{0,31}$`
 	// refSegment is one path segment of a repository or namespace: the
 	// characters platforms allow in names, and never "." or "..".
-	refSegment         = `([A-Za-z0-9_-][A-Za-z0-9_.-]*|\.[A-Za-z0-9_-][A-Za-z0-9_.-]*|\.\.[A-Za-z0-9_.-]+)`
-	refPrefix          = `^([a-z][a-z0-9-]{0,31}:)?`
-	refPattern         = refPrefix + refSegment + `(/` + refSegment + `)+$`
-	namespacePattern   = refPrefix + refSegment + `(/` + refSegment + `)*$`
-	urlPattern         = `^(https://[A-Za-z0-9.-]+(:[0-9]{1,5})?|http://(localhost|127\.0\.0\.1|\[::1\])(:[0-9]{1,5})?)(/[^?#` + space + `]*)?$`
-	fingerprintPattern = `^[A-Za-z0-9.-]+(:[0-9]{1,5})?/[0-9]+$`
-	cooldownPattern    = `^[1-9][0-9]{0,4}[dh]$`
-	accountPattern     = `^[^` + space + `]+$`
-	labelPattern       = `^[^,]*[^,` + space + `][^,]*$`
-	nonBlankPattern    = `[^` + space + `]`
+	refSegment       = `([A-Za-z0-9_-][A-Za-z0-9_.-]*|\.[A-Za-z0-9_-][A-Za-z0-9_.-]*|\.\.[A-Za-z0-9_.-]+)`
+	refPrefix        = `^([a-z][a-z0-9-]{0,31}:)?`
+	refPattern       = refPrefix + refSegment + `(/` + refSegment + `)+$`
+	namespacePattern = refPrefix + refSegment + `(/` + refSegment + `)*$`
+	// urlBase is the scheme, host and port of a URL touchmark accepts:
+	// https, or http for the loopback host only.
+	urlBase    = `(https://[A-Za-z0-9.-]+(:[0-9]{1,5})?|http://(localhost|127\.0\.0\.1|\[::1\])(:[0-9]{1,5})?)`
+	urlPattern = `^` + urlBase + `(/[^?#` + space + `]*)?$`
+	// globSegment is one segment of an exclude or match pattern: a
+	// repository path segment that may hold the glob characters * and ?.
+	// A segment of "**" spans segments.
+	globSegment = `([A-Za-z0-9_*?-][A-Za-z0-9_.*?-]*|\.[A-Za-z0-9_*?-][A-Za-z0-9_.*?-]*|\.\.[A-Za-z0-9_.*?-]+)`
+	// urlGlobSegment is globSegment without ?, which starts a URL's query.
+	urlGlobSegment = `([A-Za-z0-9_*-][A-Za-z0-9_.*-]*|\.[A-Za-z0-9_*-][A-Za-z0-9_.*-]*|\.\.[A-Za-z0-9_.*-]+)`
+	// excludePattern is an exclude entry written as [<provider>:]<pattern>,
+	// matchPattern a pattern of match: both cover a repository path, two
+	// segments or more.
+	excludePattern = refPrefix + globSegment + `(/` + globSegment + `)+$`
+	matchPattern   = `^` + globSegment + `(/` + globSegment + `)+$`
+	// The web URLs targets.yml accepts: a repository's (repo), a
+	// namespace's (org and group), and an exclude pattern's. A provider may
+	// live under a path, so how many segments name the repository is known
+	// only once the URL meets the providers (ResolveURLs); a trailing slash
+	// and, for a repository, a trailing .git are allowed.
+	repoURLPattern      = `^` + urlBase + `(/` + refSegment + `){2,}/?$`
+	namespaceURLPattern = `^` + urlBase + `(/` + refSegment + `)+/?$`
+	excludeURLPattern   = `^` + urlBase + `(/` + urlGlobSegment + `){2,}/?$`
+	fingerprintPattern  = `^[A-Za-z0-9.-]+(:[0-9]{1,5})?/[0-9]+$`
+	cooldownPattern     = `^[1-9][0-9]{0,4}[dh]$`
+	accountPattern      = `^[^` + space + `]+$`
+	labelPattern        = `^[^,]*[^,` + space + `][^,]*$`
+	nonBlankPattern     = `[^` + space + `]`
 	// patternPattern requires an ignore or sensitive_paths pattern to hold
 	// something besides spaces, slashes and backslashes; the parser checks
 	// that it is not empty after trimming them and "./".
@@ -63,15 +85,18 @@ const (
 )
 
 var (
-	packNameRe    = regexp.MustCompile(packNamePattern)
-	providerIDRe  = regexp.MustCompile(providerIDPattern)
-	urlRe         = regexp.MustCompile(urlPattern)
-	fingerprintRe = regexp.MustCompile(fingerprintPattern)
-	cooldownRe    = regexp.MustCompile(cooldownPattern)
-	accountRe     = regexp.MustCompile(accountPattern)
-	labelRe       = regexp.MustCompile(labelPattern)
-	nonBlankRe    = regexp.MustCompile(nonBlankPattern)
-	draftRe       = regexp.MustCompile(draftPattern)
+	packNameRe     = regexp.MustCompile(packNamePattern)
+	providerIDRe   = regexp.MustCompile(providerIDPattern)
+	urlRe          = regexp.MustCompile(urlPattern)
+	repoURLRe      = regexp.MustCompile(repoURLPattern)
+	namespaceURLRe = regexp.MustCompile(namespaceURLPattern)
+	excludeURLRe   = regexp.MustCompile(excludeURLPattern)
+	fingerprintRe  = regexp.MustCompile(fingerprintPattern)
+	cooldownRe     = regexp.MustCompile(cooldownPattern)
+	accountRe      = regexp.MustCompile(accountPattern)
+	labelRe        = regexp.MustCompile(labelPattern)
+	nonBlankRe     = regexp.MustCompile(nonBlankPattern)
+	draftRe        = regexp.MustCompile(draftPattern)
 )
 
 // secretRe matches strings that look like credentials: GitHub and GitLab
@@ -234,9 +259,23 @@ func checkBranchName(s string) error {
 
 // parseRef parses "path" or "provider:path" where path has at least
 // minSegments segments.
-func parseRef(s string, minSegments int) (Ref, error) {
+func parseRef(s string, minSegments int) (Ref, error) { return parseRefOf(s, minSegments, false) }
+
+// parsePattern parses an exclude entry that is not a URL:
+// "[provider:]pattern", where pattern covers two segments or more and may
+// hold the glob characters * and ? (glob.go). An entry without them is a
+// reference, which ParseRef reads.
+func parsePattern(s string) (Ref, error) { return parseRefOf(s, 2, isGlob(s)) }
+
+// parseRefOf is parseRef, with the glob characters * and ? allowed in the
+// path when glob is set. A URL is refused: only targets.yml takes one, and
+// ResolveURLs rewrites it first.
+func parseRefOf(s string, minSegments int, glob bool) (Ref, error) {
 	if len(s) > maxRefLen {
-		return Ref{}, fmt.Errorf("%.40q…: longer than %d bytes", s, maxRefLen)
+		return Ref{}, fmt.Errorf("%.40q…: longer than %d bytes", displayURL(s), maxRefLen)
+	}
+	if isURL(s) {
+		return Ref{}, fmt.Errorf("%q: a URL is not accepted here; write the repository as <provider>:<path>", displayURL(s))
 	}
 	var r Ref
 	path := s
@@ -246,14 +285,16 @@ func parseRef(s string, minSegments int) (Ref, error) {
 		}
 		r.Provider, path = prov, rest
 	}
-	if err := checkRefPath(path, minSegments); err != nil {
+	if err := checkRefPath(path, minSegments, glob); err != nil {
 		return Ref{}, fmt.Errorf("%q: %w", s, err)
 	}
 	r.Path = path
 	return r, nil
 }
 
-func checkRefPath(p string, minSegments int) error {
+// checkRefPath checks a repository or namespace path of at least
+// minSegments segments; with glob set, a segment may hold * and ?.
+func checkRefPath(p string, minSegments int, glob bool) error {
 	if p == "" {
 		return errors.New("empty path")
 	}
@@ -269,12 +310,19 @@ func checkRefPath(p string, minSegments int) error {
 			return fmt.Errorf("%q path segment", seg)
 		}
 		for _, c := range seg {
-			if !isRefChar(c) {
+			switch {
+			case isRefChar(c), glob && isGlobChar(c):
+			case isGlobChar(c):
+				return fmt.Errorf("character %q is not allowed in a repository path; glob patterns go in exclude and match", c)
+			default:
 				return fmt.Errorf("character %q is not allowed in a repository path", c)
 			}
 		}
 	}
 	if len(segs) < minSegments {
+		if glob {
+			return errors.New("a pattern covers a whole repository path, like acme/legacy-* or platform/legacy/**")
+		}
 		return errors.New("a repository path needs an owner and a name, like acme/billing")
 	}
 	return nil

@@ -45,7 +45,8 @@ file is copied byte for byte. It does not merge a team's edits into a pack's new
 an edited file is the team's and is never touched again. It keeps no state in targets —
 no lock file, no header, no marker in their files. It never checks a target out in CI,
 and never runs a script, hook, filter or LFS from the hub or a target. It delivers
-nothing to a repository without the opt-in file. There is no pull mode (targets do not
+nothing to a repository without the opt-in file, unless `targets.yml` subscribes it
+(`opt_in: assumed`). There is no pull mode (targets do not
 fetch from the hub), no remote pack sources, and no Bitbucket or Azure DevOps driver.
 
 ## Mental model
@@ -75,7 +76,17 @@ configures it: `hub.yml`, `targets.yml`, `.touchmark/operations.yml`, the CI fil
   later wins. The hub sets the minimum; a target can add packs and `ignore` paths, never
   remove a pack the hub assigns.
 * **Opt-in.** A target receives nothing until `.engineering-assets.yml` exists at its
-  root. An empty file is consent.
+  root. An empty file is consent. An entry of `targets.yml` with `opt_in: assumed`
+  subscribes the repositories it selects instead: they count as opted in without the
+  file, as if it were empty; one such entry is enough. The file still wins:
+  `enabled: false` in it opts any repository out (`skipped:opted-out`, its open sync pull
+  request closed), and deleting it returns a subscribed repository to the hub's
+  subscription rather than opting it out.
+* **Targets** are named `[<provider>:]<path>` or by web URL (`https://host/owner/name`),
+  whose provider is the one in `hub.yml` at that url; output and `--only` always use
+  `<provider>:<path>`. `exclude` entries and the `match` filter of `org`/`group` entries
+  are globs: `*` within a segment, `**` across segments, `?` one character, case
+  ignored; YAML needs a glob that starts with `*` quoted (`"**/legacy"`).
 * **Accounts.** A **reader** (read-only) runs `plan` on hub pull requests. A **writer**,
   a different account, runs `distribute` and `doctor` from the hub's default branch only.
   The **hub channel**, the CI's own token (`GITHUB_TOKEN`, `CI_JOB_TOKEN`), reaches the hub
@@ -253,14 +264,22 @@ ten `::error` and ten `::warning` annotations.
 | `packs.<pack>.description`, `.requires`, `.formerly` | none | metadata; `requires` adds and orders dependencies; `formerly` keeps a renamed pack's history |
 
 `targets.yml` (in the hub; `touchmark schema targets`): `defaults.provider`,
-`defaults.packs`; `targets[]` entries with exactly one of `repo` (`owner/name`, or
-`provider:path`), `org` or `group` (a namespace; with `topics` that must all match,
-`subgroups` default `true`, `forks` default `false`), each with optional `provider` and
-`packs`; `exclude[]`.
+`defaults.packs`, `defaults.opt_in`; `targets[]` entries with exactly one of `repo`
+(`owner/name`, `provider:path`, or a web URL), `org` or `group` (a namespace, by path or
+web URL; with `topics` that must all match, `subgroups` default `true`, `forks` default
+`false`, `match` a list of globs over the full path of which one must match), each with
+optional `provider`, `packs` and `opt_in` (`required`, the default, or `assumed`);
+`exclude[]` (repositories, globs or web URLs; it wins over every entry). A URL resolves to
+the one provider whose `url` it lies under (`github` defaults to `https://github.com`,
+`gitlab` to `https://gitlab.com`); none fails `check`, and so do several unless the
+entry's `provider` or `defaults.provider` picks one of them, credentials, a query, a
+fragment, and any scheme but `https` (`http` for loopback only). On GitHub, Gitea and
+Forgejo a repository URL, and an `exclude` URL without `**`, names `owner/name`.
 
 `.engineering-assets.yml` (in each target; `touchmark schema opt-in`): `version`,
-`packs` (added to the hub's), `ignore` (paths or globs, `**` for any depth, at most
-1000; a plain path covers everything under it). At most 64 KiB.
+`enabled` (default `true`; `false` opts out whatever the hub says), `packs` (added to
+the hub's), `ignore` (paths or globs, `**` for any depth, at most 1000; a plain path
+covers everything under it). At most 64 KiB.
 
 `.touchmark/operations.yml` (in the hub; `touchmark schema operations`):
 `recreate[]` (`target`, `head`: acts while the branch head is that commit),
@@ -301,8 +320,10 @@ from its environment once read:
 5. **The writer has no access to the hub.** Install the Apps on targets only; keep the
    hub outside the GitLab groups the accounts belong to. `doctor` fails when the writer
    can push to the hub, and warns when it can see a private one.
-6. **Nothing reaches a repository without its opt-in file.** `.engineering-assets.yml`
-   at the root, possibly empty. Never ship that file in a pack: `check` rejects it.
+6. **Nothing reaches a repository without its consent.** `.engineering-assets.yml` at
+   the root, possibly empty, or an entry with `opt_in: assumed` when the hub owns the
+   decision; `enabled: false` in the file overrides the hub. Never ship that file in a
+   pack: `check` rejects it.
 7. **Only committed packs ship.** `distribute` reads the hub's HEAD commit and refuses
    `--worktree`; it runs only when HEAD is the tip of the default branch (otherwise the
    run is `superseded` and writes nothing).
@@ -436,7 +457,7 @@ Each target ends with one outcome, and a reason for most:
 |---|---|---|
 | `opened`, `updated`, `unchanged`, `closed` | `updated`: `content`, `rebase`, `recreate`, `body`, `title`, `base-renamed`; `closed`: `no-diff`, `opted-out`, `target-dropped`, `duplicate` | nothing |
 | `declined` | the declined pull request | nothing; see [memory](concepts/memory.md) to propose again |
-| `skipped` | `not-opted-in`, `archived`, `disabled`, `empty`, `mirror`, `pending-deletion`, `prs-disabled`, `sha256`, `unsafe-opt-in`, `private-in-public-hub`, `superseded` | add the opt-in file, or nothing |
+| `skipped` | `not-opted-in`, `opted-out` (the opt-in file says `enabled: false`), `archived`, `disabled`, `empty`, `mirror`, `pending-deletion`, `prs-disabled`, `sha256`, `unsafe-opt-in`, `private-in-public-hub`, `superseded` | add the opt-in file (or `opt_in: assumed` in the hub), or nothing |
 | `blocked` | `edited` (someone pushed to the sync branch), `branch-taken`, `branch-in-use`, `opt-in-invalid`, `marker-invalid`, `rules:<rule>`, `permission:<what>`, `cannot-sign`, `archived`, `mass-close` | tick *Rebuild this branch* or add a `recreate` entry; fix the opt-in file; grant the permission; add a signing key; `allow_mass_close` |
 | `deferred` | `rate-limit`, `deadline`, `rollout-limit`, `provider-down`, `interrupted`, `cooldown` | nothing: the next run continues |
 | `failed` | `transient`, `auth`, `access`, `git`, `integrity`, `race`, `secret-exposure`, `internal` | read the report's reason; `auth` and `access` are the credential |
@@ -457,10 +478,10 @@ Fetch a page when the task is the one named beside it.
 | [A hub on GitHub](getting-started/github.md) | creating a hub with GitHub Apps and the `touchmark-distribute` environment |
 | [A hub on GitLab](getting-started/gitlab.md) | creating a hub with service accounts and protected variables |
 | [A hub on Gitea or Forgejo](getting-started/gitea-forgejo.md) | delivering to or hosting on Gitea and Forgejo |
-| [Opt a repository in](getting-started/opt-in.md) | writing a target's `.engineering-assets.yml` |
+| [Opt a repository in](getting-started/opt-in.md) | writing a target's `.engineering-assets.yml`; a hub that subscribes repositories (`opt_in: assumed`) and how they opt out |
 | [How it works](concepts/overview.md) | the flow from a hub pull request to a sync pull request |
 | [Ownership by provenance](concepts/ownership.md) | the file states, `local`, `--adopt`, CRLF, `orphaned` |
-| [Packs and opt-in](concepts/packs.md) | pack selection order, `requires`, `formerly`, seed files |
+| [Packs and opt-in](concepts/packs.md) | pack selection order, `requires`, `formerly`, seed files, consent by file or by the hub |
 | [Delivery and the sync branch](concepts/delivery.md) | the branch, the commit, signing, pull request fields, stale pull requests |
 | [Memory of declined pull requests](concepts/memory.md) | why a pull request did not come back, and how to bring it back |
 | [Security model](concepts/security.md) | the accounts, the probe, write isolation, what a target can and cannot do |

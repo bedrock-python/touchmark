@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"regexp"
 	"strconv"
 	"strings"
 	"unicode"
@@ -15,11 +16,19 @@ import (
 // terminals and CI logs. Every error and warning the parsers return is
 // cleaned first: control characters (newlines included), bidirectional
 // overrides and invalid UTF-8 are escaped, so a value cannot forge a log
-// line, a CI annotation (::error ...) or a terminal escape; and whatever
-// looks like a credential is cut to its prefix.
+// line, a CI annotation (::error ...) or a terminal escape; whatever
+// looks like a credential is cut to its prefix; and the user information
+// of a URL (user:password@) is cut.
 
 // cleanMessage returns s safe to print.
-func cleanMessage(s string) string { return redactSecrets(escapeUnprintable(s)) }
+func cleanMessage(s string) string { return redactUserinfo(redactSecrets(escapeUnprintable(s))) }
+
+// userinfoRe matches the scheme and user information of a URL: everything
+// between "://" and the "@" that ends the user information.
+var userinfoRe = regexp.MustCompile(`([A-Za-z][A-Za-z0-9+.-]*://)[^/?#@\s"'\x60]*@`)
+
+// redactUserinfo cuts the user information of every URL in s.
+func redactUserinfo(s string) string { return userinfoRe.ReplaceAllString(s, "${1}…@") }
 
 // escapeUnprintable escapes, Go style, every rune of s that could change
 // how the text around it is displayed.
@@ -103,11 +112,17 @@ func cleanWarnings(warns []Warning) []Warning {
 }
 
 // yamlError describes an error of the YAML decoder in one line. A type
-// error lists one problem per line; they are joined with "; ".
+// error lists one problem per line; they are joined with "; ". The errors
+// of a bad alias get a hint: a glob pattern that starts with "*" (**/legacy)
+// is read as one unless quoted.
 func yamlError(err error) string {
 	var te *yaml.TypeError
 	if errors.As(err, &te) {
 		return "yaml: " + strings.Join(te.Errors, "; ")
 	}
-	return err.Error()
+	msg := err.Error()
+	if strings.Contains(msg, "did not find expected alphabetic or numeric character") || strings.Contains(msg, "unknown anchor") {
+		msg += ` (a value that starts with * is read as a YAML alias: quote it, as in "**/legacy")`
+	}
+	return msg
 }

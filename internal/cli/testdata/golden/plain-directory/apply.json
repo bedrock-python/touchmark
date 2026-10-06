@@ -10,7 +10,8 @@
     "root": "$TARGET",
     "ref": "",
     "opt_in_file": ".engineering-assets.yml",
-    "opted_in": true
+    "opted_in": true,
+    "opt_in": "file"
   },
   "selection": {
     "packs": [

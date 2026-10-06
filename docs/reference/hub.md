@@ -105,7 +105,7 @@ In a hub pull request, `providers` and `ca_file` are read from the default branc
 | `providers` | list of objects | Platforms this hub delivers to. Targets refer to them by id. |
 | `providers[].id` | string, required | Name targets.yml uses for this provider, and the &lt;ID&gt; of its TOUCHMARK_&lt;ID&gt;_\* variables. |
 | `providers[].type` | one of `github`, `gitlab`, `gitea`, `forgejo`, required | — |
-| `providers[].url` | string | Web URL of the instance. Default for github: https://github.com; for gitlab: https://gitlab.com. Required for gitea and forgejo. |
+| `providers[].url` | string | Web URL of the instance. Default for github: https://github.com; for gitlab: https://gitlab.com. Required for gitea and forgejo. A target targets.yml names by web URL belongs to the provider whose url it lies under. |
 | `providers[].api_url` | string | API URL, when it cannot be derived from url. |
 | `providers[].ca_file` | string | Hub file with extra CA certificates for this instance. |
 | `providers[].writer` | string, up to 255 characters | The account that writes to targets, as the platform names it: on GitHub the App's bot, &lt;slug&gt;[bot]; on GitLab, Gitea and Forgejo the username of the service account or bot user. |

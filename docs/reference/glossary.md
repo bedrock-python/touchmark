@@ -41,7 +41,11 @@ history. `touchmark manifest` prints it.
 fingerprint and what the pull request carries.
 
 **opt-in file** — `.engineering-assets.yml` at a target's root. Its presence is consent;
-it can add packs and `ignore` paths.
+it can add packs and `ignore` paths, and `enabled: false` in it opts the target out.
+
+**`opt_in: assumed`** — an entry of `targets.yml` that subscribes the repositories it
+selects: they count as opted in without an opt-in file. See
+[targets.yml](targets.md#opt-in).
 
 **`orphaned`** — the state of a file shipped only by a pack the target no longer gets, and
 still unchanged: left in place and listed.
@@ -71,7 +75,8 @@ default branch.
 **sync pull request** — touchmark's pull request (merge request on GitLab) from the sync
 branch.
 
-**target** — a repository `targets.yml` selects.
+**target** — a repository `targets.yml` selects: by path, by web URL, or through an
+organisation or group, narrowed by `topics` and `match` and minus `exclude`.
 
 **write isolation** — keeping the write key visible to the default branch only:
 `security.write_isolation` (`platform`, `external`, `none`).

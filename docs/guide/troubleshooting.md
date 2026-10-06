@@ -16,6 +16,9 @@ These exit with code 2 and write nothing.
 | `hub checkout is shallow: full history is required` | `actions/checkout` without `fetch-depth: 0`, or `GIT_DEPTH` not `"0"` | fetch the whole history |
 | `hub checkout is a partial clone` | a clone with `--filter` | clone without it |
 | `id: still the template placeholder "change-me"` | a new hub | set `id` in `hub.yml` |
+| `targets.yml: targets[N].repo: <url> is not under the url of any provider` | a target written as a web URL whose host or path no provider in `hub.yml` has | add the provider, fix its `url`, or write the target as `<provider>:<path>` |
+| `… is under the url of providers …` | two providers share the instance of a URL | name one with `provider:` on the entry, or write the target as `<provider>:<path>` |
+| `targets.yml: its web URLs are matched with the providers' urls, which are unknown` | a hub without `providers` that names targets by URL, run outside its own CI: an `origin` remote names the provider only on `github.com`, a `*.ghe.com` host or `gitlab.com` | list the instance under `providers` in `hub.yml`; on one of those hosts, adding the `origin` remote is enough |
 | `… looks like a secret …; remove it from the file and revoke it` | a token pasted into a configuration file | remove it, and revoke the token: it is in the history |
 | `TOUCHMARK_… is visible in this job, which any branch of the hub can run` | the probe saw a write key | keep write keys only in the protected environment or variable |
 | a write key visible outside the environment, or the probe not configured | GitHub: `TOUCHMARK_KEY_EXPOSED` is `true`, or unset | remove the repository or organisation secret; pass the probe job's output |
@@ -71,12 +74,17 @@ predict a rule block that `distribute` will not hit. `doctor` checks with the wr
 
 ## Nothing happens to a repository
 
-- It has no `.engineering-assets.yml` at its root (`skipped:not-opted-in`).
+- It has no `.engineering-assets.yml` at its root (`skipped:not-opted-in`), and no entry
+  that selects it has `opt_in: assumed`.
+- Its `.engineering-assets.yml` says `enabled: false` (`skipped:opted-out`).
+- An `exclude` entry covers it: a pattern such as `acme/*` or `platform/**` covers more
+  than the repositories it names. `check` warns when one covers a `repo:` entry.
 - It is archived, disabled, empty, a mirror, pending deletion, has pull requests turned
   off, or uses SHA-256 objects (`skipped` with that reason).
 - The hub is public and the repository is not (`private-in-public-hub`, only counted).
-- An `org` or `group` entry did not select it: `topics` must all match, forks are left out
-  unless `forks: true`, nested groups need `subgroups` (on by default).
+- An `org` or `group` entry did not select it: `topics` must all match, its full path must
+  match one of the `match` patterns (`acme/svc-*` leaves out `acme/sub/svc-a`), forks are
+  left out unless `forks: true`, nested groups need `subgroups` (on by default).
 - It declined this content before (`declined`): see [memory](../concepts/memory.md).
 - It already has everything (`unchanged`).
 

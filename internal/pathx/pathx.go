@@ -204,6 +204,17 @@ func Match(pattern, p string) bool {
 	return false
 }
 
+// MatchSegments reports whether the path p matches pattern segment by
+// segment: "*", "?" and "[...]" work inside one segment as in path.Match,
+// and a "**" segment matches zero or more segments. Unlike Match, it takes
+// pattern and p as they are: nothing is trimmed, and a pattern without
+// glob characters matches only the path it spells, not what lies beneath
+// it. Matching takes time proportional to the number of pattern segments
+// times the number of path segments.
+func MatchSegments(pattern, p string) bool {
+	return matchSegments(strings.Split(pattern, "/"), strings.Split(p, "/"))
+}
+
 // MatchAny reports whether p matches any of patterns.
 func MatchAny(patterns []string, p string) bool {
 	for _, pat := range patterns {

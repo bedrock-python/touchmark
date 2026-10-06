@@ -47,7 +47,11 @@ Three ways in, one version number:
 - **Review, never merge** — every change arrives as a pull request a person merges; there
   is no auto-merge option
 - **Opt-in** — a repository receives nothing until it adds `.engineering-assets.yml`, which
-  can add packs and `ignore` paths
+  can add packs and `ignore` paths; a hub that owns the decision subscribes repositories
+  itself (`opt_in: assumed`), and `enabled: false` in the file still opts one out
+- **Targets as you name them** — a repository, an organisation or a group by path or by
+  web URL, narrowed by topics and path globs (`acme/svc-*`), minus `exclude` globs
+  (`corp:platform/legacy/**`)
 - **Four platforms, one hub** — GitHub (github.com, GHE.com, Enterprise Server), GitLab
   (gitlab.com and self-managed), Gitea and Forgejo; one hub can deliver to several at once
 - **Declines remembered** — content in a pull request closed without merging is not
@@ -222,9 +226,9 @@ every flag.
 | File | Lives in | What it holds |
 |---|---|---|
 | `hub.yml` | the hub | the hub's id, the platforms it delivers to with their writers, commit and pull request settings, security settings, pack descriptions, `requires` and `formerly` |
-| `targets.yml` | the hub | which repositories get which packs: by repository, organisation or group, filtered by topic |
+| `targets.yml` | the hub | which repositories get which packs: by repository (its path or web URL), organisation or group, filtered by topic and path pattern, minus `exclude` patterns; and whether the hub subscribes them without an opt-in file (`opt_in: assumed`) |
 | `.touchmark/operations.yml` | the hub | one-off overrides of a safeguard, merged through review: rebuild a paused branch, propose declined content again, allow a mass close |
-| `.engineering-assets.yml` | each target | the repository's consent; packs to add and paths to `ignore` |
+| `.engineering-assets.yml` | each target | the repository's consent, or with `enabled: false` its refusal; packs to add and paths to `ignore` |
 
 Credentials come from the environment, never from flags or files:
 `TOUCHMARK_[<ID>_]READ_TOKEN` (or `…_READ_APP_ID` with `…_READ_APP_KEY` for a GitHub App),

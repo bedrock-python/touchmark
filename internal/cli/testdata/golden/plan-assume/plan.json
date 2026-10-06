@@ -65,6 +65,7 @@
         "base"
       ],
       "opt_in_assumed": true,
+      "opt_in_assumed_by": "--assume-opt-in",
       "changes": {
         "create": 2,
         "update": 0,

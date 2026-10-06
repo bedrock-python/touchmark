@@ -195,6 +195,14 @@ func implicitProvider(h *Hub, env ciEnv, originHost string) (Provider, error) {
 	return p, nil
 }
 
+// OriginTellsProvider reports whether a hub without providers can take its
+// implicit provider outside CI from an origin remote on host: only a public
+// instance (github.com, a *.ghe.com host, gitlab.com) tells its type.
+func OriginTellsProvider(host string) bool {
+	_, ok := originProvider(host)
+	return ok
+}
+
 // originProvider returns the provider of a public instance at host, the
 // host of a hub's origin remote: only there does the host tell the type.
 func originProvider(host string) (Provider, bool) {
@@ -388,7 +396,9 @@ func SelectFor(hub *Hub, targets *Targets, optIn *OptIn, matched []int, known ma
 //
 // Patterns that normalize to "" match nothing and are left out; pack names
 // are taken as written. Legacy does not count: adding "version: 1" to a
-// file without it changes nothing. For example, an empty file hashes
+// file without it changes nothing. Nor does Enabled: a file that says
+// enabled: false is never compared, and one that says true chooses
+// nothing new. For example, an empty file hashes
 // "touchmark-optin/v1\nversion 1\n", and "packs: [claude]" appends
 // "pack 6:claude\n".
 func (o *OptIn) Hash() string {

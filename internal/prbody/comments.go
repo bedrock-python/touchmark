@@ -106,13 +106,31 @@ const (
 	reasonDuplicate     = "duplicate"
 )
 
+// Why a repository is no longer opted in, for an opted-out close
+// (ClosedComment's cause).
+const (
+	// CauseDisabled: its opt-in file says enabled: false.
+	CauseDisabled = "disabled"
+	// CauseNoOptIn: it has no opt-in file, and targets.yml does not
+	// subscribe it (the file was deleted, or the hub withdrew opt_in:
+	// assumed).
+	CauseNoOptIn = "no-opt-in"
+)
+
 // ClosedComment is the comment after touchmark closes its own PR, for reason
-// (decide.Reason* close reasons).
+// (decide.Reason* close reasons). An opted-out close says why the
+// repository is no longer opted in by its cause (CauseDisabled,
+// CauseNoOptIn; any other value covers both), naming the opt-in file
+// optInFile ("" for "the opt-in file").
 //
 // It says why and what comes next, without naming the request "pull" or
 // "merge" (it has no platform) and without a mention or a line that starts
 // with "/". An unknown reason is shown in a code span.
-func ClosedComment(reason string) string {
+func ClosedComment(reason, cause, optInFile string) string {
+	optIn := "the opt-in file"
+	if optInFile != "" {
+		optIn = "the opt-in file " + Code(optInFile)
+	}
 	var why, next string
 	switch reason {
 	case reasonNoDiff:
@@ -121,8 +139,19 @@ func ClosedComment(reason string) string {
 		why = "there is nothing left to sync (the default branch has the hub's versions of these files, or they are ignored or changed here)"
 		next = "This is not a decline: nothing is remembered."
 	case reasonOptedOut:
-		why = "the opt-in file of this repository is gone"
-		next = "To get engineering assets again, add the opt-in file back."
+		switch cause {
+		case CauseDisabled:
+			why = "this repository opted out, as " + optIn + " says `enabled: false`"
+			next = "To get engineering assets again, remove `enabled: false` from it."
+		case CauseNoOptIn:
+			// The repository may never have had the file: the hub may
+			// have withdrawn its subscription.
+			why = "this repository has no opt-in file, and the hub does not subscribe it (the file was deleted, or the hub stopped subscribing it)"
+			next = "To get engineering assets again, add " + optIn + "."
+		default:
+			why = "this repository is no longer opted in (it has no opt-in file and the hub does not subscribe it, or its opt-in file says `enabled: false`)"
+			next = "To get engineering assets again, add " + optIn + ", or remove `enabled: false` from it."
+		}
 	case reasonTargetDropped:
 		why = "the hub no longer syncs this repository"
 		next = "This is not a decline: if the hub adds this repository back, a new one comes."

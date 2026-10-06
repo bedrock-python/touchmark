@@ -1,8 +1,9 @@
 # Opt a repository in
 
 Nothing happens to a repository until it has `.engineering-assets.yml` at its root. The
-file can be empty: its presence is the consent. It can also ask for more packs and keep
-some paths for itself:
+file can be empty: its presence is the consent. (A hub can also subscribe repositories
+itself: see [when the hub subscribes a repository](#when-the-hub-subscribes-a-repository).)
+The file can also ask for more packs and keep some paths for itself:
 
 ```yaml
 # .engineering-assets.yml
@@ -27,7 +28,8 @@ runs [`touchmark status`](../guide/local.md) in a checkout.
 - **Change its mind.** Editing `packs` or `ignore` lifts the memory of declined pull
   requests: content the team declined by closing a sync pull request is proposed again.
   Comments and formatting don't count.
-- **Opt out.** Deleting the file stops delivery; the open sync pull request is closed
+- **Opt out.** `enabled: false` in the file stops delivery, and so does deleting the
+  file, unless the hub subscribed the repository; the open sync pull request is closed
   with the reason `opted-out`. Files already merged stay.
 
 The file is read through the platform's API from the default branch: at most 64 KiB, a
@@ -50,8 +52,10 @@ targets:
     topics: [python-library]
     packs: [python-library]
   - repo: corp:platform/api     # a repository on another provider from hub.yml
+  - repo: https://gitlab.example.com/platform/web   # a web URL: the provider at that url
 exclude:
   - your-org/legacy-monolith
+  - your-org/*-archive          # a glob: * within a segment, ** across segments
 ```
 
 A repository's packs, in order: `defaults.packs`, then the `packs` of every entry that
@@ -59,10 +63,51 @@ matches it (in file order), then the `packs` of its opt-in file. Duplicates are 
 and each pack's `requires` from `hub.yml` comes before it. When two packs ship the same
 path, the later one wins. See [Packs and opt-in](../concepts/packs.md).
 
+## When the hub subscribes a repository
+
+A hub that keeps its own repositories in sync, rather than offering packs to teams that
+ask, marks entries with `opt_in: assumed`:
+
+```yaml
+# targets.yml in the hub
+version: 1
+defaults:
+  packs: [agents]
+targets:
+  - org: your-org
+    match: [your-org/svc-*]     # only the services
+    opt_in: assumed             # no opt-in file needed
+```
+
+A repository such an entry selects counts as opted in without the file: it gets the packs
+of `targets.yml`, and its first sync pull request says the hub subscribed it. The team
+still decides:
+
+- **Merge it**, or **close it**: closing is a decline, and the same content is not
+  proposed again.
+- **Choose packs or keep files**: add the opt-in file with `packs` or `ignore`; it works
+  as for any target.
+- **Opt out**: add the opt-in file with `enabled: false`:
+
+  ```yaml
+  # .engineering-assets.yml
+  version: 1
+  enabled: false
+  ```
+
+  The open sync pull request is closed, and nothing comes until the file says otherwise.
+  Deleting the opt-in file of a subscribed repository does not opt it out: it returns it
+  to the hub's subscription.
+
+See [targets.yml](../reference/targets.md#opt-in) for the rules.
+
 ## What the team sees
 
 A sync pull request from the hub's writer on the branch `touchmark/<id>`:
 
+- when the hub subscribed the repository without an opt-in file (`opt_in: assumed`), a
+  paragraph that says so, with how to choose packs or keep files out, and how to opt
+  out;
 - a table of every change, by file and pack;
 - a **⚠ Sensitive paths** section listing changes to workflows, CI configuration, agent
   settings, skills and subagents, CODEOWNERS and executable files, which is never cut;

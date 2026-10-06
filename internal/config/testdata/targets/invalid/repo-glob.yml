@@ -1,0 +1,4 @@
+# error: targets[0].repo: "acme/*": character '*' is not allowed in a repository path; glob patterns go in exclude and match
+version: 1
+targets:
+  - repo: acme/*

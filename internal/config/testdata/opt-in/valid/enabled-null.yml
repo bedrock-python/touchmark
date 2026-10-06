@@ -1,0 +1,3 @@
+# A null enabled is absent: the repository stays opted in.
+version: 1
+enabled:

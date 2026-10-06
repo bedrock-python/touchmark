@@ -80,16 +80,24 @@ defaults:
 targets:
   - repo: acme/billing             # gh, the default
   - repo: corp:platform/api        # <provider>:<path>
+  - repo: https://gitlab.example.com/platform/web   # corp: the URL is under its url
   - provider: corp
     group: platform                # with its subgroups; subgroups: false turns them off
     topics: [python]
-  - org: cb:acme
+  - org: https://codeberg.org/acme # cb:acme
 exclude:
   - corp:platform/sandbox
+  - corp:platform/legacy/**        # a subgroup and everything beneath it
 ```
 
 A target's provider is, in order: the entry's `provider`, the `<provider>:` prefix,
 `defaults.provider`, the only provider. When that leaves a choice, `check` fails.
+
+A target written as a web URL takes the provider whose `url` it lies under, matched by
+scheme, host, port and path (`https://example.com/gitlab/platform/api` is under a
+provider at `https://example.com/gitlab`); exactly one must match. touchmark rewrites
+it as `<provider>:<path>` before anything else reads it. See
+[targets.yml](../reference/targets.md#web-urls).
 
 Everywhere a single repository is named — in output, in `--only`, in
 `.touchmark/operations.yml` — it is `<provider>:<path>`. Inside a run, a repository is

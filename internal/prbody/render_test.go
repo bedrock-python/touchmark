@@ -79,6 +79,14 @@ var scenarios = []struct {
 			in.Local = append(in.Local, fmt.Sprintf("docs/handbook/chapter-%02d/local-%03d.md", i%12, i))
 		}
 	}},
+	{"assumed", func(in *Input) {
+		// No opt-in file: the hub subscribed the repository.
+		in.Assumed = true
+		in.Changes = []Change{
+			{Path: "AGENTS.md", Pack: "agents", Action: ActionCreate, Mode: "100644"},
+			{Path: "prompts/review.md", Pack: "agents", Action: ActionCreate, Mode: "100644"},
+		}
+	}},
 	{"sensitive-only", func(in *Input) {
 		in.Sensitive = []string{"deploy/**"}
 		in.GiteaWorkflows = true
@@ -287,6 +295,7 @@ func TestRenderOrder(t *testing.T) {
 	in.PreviouslyDeclined = []int64{4}
 	in.Paused, in.UpdateBranchNeeded, in.NothingMore = true, true, true
 	in.ShowRecreate, in.ShowRepropose = true, true
+	in.Assumed = true
 	body, err := Render(in)
 	if err != nil {
 		t.Fatal(err)
@@ -294,6 +303,7 @@ func TestRenderOrder(t *testing.T) {
 	parts := []string{
 		"Acme keeps its shared",
 		"touchmark syncs packs",
+		"The hub subscribed this repository",
 		"### ⚠ Sensitive paths",
 		"### Changes",
 		"<details>",
@@ -475,6 +485,45 @@ func TestRenderBudget(t *testing.T) {
 			t.Fatalf("with every list cut: %v", err)
 		}
 	})
+}
+
+// TestRenderAssumed: the paragraph of a repository the hub subscribed names
+// the opt-in file, or reads "an opt-in file" without its name, and stays
+// when the budget cuts the lists.
+func TestRenderAssumed(t *testing.T) {
+	in := scenarioInput(t, "assumed", "gitlab")
+	body, err := Render(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "The hub subscribed this repository, which has no `.engineering-assets.yml`. " +
+		"To add packs or keep files out of the sync, add `.engineering-assets.yml` with `packs` or `ignore`; " +
+		"to stop these merge requests, add it with `enabled: false`."
+	if !strings.Contains(body, "\n\n"+want+"\n\n") {
+		t.Errorf("no paragraph %q in\n%s", want, body)
+	}
+	in.OptInFile = ""
+	want = "The hub subscribed this repository, which has no opt-in file. " +
+		"To add packs or keep files out of the sync, add an opt-in file with `packs` or `ignore`; " +
+		"to stop these merge requests, add one with `enabled: false`."
+	if body, err = Render(in); err != nil || !strings.Contains(body, want) {
+		t.Errorf("without a file name: %v\n%s", err, body)
+	}
+	in = scenarioInput(t, "assumed", "github")
+	in.Changes = hugeChanges(400)
+	r, err := newRenderer(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in.Caps.MaxBody = len(r.body([numLists]int{10, 0, 0}))
+	if body, err = Render(in); err != nil || !strings.Contains(body, "The hub subscribed this repository") {
+		t.Errorf("under a budget: %v", err)
+	}
+	checkBody(t, in, body)
+	in.Assumed = false
+	if body, err = Render(in); err != nil || strings.Contains(body, "subscribed") {
+		t.Errorf("a repository with its opt-in file: %v", err)
+	}
 }
 
 // TestSize checks that the computed size of a body is its length, for

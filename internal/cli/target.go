@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/bedrock-python/touchmark/internal/config"
@@ -30,10 +31,14 @@ type target struct {
 	// --repo nor the origin remote gave one.
 	ref      config.Ref
 	refKnown bool
-	// optInName is the opt-in file; optIn is nil when it is absent.
-	optInName string
-	optIn     *config.OptIn
-	warnings  []string
+	// optInName is the opt-in file; optIn is nil when the target is not
+	// opted in: the file is absent and targets.yml does not subscribe the
+	// target, or it says enabled: false. optInState says which
+	// (report.OptIn*).
+	optInName  string
+	optIn      *config.OptIn
+	optInState string
+	warnings   []string
 }
 
 // openTarget finds the target root: the top of the git work tree containing
@@ -75,11 +80,12 @@ func openTarget(ctx context.Context, e *env, dir string) (*target, error) {
 	return t, nil
 }
 
-// readOptIn reads and parses the opt-in file called name at the target root. An
-// absent file leaves optIn nil. The file comes from the target, so it is
+// readOptIn reads and parses the opt-in file called name at the target
+// root. An absent file, or one that says enabled: false, leaves optIn nil
+// (optInState none or opted-out). The file comes from the target, so it is
 // read without following symlinks and with a size limit.
 func (t *target) readOptIn(name string) error {
-	t.optInName = name
+	t.optInName, t.optInState = name, report.OptInNone
 	data, found, err := readRegular(t.root, name, maxOptInRead)
 	if err != nil {
 		return configErrorf("opt-in file %s: %w", name, err)
@@ -94,7 +100,44 @@ func (t *target) readOptIn(name string) error {
 	for _, w := range warns {
 		t.warnings = append(t.warnings, name+": "+w.Message)
 	}
-	t.optIn = o
+	if o.Disabled() {
+		t.optInState = report.OptInDisabled
+		return nil
+	}
+	t.optIn, t.optInState = o, report.OptInFile
+	return nil
+}
+
+// assume opts in a target without an opt-in file that targets.yml
+// subscribes (config.Assume): a repo: entry with opt_in: assumed names it.
+// It then gets the packs of targets.yml, as if it had an empty opt-in
+// file. An org or group entry with opt_in: assumed that may hold the
+// target is a warning: only the platform tells whether it selects it, so
+// the target stays not opted in here, and plan has the answer.
+func (t *target) assume(h *hub) error {
+	if t.optInState != report.OptInNone {
+		return nil
+	}
+	if !t.refKnown {
+		if h.targets != nil && (h.targets.Defaults.OptIn == config.OptInAssumed ||
+			slices.ContainsFunc(h.targets.Targets, func(e config.Entry) bool { return e.OptIn == config.OptInAssumed })) {
+			t.warnings = append(t.warnings, "targets.yml subscribes some repositories without an opt-in file (opt_in: assumed), "+
+				"and this one's name is unknown (no --repo and no origin remote): pass --repo to tell whether it is one of them")
+		}
+		return nil
+	}
+	a, err := config.Assume(h.cfg, h.targets, t.ref)
+	if err != nil {
+		return configError(err)
+	}
+	if a.Assumed {
+		t.optIn, t.optInState = &config.OptIn{Version: 1}, report.OptInAssumed
+		return nil
+	}
+	if len(a.Unresolved) > 0 {
+		t.warnings = append(t.warnings, fmt.Sprintf("targets.yml may subscribe this repository without an opt-in file: %s with opt_in: assumed "+
+			"cannot be resolved here, so it counts as not opted in; plan tells, and an opt-in file decides it here", strings.Join(a.Unresolved, ", ")))
+	}
 	return nil
 }
 
@@ -252,7 +295,7 @@ func remoteProvider(host string, cfg *config.Hub, targets *config.Targets) strin
 
 // report returns the target part of a report.
 func (t *target) report() report.Target {
-	r := report.Target{Root: t.root, OptInFile: t.optInName, OptedIn: t.optIn != nil}
+	r := report.Target{Root: t.root, OptInFile: t.optInName, OptedIn: t.optIn != nil, OptIn: t.optInState}
 	if t.refKnown {
 		r.Ref = t.ref.String()
 	}

@@ -7,7 +7,7 @@ Hub `acme-eng` (`github.com/712345678`) at `$COMMIT` · touchmark dev
 | `gh` | `github.com` | `acme-read[bot]` | `acme-write[bot]`: not checked | resolve complete |
 | `corp` | `gitlab.example.com` | `tm-reader` | `tm-writer`: not checked | resolve complete |
 
-**\-\-assume\-opt\-in:** every target counts as opted in, for this report only; 1 target without an opt\-in file is planned as if it had an empty one
+**\-\-assume\-opt\-in:** for this report only, a target without an opt\-in file counts as opted in \(one whose file says enabled\: false stays opted out\); 1 target is planned as if it had an empty one
 
 | Outcome | Targets |
 |---|---:|

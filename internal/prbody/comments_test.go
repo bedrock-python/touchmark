@@ -193,14 +193,29 @@ func TestCommitMessageMatchesCheck(t *testing.T) {
 
 func TestClosedComment(t *testing.T) {
 	for _, reason := range []string{"no-diff", "opted-out", "target-dropped", "duplicate"} {
-		got := ClosedComment(reason)
+		got := ClosedComment(reason, "", optInName)
 		golden(t, "comments/closed-"+reason+".md", got)
 		checkSafe(t, got, 1)
 		if strings.Contains(got, "reason `") {
 			t.Errorf("%s: explained as an unknown reason", reason)
 		}
 	}
-	got := ClosedComment("@x\n/close`")
+	// An opt-out by its cause: the file says enabled: false, or the
+	// repository has none and the hub does not subscribe it (it may never
+	// have had one, when the hub withdrew its subscription).
+	for _, cause := range []string{CauseDisabled, CauseNoOptIn} {
+		got := ClosedComment("opted-out", cause, optInName)
+		golden(t, "comments/closed-opted-out-"+cause+".md", got)
+		checkSafe(t, got, 1)
+	}
+	if got := ClosedComment("opted-out", CauseNoOptIn, ""); strings.Contains(got, "enabled") || strings.Contains(got, "back") ||
+		!strings.Contains(got, "add the opt-in file.") {
+		t.Errorf("no opt-in file: %q", got)
+	}
+	if got := ClosedComment("no-diff", CauseDisabled, optInName); got != ClosedComment("no-diff", "", "") {
+		t.Errorf("a cause changes the comment of another reason: %q", got)
+	}
+	got := ClosedComment("@x\n/close`", "", "")
 	if want := "touchmark closed this: reason `` @x/close` ``."; got != want {
 		t.Errorf("unknown reason: %q, want %q", got, want)
 	}
@@ -211,7 +226,7 @@ func TestClosedComment(t *testing.T) {
 // are decide's.
 func TestDecideNames(t *testing.T) {
 	for _, reason := range []string{decide.ReasonNoDiff, decide.ReasonOptedOut, decide.ReasonTargetDropped, decide.ReasonDuplicate} {
-		if strings.Contains(ClosedComment(reason), "reason `") {
+		if strings.Contains(ClosedComment(reason, "", ""), "reason `") {
 			t.Errorf("close reason %q has no text of its own", reason)
 		}
 	}

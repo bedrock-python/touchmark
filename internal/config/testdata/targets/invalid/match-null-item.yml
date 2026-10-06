@@ -1,0 +1,5 @@
+# error: targets[0].match[0]: expected a string, got null
+version: 1
+targets:
+  - org: acme
+    match: [null]

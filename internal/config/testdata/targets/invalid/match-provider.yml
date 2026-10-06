@@ -1,0 +1,5 @@
+# error: targets[0].match[0]: "gh:acme/*": match takes repository paths without a provider
+version: 1
+targets:
+  - org: gh:acme
+    match: [gh:acme/*]

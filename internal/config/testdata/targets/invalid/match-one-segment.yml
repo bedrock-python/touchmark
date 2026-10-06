@@ -1,0 +1,5 @@
+# error: targets[0].match[0]: "svc-*": a pattern covers a whole repository path
+version: 1
+targets:
+  - org: acme
+    match: [svc-*]

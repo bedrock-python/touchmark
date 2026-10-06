@@ -136,6 +136,31 @@ func TestDoctor(t *testing.T) {
 	}
 }
 
+// TestDoctorOptIn: doctor checks a repository targets.yml subscribes
+// without an opt-in file, as delivery writes to it, and skips one whose
+// opt-in file says enabled: false, whatever targets.yml says.
+func TestDoctorOptIn(t *testing.T) {
+	w := newWorld(t)
+	w.targetsYML = assumedTargetsYML
+	svc := w.repo("acme/svc-a", nil, "README.md", "subscribed by the hub\n")
+	w.p.GrantWrite(svc.ID, w.writer)
+	w.repo("acme/svc-off", nil, optInName, "version: 1\nenabled: false\n")
+	w.repo("acme/web", topics("python"), "README.md", "wants an opt-in file\n")
+	broken := w.repo("acme/svc-broken", nil, optInName, "version: 2\n")
+	w.p.GrantWrite(broken.ID, w.writer)
+	doc := w.doctor(w.doctorDeps(w.writer))
+	wantCheck(t, "svc-a", doctorTarget(t, doc, "gh:acme/svc-a").Checks, "access", report.StatusOK, "may push")
+	if got := doctorTarget(t, doc, "gh:acme/svc-off"); got.Skipped != "opted-out" || len(got.Checks) != 0 {
+		t.Errorf("svc-off: %+v", got)
+	}
+	if got := doctorTarget(t, doc, "gh:acme/web"); got.Skipped != "not-opted-in" {
+		t.Errorf("web: %+v", got)
+	}
+	// An opt-in file that does not parse is delivery's business: the
+	// writer's access is checked anyway.
+	wantCheck(t, "svc-broken", doctorTarget(t, doc, "gh:acme/svc-broken").Checks, "access", report.StatusOK, "may push")
+}
+
 // TestDoctorHub: whether the writer may write to the hub, by what it sees.
 func TestDoctorHub(t *testing.T) {
 	for _, tc := range []struct {

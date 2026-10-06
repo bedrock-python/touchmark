@@ -1,0 +1,5 @@
+# error: targets[0].match[0]: "https://github.com/acme/*": a URL is not accepted here
+version: 1
+targets:
+  - org: acme
+    match: [https://github.com/acme/*]

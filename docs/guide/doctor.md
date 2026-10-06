@@ -28,7 +28,9 @@ Each check has a name, a status and a detail. The names you will see:
 | `write-isolation` | the hub | `security.write_isolation` is `none`: a warning with its reason |
 
 A check touchmark cannot read is `unknown`, never `ok`. Targets it does not check say why
-(`skipped`: not opted in, archived, deferred, …).
+(`skipped`: not opted in, opted out, archived, deferred, …). A repository `targets.yml`
+subscribes (`opt_in: assumed`) is checked without an opt-in file, as `distribute` writes
+to it.
 
 ## Where the hub keeps its write key: `--hub-token`
 

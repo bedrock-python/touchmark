@@ -279,7 +279,7 @@
         },
         "type": { "$ref": "#/$defs/providerType" },
         "url": {
-          "description": "Web URL of the instance. Default for github: https://github.com; for gitlab: https://gitlab.com. Required for gitea and forgejo.",
+          "description": "Web URL of the instance. Default for github: https://github.com; for gitlab: https://gitlab.com. Required for gitea and forgejo. A target targets.yml names by web URL belongs to the provider whose url it lies under.",
           "$ref": "#/$defs/url"
         },
         "api_url": {

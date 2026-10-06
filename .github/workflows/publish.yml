@@ -475,8 +475,12 @@ jobs:
             test "$got" = "$DIGEST" || { echo "::error::$IMAGE:$t names $got, not $DIGEST"; exit 1; }
           done
           bash scripts/release/check-image.sh "$IMAGE:$VERSION" "$TAG"
-          docker buildx imagetools inspect "$IMAGE@$DIGEST" --format '{{ json .SBOM }}' | grep -q '"SPDX"'
-          docker buildx imagetools inspect "$IMAGE@$DIGEST" --format '{{ json .Provenance }}' | grep -q '"SLSA"'
+          # Captured first: grep -q stops reading at the first match, and
+          # under pipefail docker's broken pipe would fail the step.
+          sbom="$(docker buildx imagetools inspect "$IMAGE@$DIGEST" --format '{{ json .SBOM }}')"
+          grep -q '"SPDX"' <<<"$sbom"
+          provenance="$(docker buildx imagetools inspect "$IMAGE@$DIGEST" --format '{{ json .Provenance }}')"
+          grep -q '"SLSA"' <<<"$provenance"
 
       - name: The release's files against the signed checksums.txt
         if: runner.arch == 'X64'

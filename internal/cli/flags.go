@@ -31,6 +31,8 @@ type options struct {
 	worktree bool
 	dryRun   bool
 	format   string
+	// assumeOptIn is status's and apply's --assume-opt-in (target.assume).
+	assumeOptIn bool
 	// only, hubFP and strict are plan's (plan.go).
 	only   refList
 	hubFP  fingerprintFlag
@@ -169,6 +171,8 @@ func (f *flagSet) targetFlags() {
 	f.fs.StringVar(&f.o.dir, "dir", "", "the target working tree `DIR` (default: the current directory)")
 	f.fs.StringVar(&f.o.repo, "repo", "", "the target in targets.yml, as `OWNER/NAME` or PROVIDER:PATH (default: from the origin remote)")
 	f.fs.Var(&f.o.packs, "packs", "comma-separated `PACKS` to apply instead of the selection from targets.yml and the opt-in file")
+	f.fs.BoolVar(&f.o.assumeOptIn, "assume-opt-in", false,
+		"count the target as opted in when it has no opt-in file, as an org or group entry with opt_in: assumed that a local run cannot resolve would")
 }
 
 func checkFlags() (*flagSet, *options) {

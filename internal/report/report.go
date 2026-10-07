@@ -36,8 +36,8 @@ type Target struct {
 	// when it could not be determined.
 	Ref       string `json:"ref"`
 	OptInFile string `json:"opt_in_file"`
-	// OptedIn is set when the target gets packs: OptIn is OptInFile or
-	// OptInAssumed.
+	// OptedIn is set when the target gets packs: OptIn is OptInFile,
+	// OptInAssumed or OptInFlag.
 	OptedIn bool `json:"opted_in"`
 	// OptIn says why the target is opted in or not: one of the OptIn*
 	// values.
@@ -51,6 +51,10 @@ const (
 	// OptInAssumed: the target has no opt-in file, and a repo: entry of
 	// targets.yml with opt_in: assumed subscribes it.
 	OptInAssumed = "assumed"
+	// OptInFlag: the target has no opt-in file, and --assume-opt-in counts
+	// it as opted in, as an org or group entry with opt_in: assumed that
+	// a local run cannot resolve would.
+	OptInFlag = "flag"
 	// OptInDisabled: the opt-in file says enabled: false.
 	OptInDisabled = "opted-out"
 	// OptInNone: the target has no opt-in file, and no repo: entry

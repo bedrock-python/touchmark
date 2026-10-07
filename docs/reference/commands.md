@@ -238,11 +238,12 @@ Flags:
 <!-- generated: help status -->
 
 ```text
-Usage: touchmark status [--hub DIR] [--dir DIR] [--repo REF] [--packs a,b] [--worktree] [--format text|json]
+Usage: touchmark status [--hub DIR] [--dir DIR] [--repo REF] [--packs a,b] [--assume-opt-in] [--worktree] [--format text|json]
 
 List every managed path of the target and its state; changes nothing.
 
 Flags:
+  --assume-opt-in    count the target as opted in when it has no opt-in file, as an org or group entry with opt_in: assumed that a local run cannot resolve would
   --dir DIR          the target working tree DIR (default: the current directory)
   --format FORMAT    output FORMAT: text or json (default text)
   --hub DIR          the hub checkout DIR (default $TOUCHMARK_HUB)
@@ -264,6 +265,7 @@ Apply the packs to the target's working tree.
 
 Flags:
   --adopt GLOB       overwrite local files matching GLOB with the pack version (repeatable)
+  --assume-opt-in    count the target as opted in when it has no opt-in file, as an org or group entry with opt_in: assumed that a local run cannot resolve would
   --dir DIR          the target working tree DIR (default: the current directory)
   --dry-run          print what apply would change without writing
   --format FORMAT    output FORMAT: text or json (default text)

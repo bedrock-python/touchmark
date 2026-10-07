@@ -53,7 +53,8 @@ touchmark apply --hub ~/src/engineering-assets --adopt '.agents/guidelines/**'
 ```
 
 `--adopt` takes a glob and repeats. `ignore` in the opt-in file is stronger: an ignored
-path is never adopted.
+path is never adopted. In a repository the hub subscribes through an `org:` or `group:`
+entry with `opt_in: assumed`, and that has no opt-in file, add `--assume-opt-in` (below).
 
 ## Organisations, groups and explicit packs
 
@@ -77,9 +78,18 @@ without the opt-in file:
 - without `--repo` or an `origin` remote, touchmark cannot tell, and warns when
   `targets.yml` subscribes anything.
 
-An opt-in file in the checkout settles it either way; with `enabled: false` in it,
-`status` prints `opted out` and `apply` writes nothing. In `--format json` the target's
-`opt_in` says which: `file`, `assumed`, `opted-out` or `none`.
+`--assume-opt-in` settles the last two cases here: a target without the opt-in file
+counts as opted in, as such an entry would make it. `status` prints `opted in by
+--assume-opt-in`, and `apply` writes the packs of `targets.yml`:
+
+```sh
+touchmark apply --hub ~/src/engineering-assets --assume-opt-in --adopt AGENTS.md
+```
+
+An opt-in file in the checkout settles it either way, whatever the flag; with
+`enabled: false` in it, `status` prints `opted out` and `apply` writes nothing. In
+`--format json` the target's `opt_in` says which: `file`, `assumed`, `flag` (opted in
+by `--assume-opt-in`), `opted-out` or `none`.
 
 ## Try a pack before committing it
 

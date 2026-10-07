@@ -64,6 +64,8 @@ func (s *Sync) WriteText(w io.Writer) error {
 		return p.err
 	case s.Target.OptIn == OptInAssumed:
 		p.linef("opted in by targets.yml (opt_in: assumed): %s not found in %s", s.Target.OptInFile, s.Target.Root)
+	case s.Target.OptIn == OptInFlag:
+		p.linef("opted in by --assume-opt-in: %s not found in %s", s.Target.OptInFile, s.Target.Root)
 	}
 	if s.Selection != nil {
 		p.linef("packs: %s", packsLine(s.Selection))

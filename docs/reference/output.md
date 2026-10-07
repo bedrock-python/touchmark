@@ -271,7 +271,8 @@ appears in it. See [Set up a hub's platform](../guide/setup.md).
 `--format json` prints the hub (its directory, `id` and commit), the target (its
 directory, its reference in `targets.yml`, its opt-in file, whether it opted in, and
 `opt_in`, which says why: `file`, the opt-in file is there; `assumed`, there is none and
-a `repo:` entry with `opt_in: assumed` subscribes it; `opted-out`, the file says
+a `repo:` entry with `opt_in: assumed` subscribes it; `flag`, there is none and
+`--assume-opt-in` counts it as opted in; `opted-out`, the file says
 `enabled: false`; `none`, neither), the
 pack selection and where each pack came from, one entry per managed path with its
 `state`, `action`, `pack` and blob ids, a `summary` counting each state, and `warnings`:

@@ -218,7 +218,7 @@ the hub. See [Set up a hub's platform](guide/setup.md).
 | `probe` | jobs any hub branch can start | — | exits 2 when the job can see a write credential or signing key |
 | `setup github|gitlab [--dry-run] ...` | a maintainer's machine | `TOUCHMARK_HUB_TOKEN` | creates the reader and writer, stores the keys so only the default branch sees the write key, protects the hub; changes only what differs; exit 3 when a step is left to you |
 | `migrate --from-multi-gitter FILE [--id ID] [--writer LOGIN]` | anywhere | reader, optional | prints `hub.yml`, `targets.yml` and `operations.yml` for a hub that replaces a multi-gitter setup on GitLab |
-| `status [--hub DIR] [--dir DIR] [--repo REF] [--packs a,b]` | a target checkout | none | lists every managed path and its state; changes nothing |
+| `status [--hub DIR] [--dir DIR] [--repo REF] [--packs a,b] [--assume-opt-in]` | a target checkout | none | lists every managed path and its state; changes nothing |
 | `apply [status flags] [--adopt GLOB]... [--dry-run]` | a target checkout | none | applies the packs to the working tree; `--adopt` takes `local` files back |
 | `manifest [--hub DIR]` | hub | none | prints the ownership manifest as JSON |
 | `schema hub|targets|opt-in|operations|report|doctor|setup` | anywhere | none | prints a JSON Schema |

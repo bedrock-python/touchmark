@@ -47,7 +47,7 @@ jobs:
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.26.x'
+          go-version: '1.27.x'
           cache: true
 
       - name: gofmt
@@ -114,7 +114,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        go: ['1.25.x', '1.26.x']
+        go: ['1.26.x', '1.27.x']
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -131,11 +131,11 @@ jobs:
       # on Linux also measures the coverage of the whole suite and holds it
       # to the gate of make test (COVERAGE_MIN in the Makefile).
       - name: go test -race, the coverage and its gate
-        if: runner.os == 'Linux' && matrix.go == '1.26.x'
+        if: runner.os == 'Linux' && matrix.go == '1.27.x'
         run: make test
 
       - name: go test -race
-        if: runner.os == 'Linux' && matrix.go != '1.26.x'
+        if: runner.os == 'Linux' && matrix.go != '1.27.x'
         run: go test -race -timeout 45m ./...
 
       - name: go test
@@ -143,7 +143,7 @@ jobs:
         run: go test -timeout 45m ./...
 
       - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
-        if: runner.os == 'Linux' && matrix.go == '1.26.x'
+        if: runner.os == 'Linux' && matrix.go == '1.27.x'
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage.out
@@ -168,7 +168,7 @@ jobs:
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.26.x'
+          go-version: '1.27.x'
           cache: true
 
       - name: GitHub's schemas and REST descriptions
@@ -214,7 +214,7 @@ jobs:
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.26.x'
+          go-version: '1.27.x'
           cache: true
 
       # Run outside the module's dependencies: go run with a version never
@@ -262,7 +262,7 @@ jobs:
       - if: steps.template.outputs.public == 'true'
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.26.x'
+          go-version: '1.27.x'
           cache: true
 
       - name: scripts/validate.sh of the template
@@ -316,7 +316,7 @@ jobs:
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.26.x'
+          go-version: '1.27.x'
           cache: true
 
       - name: The Action's step and the release scripts
@@ -466,7 +466,7 @@ jobs:
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.26.x'
+          go-version: '1.27.x'
           cache: true
 
       # Every Fuzz* target in every package runs for 30 seconds. Go's fuzzer
@@ -530,7 +530,7 @@ jobs:
     # hand. docs/project/e2e.md explains how to run them locally.
     name: e2e (${{ matrix.image }})
     runs-on: ubuntu-latest
-    # The job pulls golang:1.26 (1.3 GB) and the forge, boots the forge (at
+    # The job pulls golang:1.27 (1.3 GB) and the forge, boots the forge (at
     # most 3 minutes), seeds it and builds the tests with the race detector
     # from a cold cache before go test starts with its own limit of
     # TOUCHMARK_E2E_TEST_TIMEOUT. The job's limit leaves that much room, so
@@ -549,7 +549,7 @@ jobs:
           persist-credentials: false
 
       # The script starts the forge, seeds it and runs go test in
-      # golang:1.26 next to it; it removes everything it created on exit.
+      # golang:1.27 next to it; it removes everything it created on exit.
       - name: scripts/e2e/gitea.sh
         env:
           IMAGE: ${{ matrix.image }}
@@ -575,7 +575,7 @@ jobs:
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.26.x'
+          go-version: '1.27.x'
           cache: true
 
       - name: go test -run TestPropertyDistribute
@@ -605,7 +605,7 @@ jobs:
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.26.x'
+          go-version: '1.27.x'
           cache: true
 
       - name: go test -run 'TestScale|TestPlanScopeScale'

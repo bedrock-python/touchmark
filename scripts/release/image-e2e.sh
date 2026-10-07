@@ -2,7 +2,7 @@
 # image-e2e.sh runs plan and distribute from a touchmark image against a
 # live Gitea or Forgejo: the binary, the git and the user of the image, end
 # to end. The unit and e2e suites run the engine in process with the git of
-# golang:1.26; this checks the artifact a hub actually runs. docs/project/release.md
+# golang:1.27; this checks the artifact a hub actually runs. docs/project/release.md
 # runs it on a release candidate before the tag.
 #
 # Usage: scripts/release/image-e2e.sh IMAGE [FORGE_IMAGE]

@@ -46,7 +46,7 @@ On Windows, take `touchmark_X.Y.Z_windows_amd64.zip` and put `touchmark.exe` on 
 go install github.com/bedrock-python/touchmark/cmd/touchmark@latest
 ```
 
-Go 1.25 or newer. A binary built this way reports the module version in
+Go 1.26 or newer. A binary built this way reports the module version in
 `touchmark version`.
 
 ## The image

@@ -8,7 +8,7 @@
 |---|---|
 | Program | `touchmark`, one static Go binary; the same binary in the image `ghcr.io/bedrock-python/touchmark` and the GitHub Action `bedrock-python/touchmark` |
 | Requires | git 2.31+ for `check`, `status`, `apply`, `manifest`; git 2.45+ for `plan` and `distribute`, which read the targets (the image brings its own) |
-| Install | archives on [GitHub releases](https://github.com/bedrock-python/touchmark/releases) · `go install github.com/bedrock-python/touchmark/cmd/touchmark@latest` (Go 1.25+) · `docker run ghcr.io/bedrock-python/touchmark:<version>` |
+| Install | archives on [GitHub releases](https://github.com/bedrock-python/touchmark/releases) · `go install github.com/bedrock-python/touchmark/cmd/touchmark@latest` (Go 1.26+) · `docker run ghcr.io/bedrock-python/touchmark:<version>` |
 | Platforms | GitHub (github.com, GHE.com, GHES 3.19+), GitLab 17.0+, Gitea 1.26+, Forgejo 15+ |
 | Hub template | <https://github.com/bedrock-python/engineering-assets-template> |
 | Source | <https://github.com/bedrock-python/touchmark> |

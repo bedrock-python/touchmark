@@ -1,6 +1,7 @@
 package prbody
 
 import (
+	"encoding/json"
 	"flag"
 	"os"
 	"path/filepath"
@@ -77,9 +78,31 @@ func golden(t *testing.T, name, got string) {
 	if err != nil {
 		t.Fatalf("%v (run go test -update to create it)", err)
 	}
-	if string(want) != got {
+	if decoded(string(want)) != decoded(got) {
 		t.Errorf("%s differs from the golden file (go test -update rewrites it)\n--- got\n%s\n--- want\n%s", path, got, want)
 	}
+}
+
+// decoded returns body with the data of each marker line as its JSON: Go
+// does not promise the same gzip bytes from one release to the next, so the
+// golden files compare what a marker holds, not how it was compressed.
+func decoded(body string) string {
+	lines := strings.Split(body, "\n")
+	for i, line := range lines {
+		if !strings.HasPrefix(line, "<!-- touchmark:") {
+			continue
+		}
+		m, err := marker.Parse(line)
+		if err != nil {
+			continue
+		}
+		js, err := json.Marshal(m.Data)
+		if err != nil {
+			continue
+		}
+		lines[i] = line[:strings.Index(line, " data=")] + " data=" + string(js) + " -->"
+	}
+	return strings.Join(lines, "\n")
 }
 
 // span is one code span of a line: its byte range and the text it shows.

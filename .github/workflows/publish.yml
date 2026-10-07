@@ -67,7 +67,7 @@ concurrency:
 env:
   GOTOOLCHAIN: local
   # The Go of the release builds: the newest the test matrix covers.
-  GO_VERSION: '1.26.x'
+  GO_VERSION: '1.27.x'
   IMAGE: ghcr.io/bedrock-python/touchmark
   # Who signs and attests a release: this workflow, run on master.
   SIGNER_WORKFLOW: bedrock-python/touchmark/.github/workflows/publish.yml

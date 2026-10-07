@@ -13,7 +13,7 @@ The accounts ([Security model](../concepts/security.md)): a **reader** for `plan
 How to read the tests column:
 
 - plain names run in `go test ./...` on every OS;
-- *(git 2.45)*: the test needs a git that `plan` and `distribute` support and skips on an older one; the Docker run of the suite (`golang:1.26`, git 2.47, [e2e.md](e2e.md#run)) runs it;
+- *(git 2.45)*: the test needs a git that `plan` and `distribute` support and skips on an older one; the Docker run of the suite (`golang:1.27`, git 2.47, [e2e.md](e2e.md#run)) runs it;
 - *(e2e Gitea)*, *(e2e GitLab)*: the live harnesses `scripts/e2e/gitea.sh` and `scripts/e2e/gitlab.sh` (build tag `e2e`);
 - *(GitHub fake)*: `ghfake`, an HTTP fake of GitHub; the live check waits for a GitHub sandbox organization, which does not exist yet ([e2e.md](e2e.md#github)).
 

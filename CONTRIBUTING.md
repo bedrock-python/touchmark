@@ -8,7 +8,7 @@ it adds. If you are unsure whether an idea fits, open an issue before the pull r
 
 ## Development setup
 
-You need Go 1.25 or newer (the `go` line of `go.mod`), git, [uv](https://docs.astral.sh/uv/)
+You need Go 1.26 or newer (the `go` line of `go.mod`), git, [uv](https://docs.astral.sh/uv/)
 for the documentation site, and Docker for the image and the live tests.
 
 ```bash
@@ -47,7 +47,7 @@ on Windows or macOS. With git older than 2.45, the tests of `distribute` skip, a
 comes out below the gate. To run the whole suite with a recent git from any OS:
 
 ```bash
-docker run --rm -v "$PWD:/src" -w /src golang:1.26 \
+docker run --rm -v "$PWD:/src" -w /src golang:1.27 \
   sh -c 'git config --global --add safe.directory /src && go test -race -timeout 45m ./...'
 ```
 

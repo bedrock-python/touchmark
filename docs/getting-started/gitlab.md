@@ -12,7 +12,7 @@ See [Set up a hub's platform](../guide/setup.md#gitlab).
 
 1. **Create the hub.** Choose *New project → Import project → Repository by URL* and give
    the URL of [the template](https://github.com/bedrock-python/engineering-assets-template),
-   or fork its mirror at `gitlab.com/bedrock-python/engineering-assets-template`.
+   `https://github.com/bedrock-python/engineering-assets-template.git`.
 2. **Create two service accounts** and add them to the groups that own your
    repositories. On instances without service accounts, use group access tokens. Keep
    the hub out of those groups: put it in a group or subgroup the accounts don't belong

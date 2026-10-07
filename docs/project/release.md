@@ -141,7 +141,7 @@ Once, when the template is first published:
 
 - *Settings → General*: tick **Template repository**.
 - *Settings → Actions → General*: **Disable actions**. The template's workflows are a hub's: they deliver from the default branch and check every pull request of a hub, and in the template itself, with the placeholder `id` and no keys, every run would fail (`check` rejects the placeholder by design). touchmark's own CI checks the template instead (`ci.yml`, job `template`). Dependabot's version updates still open pull requests there.
-- The GitLab mirror `gitlab.com/bedrock-python/engineering-assets-template` that the template's README offers: create it, and turn **CI/CD** off in its *Settings → General → Visibility, project features, permissions*, for the same reason. Keep it in sync from outside the template: a workflow placed in the template is copied into every hub created from it.
+- A GitLab mirror `gitlab.com/bedrock-python/engineering-assets-template`: create it, and turn **CI/CD** off in its *Settings → General → Visibility, project features, permissions*, for the same reason. Keep it in sync from outside the template: a workflow placed in the template is copied into every hub created from it. Offer it in the template's README and in [GitLab](../getting-started/gitlab.md) only once it exists; until then both give the template's URL on GitHub to import.
 
 ## Try a release locally
 

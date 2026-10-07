@@ -49,6 +49,28 @@ func TestAssumedOptIn(t *testing.T) {
 	if rep := unknown.report("status"); rep.Target.OptedIn || len(rep.Warnings) != 1 || !strings.Contains(rep.Warnings[0], "pass --repo") {
 		t.Errorf("a target without a name: %+v, warnings %q", rep.Target, rep.Warnings)
 	}
+
+	// --assume-opt-in settles what the org entry leaves open: the library
+	// counts as opted in, with the packs of targets.yml and no warning, and
+	// apply writes them. So does a target without a name.
+	libY := newRepo(t, false)
+	flagged := newScenario(t, "assumed", h, libY, "--repo", "acme/lib-y", "--assume-opt-in")
+	flagged.golden("status-flag.txt", flagged.text("status"))
+	if rep := flagged.report("status"); !rep.Target.OptedIn || rep.Target.OptIn != report.OptInFlag || len(rep.Warnings) != 0 {
+		t.Errorf("acme/lib-y with --assume-opt-in: %+v, warnings %q", rep.Target, rep.Warnings)
+	}
+	flagged.json("apply")
+	if tree := libY.tree(); !strings.Contains(tree, "AGENTS.md") {
+		t.Errorf("apply --assume-opt-in wrote no packs:\n%s", tree)
+	}
+	unnamed := newScenario(t, "assumed", h, newPlainDir(t), "--assume-opt-in")
+	if rep := unnamed.report("status"); !rep.Target.OptedIn || rep.Target.OptIn != report.OptInFlag || len(rep.Warnings) != 0 {
+		t.Errorf("a target without a name, with --assume-opt-in: %+v, warnings %q", rep.Target, rep.Warnings)
+	}
+	// A repo: entry that subscribes the target still says so.
+	if rep := newScenario(t, "assumed", h, newRepo(t, false), "--repo", "acme/svc", "--assume-opt-in").report("status"); rep.Target.OptIn != report.OptInAssumed {
+		t.Errorf("acme/svc with --assume-opt-in: opt_in %q, want %q", rep.Target.OptIn, report.OptInAssumed)
+	}
 }
 
 // An opt-in file with enabled: false opts the target out, whatever
@@ -62,6 +84,10 @@ func TestOptedOut(t *testing.T) {
 	s := newScenario(t, "opted-out", h, tg, "--repo", "acme/svc")
 	s.golden("status.txt", s.text("status"))
 	s.golden("apply.json", s.json("apply"))
+	if rep := newScenario(t, "opted-out", h, tg, "--repo", "acme/svc", "--assume-opt-in").report("status"); rep.Target.OptedIn ||
+		rep.Target.OptIn != report.OptInDisabled {
+		t.Errorf("enabled: false with --assume-opt-in: %+v", rep.Target)
+	}
 	if tree := tg.tree(); strings.Contains(tree, "AGENTS.md") {
 		t.Errorf("apply wrote into a target that opted out:\n%s", tree)
 	}

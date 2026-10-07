@@ -113,30 +113,43 @@ func (t *target) readOptIn(name string) error {
 // It then gets the packs of targets.yml, as if it had an empty opt-in
 // file. An org or group entry with opt_in: assumed that may hold the
 // target is a warning: only the platform tells whether it selects it, so
-// the target stays not opted in here, and plan has the answer.
-func (t *target) assume(h *hub) error {
+// the target stays not opted in here, and plan has the answer. flag
+// (--assume-opt-in) settles that here instead: the target counts as
+// opted in, as such an entry would make it. An opt-in file, enabled:
+// false included, still wins over the flag.
+func (t *target) assume(h *hub, flag bool) error {
 	if t.optInState != report.OptInNone {
 		return nil
 	}
+	var warning string
 	if !t.refKnown {
 		if h.targets != nil && (h.targets.Defaults.OptIn == config.OptInAssumed ||
 			slices.ContainsFunc(h.targets.Targets, func(e config.Entry) bool { return e.OptIn == config.OptInAssumed })) {
-			t.warnings = append(t.warnings, "targets.yml subscribes some repositories without an opt-in file (opt_in: assumed), "+
-				"and this one's name is unknown (no --repo and no origin remote): pass --repo to tell whether it is one of them")
+			warning = "targets.yml subscribes some repositories without an opt-in file (opt_in: assumed), " +
+				"and this one's name is unknown (no --repo and no origin remote): pass --repo to tell whether it is one of them, " +
+				"or --assume-opt-in to count it as one"
 		}
+	} else {
+		a, err := config.Assume(h.cfg, h.targets, t.ref)
+		if err != nil {
+			return configError(err)
+		}
+		if a.Assumed {
+			t.optIn, t.optInState = &config.OptIn{Version: 1}, report.OptInAssumed
+			return nil
+		}
+		if len(a.Unresolved) > 0 {
+			warning = fmt.Sprintf("targets.yml may subscribe this repository without an opt-in file: %s with opt_in: assumed "+
+				"cannot be resolved here, so it counts as not opted in; plan tells, and --assume-opt-in or an opt-in file decides it here",
+				strings.Join(a.Unresolved, ", "))
+		}
+	}
+	if flag {
+		t.optIn, t.optInState = &config.OptIn{Version: 1}, report.OptInFlag
 		return nil
 	}
-	a, err := config.Assume(h.cfg, h.targets, t.ref)
-	if err != nil {
-		return configError(err)
-	}
-	if a.Assumed {
-		t.optIn, t.optInState = &config.OptIn{Version: 1}, report.OptInAssumed
-		return nil
-	}
-	if len(a.Unresolved) > 0 {
-		t.warnings = append(t.warnings, fmt.Sprintf("targets.yml may subscribe this repository without an opt-in file: %s with opt_in: assumed "+
-			"cannot be resolved here, so it counts as not opted in; plan tells, and an opt-in file decides it here", strings.Join(a.Unresolved, ", ")))
+	if warning != "" {
+		t.warnings = append(t.warnings, warning)
 	}
 	return nil
 }

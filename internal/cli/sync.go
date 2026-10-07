@@ -111,7 +111,7 @@ func (s *syncRun) load(ctx context.Context) error {
 	if err := t.resolveRef(ctx, s.o.repo, h); err != nil {
 		return err
 	}
-	if err := t.assume(h); err != nil {
+	if err := t.assume(h, s.o.assumeOptIn); err != nil {
 		return err
 	}
 	s.hub, s.tgt = h, t

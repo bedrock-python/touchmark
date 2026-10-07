@@ -93,7 +93,7 @@ func commands() []*command {
 			flags:   probeFlags, run: runProbe},
 		migrateCommand(),
 		setupCommand(),
-		{name: "status", synopsis: "[--hub DIR] [--dir DIR] [--repo REF] [--packs a,b] [--worktree] [--format text|json]",
+		{name: "status", synopsis: "[--hub DIR] [--dir DIR] [--repo REF] [--packs a,b] [--assume-opt-in] [--worktree] [--format text|json]",
 			summary: "list every managed path of the target and its state; changes nothing",
 			flags:   statusFlags, run: runStatus},
 		{name: "apply", synopsis: "[status flags] [--adopt GLOB]... [--dry-run]",

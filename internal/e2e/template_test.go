@@ -26,7 +26,8 @@ import (
 //
 //  1. the hub: the template's files in one commit on main, as a migration
 //     makes it (the commit skips CI), in the organisation of hubs; the one
-//     change is the image of the jobs, the TODO(release) placeholder
+//     change is the image of the jobs, the template's pin (a release's
+//     digest, or the TODO(release) placeholder before the first release)
 //     replaced with the image under test in the same NAME:TAG@sha256 form;
 //     the reader's and the writer's tokens as the Actions secrets
 //     TOUCHMARK_READ_TOKEN and TOUCHMARK_WRITE_TOKEN (README "On Gitea or
@@ -304,18 +305,19 @@ func templateFiles(tpl map[string][]byte, replace map[string]string) []conforman
 	return files
 }
 
-// placeholderImage is a job's image in the template before a release pins
-// it.
-var placeholderImage = regexp.MustCompile(`(?m)^(\s*image: )ghcr\.io/bedrock-python/touchmark:[^@\s]+@sha256:0{64}$`)
+// templateImage is a job's touchmark image in the template: a release's,
+// pinned by digest, or before the first release the TODO(release)
+// placeholder, whose digest is all zeros.
+var templateImage = regexp.MustCompile(`(?m)^(\s*image: )ghcr\.io/bedrock-python/touchmark:[^@\s]+@sha256:[0-9a-f]{64}$`)
 
-// pinImages replaces every placeholder image of a workflow with image, as
-// a release's update does; the workflow must have one per job.
+// pinImages replaces every touchmark image of a workflow with image, as a
+// release's update does; the workflow must have one per job.
 func pinImages(t *testing.T, name, workflow, image string) string {
 	t.Helper()
-	if len(placeholderImage.FindAllString(workflow, -1)) == 0 {
-		t.Fatalf("%s has no placeholder image (image: ghcr.io/bedrock-python/touchmark:<tag>@sha256:0…)", name)
+	if len(templateImage.FindAllString(workflow, -1)) == 0 {
+		t.Fatalf("%s has no touchmark image (image: ghcr.io/bedrock-python/touchmark:<tag>@sha256:<digest>)", name)
 	}
-	return placeholderImage.ReplaceAllString(workflow, "${1}"+image)
+	return templateImage.ReplaceAllString(workflow, "${1}"+image)
 }
 
 // describeHub sets id and writer in the template's hub.yml, as README step

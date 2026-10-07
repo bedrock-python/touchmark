@@ -33,7 +33,8 @@ import (
 //  1. the hub: the template's files in one commit, as GitLab's import of a
 //     repository makes a project (no pipeline runs), in the group of hubs,
 //     with the instance runners off; the one change is the image line, the
-//     TODO(release) placeholder replaced with the image under test, in the
+//     template's pin (a release's digest, or the TODO(release) placeholder
+//     before the first release) replaced with the image under test, in the
 //     same NAME:TAG@sha256:<digest> form;
 //  2. `touchmark setup gitlab` from a clone of the hub, with the person's
 //     token (README "On GitLab", steps 2 to 4);
@@ -257,17 +258,19 @@ func templateFiles(tpl map[string][]byte, replace map[string]string) []conforman
 	return files
 }
 
-// placeholderImage is the template's image line before a release pins it.
-var placeholderImage = regexp.MustCompile(`(?m)^(\s*name: )ghcr\.io/bedrock-python/touchmark:[^@\s]+@sha256:0{64}$`)
+// templateImage is the template's touchmark image line: a release's,
+// pinned by digest, or before the first release the TODO(release)
+// placeholder, whose digest is all zeros.
+var templateImage = regexp.MustCompile(`(?m)^(\s*name: )ghcr\.io/bedrock-python/touchmark:[^@\s]+@sha256:[0-9a-f]{64}$`)
 
-// pinImage replaces the one placeholder image of the template's
+// pinImage replaces the one touchmark image of the template's
 // .gitlab-ci.yml with image, as a release's update does.
 func pinImage(t *testing.T, ci, image string) string {
 	t.Helper()
-	if n := len(placeholderImage.FindAllString(ci, -1)); n != 1 {
-		t.Fatalf("the template's .gitlab-ci.yml has %d placeholder image lines (name: ghcr.io/bedrock-python/touchmark:<tag>@sha256:0…), want 1", n)
+	if n := len(templateImage.FindAllString(ci, -1)); n != 1 {
+		t.Fatalf("the template's .gitlab-ci.yml has %d touchmark image lines (name: ghcr.io/bedrock-python/touchmark:<tag>@sha256:<digest>), want 1", n)
 	}
-	return placeholderImage.ReplaceAllString(ci, "${1}"+image)
+	return templateImage.ReplaceAllString(ci, "${1}"+image)
 }
 
 // describeHub sets id and writer in the template's hub.yml, as README step

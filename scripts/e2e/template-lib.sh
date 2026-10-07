@@ -97,9 +97,16 @@ tpl_image() {
 	tpl_pushed=localhost:$port/touchmark:0.0.0-e2e
 	docker tag "$image" "$tpl_pushed"
 	docker push -q "$tpl_pushed" >/dev/null || die "cannot push to the registry on localhost:$port"
-	digest=$(docker image inspect -f '{{range .RepoDigests}}{{println .}}{{end}}' "$tpl_pushed" |
-		sed -n "s|^localhost:$port/touchmark@\(sha256:[0-9a-f]\{64\}\)\$|\1|p" | head -n 1)
-	[ -n "$digest" ] || die "the pushed image has no digest of localhost:$port"
+	# The digest is the one the registry serves for the tag, not the one
+	# RepoDigests names: with the containerd image store, a multi-platform
+	# image pulled for one platform is pushed as that platform's manifest
+	# alone, while RepoDigests keeps the index's digest, which the registry
+	# then lacks (a runner that always pulls fails on it).
+	digest=$(docker exec "$tpl_registry" wget -S -q -O /dev/null \
+		--header 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json' \
+		"http://127.0.0.1:$port/v2/touchmark/manifests/0.0.0-e2e" 2>&1 |
+		sed -n 's/^ *[Dd]ocker-[Cc]ontent-[Dd]igest: *\(sha256:[0-9a-f]\{64\}\).*$/\1/p' | head -n 1)
+	[ -n "$digest" ] || die "the registry on localhost:$port serves no digest for $tpl_pushed"
 	tpl_image_ref=$tpl_pushed@$digest
 	log "touchmark image: $image, as $tpl_image_ref ($(docker run --rm --entrypoint touchmark "$tpl_image_ref" version 2>&1 | head -n 1))"
 }

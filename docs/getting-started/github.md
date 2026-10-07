@@ -8,7 +8,7 @@ writer App delivers from the default branch.
 your-org/engineering-assets              the hub: packs/, hub.yml, targets.yml
         │  one pull request per repository on every change to a pack
         ▼
-your-org/billing, your-org/sdk-python    opted in with .engineering-assets.yml
+your-org/billing, your-org/sdk-python    opted in, or subscribed by the hub
 ```
 
 `touchmark setup github`, run from a clone of the hub with an administrator's token,

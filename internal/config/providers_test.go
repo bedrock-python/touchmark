@@ -589,7 +589,7 @@ func TestOptInHash(t *testing.T) {
 	const (
 		empty      = "sha256:30e55501db0d69e2eacd8c683b38f517a65230d7627732f2b4aaedaf2f63604c" // "touchmark-optin/v1\nversion 1\n"
 		claude     = "sha256:baad60f2cace5239242fc31de906495bdfd4e21a8629223087b177a9ec6a1a69" // + "pack 6:claude\n"
-		documented = "sha256:878b7d2c14501ddfe4da33ea6dc86bf713fcc7c8aa058cac32ef882b2294d343" // + "ignore 21:.claude/settings.json\nignore 18:docs/guidelines/**\n"
+		documented = "sha256:6d10fe0a880c6cb1c134abc2f3f465e2ad755d81b1a9db34eca9c5e86e80c626" // + "ignore 21:.agents/guidelines/**\nignore 21:.claude/settings.json\n"
 		two        = "sha256:82593c8b5735ffd2640a700d424e7ee4852a70064723380f407f8e6d7955bf63" // "pack 6:agents\npack 6:claude\n"
 		nl         = "sha256:de2595845a1b2ac3af43a40dc997f83113d6432c7c776923866bc2f0804f216b" // "ignore 3:a\nb\n"
 		ab         = "sha256:6440ee73aaed31d625fb7536d288db75a82ff5a18d1ae2fc074889cb9c24d623" // "ignore 1:a\nignore 1:b\n"
@@ -606,7 +606,7 @@ func TestOptInHash(t *testing.T) {
 		{"legacy", &OptIn{Version: 1, Legacy: true}, empty},
 		{"empty lists", &OptIn{Version: 1, Packs: []string{}, Ignore: []string{}}, empty},
 		{"a pack", &OptIn{Packs: []string{"claude"}}, claude},
-		{"documented example", &OptIn{Version: 1, Packs: []string{"claude"}, Ignore: []string{"docs/guidelines/**", ".claude/settings.json"}}, documented},
+		{"documented example", &OptIn{Version: 1, Packs: []string{"claude"}, Ignore: []string{".agents/guidelines/**", ".claude/settings.json"}}, documented},
 		{"sorted and deduplicated", &OptIn{Packs: []string{"claude", "agents", "claude"}}, two},
 		{"a pattern with a newline", &OptIn{Ignore: []string{"a\nb"}}, nl},
 		{"two patterns", &OptIn{Ignore: []string{"b", "a", "./a/", " b "}}, ab},
@@ -621,9 +621,9 @@ func TestOptInHash(t *testing.T) {
 	// Comments, order, formatting, duplicates and the version key do not
 	// change the hash of a parsed file.
 	same := []string{
-		"version: 1\npacks: [claude]\nignore:\n  - .claude/settings.json\n  - docs/guidelines/**\n",
-		"# The team's choice.\nignore: ['./docs/guidelines/**', '.claude/settings.json/', .claude/settings.json]\npacks:\n  - claude   # reviewed\n  - claude\n",
-		"version: 1\r\nignore: [\"docs\\\\guidelines\\\\**\", \" .claude/settings.json \"]\r\npacks: [claude]\r\n",
+		"version: 1\npacks: [claude]\nignore:\n  - .claude/settings.json\n  - .agents/guidelines/**\n",
+		"# The team's choice.\nignore: ['./.agents/guidelines/**', '.claude/settings.json/', .claude/settings.json]\npacks:\n  - claude   # reviewed\n  - claude\n",
+		"version: 1\r\nignore: [\".agents\\\\guidelines\\\\**\", \" .claude/settings.json \"]\r\npacks: [claude]\r\n",
 	}
 	for _, text := range same {
 		o, _, err := ParseOptIn([]byte(text))

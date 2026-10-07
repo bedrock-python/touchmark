@@ -59,7 +59,7 @@ version: 1
 packs: [claude]
 ignore:
   - .claude/settings.json
-  - docs/guidelines/**
+  - .agents/guidelines/**
 ```
 
 - `packs` adds packs. A pack that does not exist in the hub blocks the target with

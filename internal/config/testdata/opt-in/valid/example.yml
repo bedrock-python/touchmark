@@ -3,4 +3,4 @@ version: 1
 packs: [claude]          # in addition to what the hub assigns
 ignore:
   - .claude/settings.json
-  - docs/guidelines/**
+  - .agents/guidelines/**

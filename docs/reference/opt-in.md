@@ -11,7 +11,7 @@ version: 1
 packs: [claude]                 # in addition to what the hub assigns
 ignore:
   - .claude/settings.json       # this repository keeps its own
-  - docs/guidelines/**
+  - .agents/guidelines/**
 ```
 
 - `enabled: false` opts the repository out, whatever `targets.yml` says: it is skipped

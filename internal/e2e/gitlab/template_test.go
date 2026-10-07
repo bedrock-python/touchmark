@@ -150,7 +150,7 @@ func TestTemplate(t *testing.T) {
 			t.Errorf("%s: open merge requests %v, want one on touchmark/%s by %s", p.PathWithNamespace, got, id, rep.Writer)
 			continue
 		}
-		if !e.fileExists(t, p.ID, "touchmark/"+id, "AGENTS.md") || !e.fileExists(t, p.ID, "touchmark/"+id, "docs/guidelines/database.md") {
+		if !e.fileExists(t, p.ID, "touchmark/"+id, "AGENTS.md") || !e.fileExists(t, p.ID, "touchmark/"+id, ".agents/guidelines/database.md") {
 			t.Errorf("%s: the sync branch lacks the packs' files", p.PathWithNamespace)
 		}
 	}

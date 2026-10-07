@@ -11,7 +11,7 @@ version: 1
 packs: [claude]                 # in addition to what the hub assigns
 ignore:
   - .claude/settings.json       # we keep our own
-  - docs/guidelines/**
+  - .agents/guidelines/**
 ```
 
 Commit it to the default branch. The next `distribute` run opens a sync pull request with

@@ -49,7 +49,7 @@ current version and receive updates again:
 
 ```sh
 touchmark apply --hub ~/src/engineering-assets --adopt AGENTS.md
-touchmark apply --hub ~/src/engineering-assets --adopt 'docs/guidelines/**'
+touchmark apply --hub ~/src/engineering-assets --adopt '.agents/guidelines/**'
 ```
 
 `--adopt` takes a glob and repeats. `ignore` in the opt-in file is stronger: an ignored

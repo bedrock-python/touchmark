@@ -53,7 +53,7 @@
 #
 # (internal/e2e/gitlab skips without its GitLab; internal/e2e/github needs
 # no server and runs in the ordinary unit suite, so it is left out) in
-# golang:1.26 inside the forge container's network namespace. touchmark
+# golang:1.27 inside the forge container's network namespace. touchmark
 # sends a credential over plain http only to loopback
 # (docs/project/threat-model.md, "Tokens and git"), so the tests reach the
 # forge at http://localhost:3000, which is also its ROOT_URL: clone URLs in
@@ -80,7 +80,7 @@ readonly SUPPORTED_IMAGES=(
 	codeberg.org/forgejo/forgejo:15.0.9
 	codeberg.org/forgejo/forgejo:16.0.5
 )
-readonly GO_IMAGE=${TOUCHMARK_E2E_GO_IMAGE:-golang:1.26}
+readonly GO_IMAGE=${TOUCHMARK_E2E_GO_IMAGE:-golang:1.27}
 # Gitea's runner for --template (gitea.com/gitea/runner, formerly
 # act_runner), pinned by digest.
 readonly RUNNER_IMAGE=docker.gitea.com/runner:4.1.0@sha256:131ff842ec12453108f1c1a454031c325d3c95e4af459979a2e303e12d99c98c

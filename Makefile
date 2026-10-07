@@ -11,9 +11,9 @@ SHELL := bash
 GOLANGCI_LINT_VERSION := v2.14.0
 GOVULNCHECK_VERSION := v1.8.0
 # The goreleaser of publish.yml, in its image as docs/project/release.md runs
-# it. The image brings its own Go (1.27 in v2.18.2), where publish.yml builds
-# with 1.26: a snapshot checks the configuration and the files, not the bytes
-# of a release.
+# it. The image brings its own Go (1.27 in v2.18.2), the same minor as
+# publish.yml's; a snapshot checks the configuration and the files, not the
+# bytes of a release.
 GORELEASER_IMAGE := goreleaser/goreleaser:v2.18.2@sha256:7077423cf5ef643ff56a34b58f93c1364e927e5c3dfa470eeabc44cab1a9c72b
 
 # A golangci-lint on PATH runs when it is the pinned version; otherwise go run

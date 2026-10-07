@@ -299,7 +299,7 @@ Print the JSON Schema of a configuration file or of a report.
 ### version
 
 ```text
-touchmark v0.1.0 (go1.26.8 linux/amd64, commit 3f2a…, 2026-10-01T12:00:00Z)
+touchmark v0.1.0 (go1.27.1 linux/amd64, commit 3f2a…, 2026-10-01T12:00:00Z)
 ```
 
 <!-- generated: help version -->

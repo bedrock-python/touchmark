@@ -4,7 +4,7 @@
 
 ## Run
 
-You need Docker and bash (Git Bash on Windows). Nothing else: the tests run in `golang:1.26`.
+You need Docker and bash (Git Bash on Windows). Nothing else: the tests run in `golang:1.27`.
 
 ```sh
 bash scripts/e2e/gitea.sh docker.gitea.com/gitea:1.27.3
@@ -37,7 +37,7 @@ The flavor comes from the image name. One image takes 8 to 10 minutes, the build
    | `jdoe` | person | `write:repository,write:issue,read:user` |
 
 4. Creates the private organisation `acme`: the team `readers` gives the reader read access to code, issues and pull requests, the team `writers` gives the writer write access, and `jdoe` is an owner. The script checks all of this through the API, and that the reader and the writer cannot create repositories.
-5. Runs `go test -tags e2e -count=1 -race -v ./internal/e2e ./internal/e2e/gitlab` in `golang:1.26`, in the server container's network namespace (`internal/e2e/github` needs no server: the unit suite runs it).
+5. Runs `go test -tags e2e -count=1 -race -v ./internal/e2e ./internal/e2e/gitlab` in `golang:1.27`, in the server container's network namespace (`internal/e2e/github` needs no server: the unit suite runs it).
 
 touchmark sends a credential over plain http only to loopback ([Tokens and git](threat-model.md#tokens-and-git)). So the tests reach the server at `http://localhost:3000`, and that is also its `ROOT_URL`, so clone URLs in API answers work.
 
@@ -150,7 +150,7 @@ A cold GitLab boots in 3 to 6 minutes on a Linux host with 4 CPUs (expected; not
 ### What the script does
 
 1. Creates the network `touchmark-e2e-<rand>` and starts GitLab as `touchmark-e2e-gitlab`: `external_url http://localhost`, Puma in single mode, 10 Sidekiq threads, no Prometheus and exporters, registry, Pages or KAS, `--shm-size 256m`, `--memory 4608m`. `GITLAB_OMNIBUS_CONFIG` holds no secret: it stays in the container's configuration (`docker inspect`) for the container's life. Omnibus generates root's password, which nothing uses (root's token comes from a `gitlab-rails runner` script), and the script deletes `/etc/gitlab/initial_root_password` once GitLab is ready.
-2. Builds a linux `touchmark` from the working tree in `golang:1.26` into the volume `touchmark-e2e-<rand>-bin` while GitLab boots.
+2. Builds a linux `touchmark` from the working tree in `golang:1.27` into the volume `touchmark-e2e-<rand>-bin` while GitLab boots.
 3. Waits for `/-/readiness?all=1` and for the API (at most 15 minutes, printing progress and memory every 30 seconds).
 4. Seeds, and checks through the API:
 
@@ -163,7 +163,7 @@ A cold GitLab boots in 3 to 6 minutes on a Linux host with 4 CPUs (expected; not
 
    Which path an image takes, checked on 2026-09-27: CE 18.11.12 answers 404 to `GET /service_accounts` (there the API is EE code, `ee/lib/api/service_accounts.rb`, which the `gitlab-ce` image lacks), so its reader and writer are group access token bots (`group_<id>_bot_<hex>`); CE 19.4.1 has instance service accounts (`touchmark-reader`, `touchmark-writer`). The script logs the path, and the tests get it in `TOUCHMARK_E2E_GITLAB_ACCOUNTS`. The checks: every token acts as its account, only root is an administrator, the scopes by `GET /personal_access_tokens/self`, the roles by the reader's `GET /groups/:id/members/all/:user_id` in `acme` and `acme/sub`, and the reader cannot create a project.
 5. Creates an instance runner with `POST /user/runners` (a `glrt-` token), starts `gitlab/gitlab-runner` of the same minor in GitLab's network namespace with the binary at `/opt/touchmark/touchmark`, registers it with the shell executor (the token reaches `gitlab-runner register` through the environment) and waits until GitLab reports it `online`.
-6. Runs `go test -tags e2e -count=1 -race -v ./internal/e2e/gitlab/...` in `golang:1.26`, in GitLab's network namespace.
+6. Runs `go test -tags e2e -count=1 -race -v ./internal/e2e/gitlab/...` in `golang:1.27`, in GitLab's network namespace.
 
 touchmark sends a credential over plain http only to loopback ([Tokens and git](threat-model.md#tokens-and-git)). So GitLab's `external_url` is `http://localhost`, and the tests and the runner share its network namespace: clone URLs in API answers and `CI_SERVER_URL` in jobs are the URL touchmark uses. GitLab's nginx listens on IPv4 only; Go, git and curl fall back from `::1` to `127.0.0.1`, busybox `wget` does not.
 
@@ -270,7 +270,7 @@ bash scripts/e2e/gitea.sh --template ../engineering-assets-template --run TestTe
 bash scripts/e2e/gitlab.sh --template ../engineering-assets-template --touchmark-image ghcr.io/bedrock-python/touchmark@sha256:<digest> --run TestTemplate gitlab/gitlab-ce:18.11.12-ce.0
 # the GitHub workflow: a dry run against the fake, Linux only (the Action needs a Linux runner)
 docker run --rm --name touchmark-e2e-template-github -v "$PWD:/src:ro" -v "$PWD/../engineering-assets-template:/template:ro" -w /src \
-  -e TOUCHMARK_E2E_TEMPLATE=/template golang:1.26 \
+  -e TOUCHMARK_E2E_TEMPLATE=/template golang:1.27 \
   sh -c 'git config --global --add safe.directory /src && go test -count=1 -run TestTemplateWorkflow ./internal/e2e/github/'
 ```
 
@@ -279,7 +279,7 @@ Without `--run`, `--template` adds `TestTemplate` to the whole suite. Without `-
 ### What `--template` adds (`scripts/e2e/template-lib.sh`)
 
 1. The touchmark image: built from the working tree's `Dockerfile` (`BINARY=source`), or `--touchmark-image`, pulled. It is pushed to a registry (`registry:3.1.2`, by digest) that listens on `127.0.0.1:<random port>` in the Docker host's network namespace, as `localhost:<port>/touchmark:0.0.0-e2e@sha256:<digest>`: the `NAME:TAG@sha256:<digest>` form the template pins the release image in. The Docker daemon pulls from a registry on localhost without TLS.
-2. A forwarder (`scripts/e2e/loopback.go`, built and run in `golang:1.26` with `--network host`) on `127.0.0.1` and `[::1]` of the Docker host's network namespace, at the forge's port (80, 3000), to the forge's address on the run's network. The runners start the job containers in that namespace (network mode `host`), so the jobs reach the forge at its external URL, `http://localhost` or `http://localhost:3000`, the only plain-http host touchmark sends a credential to. A job container cannot join the forge's network namespace instead: GitLab's Docker executor gives every container a hostname, and Docker refuses `--hostname` with `--network container:<name>` ("conflicting options: hostname and the network mode", checked on Docker 29.3). On Docker Desktop, that namespace is the Linux VM's, not the desktop's, and nothing is published on the desktop.
+2. A forwarder (`scripts/e2e/loopback.go`, built and run in `golang:1.27` with `--network host`) on `127.0.0.1` and `[::1]` of the Docker host's network namespace, at the forge's port (80, 3000), to the forge's address on the run's network. The runners start the job containers in that namespace (network mode `host`), so the jobs reach the forge at its external URL, `http://localhost` or `http://localhost:3000`, the only plain-http host touchmark sends a credential to. A job container cannot join the forge's network namespace instead: GitLab's Docker executor gives every container a hostname, and Docker refuses `--hostname` with `--network container:<name>` ("conflicting options: hostname and the network mode", checked on Docker 29.3). On Docker Desktop, that namespace is the Linux VM's, not the desktop's, and nothing is published on the desktop.
 3. The runner:
    - GitLab: `touchmark-e2e-gitlab-image-runner`, the `gitlab/gitlab-runner` image of the GitLab minor with the Docker socket, registered as a group runner of the group `hubs` (the person is its Owner): Docker executor, network mode `host`, `disable_cache` (no volumes left behind), the image under test as its default image. The template's hub turns the instance runners off, so only this runner runs its jobs. The runner pulls its helper image from `registry.gitlab.com` on the first job.
    - Gitea: `touchmark-e2e-<rand>-actions`, Gitea's runner (`docker.gitea.com/runner:4.1.0`, by digest, formerly `act_runner`) with the Docker socket, registered for the instance with a token from `gitea actions generate-runner-token`: `container.network: host`, `docker_host: "-"` (jobs get no Docker socket), the cache server off. The organisation `hubs`, with the person as an owner, holds the hub.
@@ -322,10 +322,10 @@ go test ./internal/e2e/github/                            # conformance as githu
 TOUCHMARK_HEAVY_TESTS=1 go test ./internal/e2e/github/    # also the conformance as GHES outside Linux
 ```
 
-`TestDistribute` and `TestDistributeUnsigned` run `distribute`, which needs git 2.45 or later: on an older git they skip, and the Docker run of the unit suite (`golang:1.26`, git 2.47) covers them:
+`TestDistribute` and `TestDistributeUnsigned` run `distribute`, which needs git 2.45 or later: on an older git they skip, and the Docker run of the unit suite (`golang:1.27`, git 2.47) covers them:
 
 ```sh
-docker run --rm --name touchmark-e2e-unit-suite -v "$PWD:/src" -w /src golang:1.26 \
+docker run --rm --name touchmark-e2e-unit-suite -v "$PWD:/src" -w /src golang:1.27 \
   sh -c 'git config --global --add safe.directory /src; go test -race -count=1 -timeout 45m ./...'
 ```
 

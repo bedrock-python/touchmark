@@ -77,7 +77,7 @@
 #
 #   go test -tags e2e -count=1 -race -v ./internal/e2e/gitlab/...
 #
-# in golang:1.26. touchmark sends a credential over plain http only to
+# in golang:1.27. touchmark sends a credential over plain http only to
 # loopback (docs/project/threat-model.md, "Tokens and git"), so the tests and
 # the runner share GitLab's network namespace and reach it at
 # http://localhost, its external_url: clone URLs in API answers and
@@ -109,7 +109,7 @@ readonly SUPPORTED_IMAGES=(
 	gitlab/gitlab-ce:18.11.12-ce.0
 	gitlab/gitlab-ce:19.4.1-ce.0
 )
-readonly GO_IMAGE=${TOUCHMARK_E2E_GO_IMAGE:-golang:1.26}
+readonly GO_IMAGE=${TOUCHMARK_E2E_GO_IMAGE:-golang:1.27}
 readonly TEST_TIMEOUT=${TOUCHMARK_E2E_TEST_TIMEOUT:-45m}
 readonly READY_TIMEOUT=${TOUCHMARK_E2E_READY_TIMEOUT:-900}
 readonly URL=http://localhost

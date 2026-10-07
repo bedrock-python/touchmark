@@ -63,7 +63,7 @@ jobs:
         with:
           persist-credentials: false
 
-      # The GitLab image takes about 6 GB on disk, the runner and golang:1.26
+      # The GitLab image takes about 6 GB on disk, the runner and golang:1.27
       # 3 GB more: drop the preinstalled SDKs the job never uses.
       - name: Free disk space
         run: |
@@ -72,7 +72,7 @@ jobs:
           df -h /
 
       # The script starts GitLab and a runner, seeds them and runs go test
-      # in golang:1.26 next to them; it removes everything it created on
+      # in golang:1.27 next to them; it removes everything it created on
       # exit.
       - name: scripts/e2e/gitlab.sh
         env:

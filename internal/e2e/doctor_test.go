@@ -175,9 +175,15 @@ func TestDoctor(t *testing.T) {
 	want("provider", pc, "token-expiry", report.StatusOK, "no expiry date")
 	want("provider", pc, "2fa", report.StatusUnknown, "do not show")
 	want("provider", pc, "hub-hidden", report.StatusWarn, "sees the private hub")
+	// Gitea shows a token's scopes from 1.27 on; older Gitea and Forgejo
+	// leave them unknown.
 	scopes := check("provider", pc, "scopes")
-	if e.Flavor == "gitea" && scopes.Status != report.StatusOK {
-		t.Errorf("scopes on Gitea: %s %q", scopes.Status, scopes.Detail)
+	if v := forgeVersion(t, e); !v.Forgejo && v.atLeast(1, 27) {
+		if scopes.Status != report.StatusOK {
+			t.Errorf("scopes on %s: %s %q", v, scopes.Status, scopes.Detail)
+		}
+	} else if !v.Forgejo && (scopes.Status != report.StatusUnknown || !strings.Contains(scopes.Detail, "1.27 and later")) {
+		t.Errorf("scopes on %s: %s %q, want unknown", v, scopes.Status, scopes.Detail)
 	}
 	finding(t, "doctor-scopes", "the writer's scopes: %s %q", scopes.Status, scopes.Detail)
 

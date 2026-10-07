@@ -55,8 +55,8 @@
 #     has instance service accounts. The script logs which path it took,
 #     and the tests get it in TOUCHMARK_E2E_GITLAB_ACCOUNTS;
 #   - the person jdoe, an owner of acme, with a personal access token;
-#   - an instance runner (gitlab/gitlab-runner of the same minor, shell
-#     executor), registered with a runner authentication token from
+#   - an instance runner (gitlab/gitlab-runner of the same minor, Alpine,
+#     shell executor), registered with a runner authentication token from
 #     POST /user/runners, with a linux touchmark built from the working tree
 #     at /opt/touchmark/touchmark.
 #
@@ -592,12 +592,13 @@ build_touchmark() {
 }
 
 # runner_image is the runner of the minor of the GitLab image; a runner
-# works with GitLab of its own minor and older.
+# works with GitLab of its own minor and older. The Alpine flavour: its git
+# (2.47 to 2.54) runs plan, which needs 2.45; the Ubuntu one has 2.43.
 runner_image() {
 	case $image in
-	*:17.11.*) echo gitlab/gitlab-runner:v17.11.4 ;;
-	*:18.11.*) echo gitlab/gitlab-runner:v18.11.4 ;;
-	*) echo gitlab/gitlab-runner:v19.4.1 ;;
+	*:17.11.*) echo gitlab/gitlab-runner:alpine-v17.11.4 ;;
+	*:18.11.*) echo gitlab/gitlab-runner:alpine-v18.11.4 ;;
+	*) echo gitlab/gitlab-runner:alpine-v19.4.1 ;;
 	esac
 }
 

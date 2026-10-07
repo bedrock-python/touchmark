@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0](https://github.com/bedrock-python/touchmark/compare/v0.1.0...v0.2.0) (2026-10-07)
+
+
+### Features
+
+* **cli:** --assume-opt-in for status and apply ([#12](https://github.com/bedrock-python/touchmark/issues/12)) ([fd79d01](https://github.com/bedrock-python/touchmark/commit/fd79d0132859d594f4bd7b2048a1051e7d0f0b81))
+
 ## 0.1.0 (2026-10-07)
 
 

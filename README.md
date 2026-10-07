@@ -23,8 +23,8 @@ Three ways in, one version number:
 
 | | | |
 |---|---|---|
-| **GitHub Action** | `uses: bedrock-python/touchmark@<commit> # v0.1.0` | The hub's workflows on GitHub. Runs the release's image by digest, after checking its build provenance. [The Action](https://bedrock-python.github.io/touchmark/reference/action/) |
-| **Container image** | `ghcr.io/bedrock-python/touchmark:0.1.0` | GitLab CI, Gitea and Forgejo Actions, `docker run`: touchmark and git on Alpine, as a non-root user. [Run it in CI](https://bedrock-python.github.io/touchmark/guide/ci/) |
+| **GitHub Action** | `uses: bedrock-python/touchmark@<commit> # v0.2.0` | The hub's workflows on GitHub. Runs the release's image by digest, after checking its build provenance. [The Action](https://bedrock-python.github.io/touchmark/reference/action/) |
+| **Container image** | `ghcr.io/bedrock-python/touchmark:0.2.0` | GitLab CI, Gitea and Forgejo Actions, `docker run`: touchmark and git on Alpine, as a non-root user. [Run it in CI](https://bedrock-python.github.io/touchmark/guide/ci/) |
 | **Binary** | [Releases](https://github.com/bedrock-python/touchmark/releases) | Linux, macOS and Windows on amd64 and arm64, one static binary; or `go install github.com/bedrock-python/touchmark/cmd/touchmark@latest` with Go 1.26 or newer. [Installation](https://bedrock-python.github.io/touchmark/getting-started/installation/) |
 
 <!-- x-release-please-end -->
@@ -75,7 +75,7 @@ Three ways in, one version number:
 <!-- x-release-please-start-version -->
 ```bash
 # The binary for your platform, from the release
-v=0.1.0
+v=0.2.0
 curl -fsSLO "https://github.com/bedrock-python/touchmark/releases/download/v$v/touchmark_${v}_linux_amd64.tar.gz"
 tar -xzf "touchmark_${v}_linux_amd64.tar.gz" touchmark
 
@@ -83,7 +83,7 @@ tar -xzf "touchmark_${v}_linux_amd64.tar.gz" touchmark
 go install github.com/bedrock-python/touchmark/cmd/touchmark@latest
 
 # The image
-docker pull ghcr.io/bedrock-python/touchmark:0.1.0
+docker pull ghcr.io/bedrock-python/touchmark:0.2.0
 ```
 <!-- x-release-please-end -->
 
@@ -164,7 +164,7 @@ runs the Action; its plan step on a hub pull request:
 
 <!-- x-release-please-start-version -->
 ```yaml
-- uses: bedrock-python/touchmark@<commit> # v0.1.0
+- uses: bedrock-python/touchmark@<commit> # v0.2.0
   with:
     command: plan
     strict: true

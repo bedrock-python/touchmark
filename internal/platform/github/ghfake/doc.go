@@ -189,6 +189,8 @@
 //	    name 'o/n'." with HTTP 200 and the other aliases' data
 //	  validation errors: path from "query [Name]", extensions   observed (undefinedField)
 //	    code, no data
+//	  Int is a signed 32-bit integer: a literal or variable      docs (GraphQL spec, Int)
+//	    out of range fails validation or coercion
 //	  a declared variable not used: variableNotUsed, "Variable   observed
 //	    $v is declared by anonymous query but not used"
 //	  object(expression): Blob for files and symlinks (the link  observed (a public repository)

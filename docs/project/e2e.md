@@ -7,9 +7,9 @@
 You need Docker and bash (Git Bash on Windows). Nothing else: the tests run in `golang:1.27`.
 
 ```sh
-bash scripts/e2e/gitea.sh docker.gitea.com/gitea:1.27.3
+bash scripts/e2e/gitea.sh docker.gitea.com/gitea:28.1.0
 bash scripts/e2e/gitea.sh codeberg.org/forgejo/forgejo:16.0.5
-bash scripts/e2e/gitea.sh all                          # Gitea 1.26.4, 1.27.3, Forgejo 15.0.9 (LTS), 16.0.5
+bash scripts/e2e/gitea.sh all                          # Gitea 1.26.4, 1.27.3, 28.1.0, Forgejo 15.0.9 (LTS), 16.0.5
 bash scripts/e2e/gitea.sh --run TestFacts all          # one test, every image
 bash scripts/e2e/gitea.sh --keep docker.gitea.com/gitea:1.26.4
 bash scripts/e2e/gitea.sh --require-signin --run TestVisibility all
@@ -109,7 +109,7 @@ Each test prints what it learned as `FINDING` lines. The run ends with a summary
 
 ## CI
 
-The job `e2e-forge` in `.github/workflows/ci.yml` runs the script once per image: the latest Gitea and Forgejo (1.27.3 and 16.0.5) on every pull request and push, all four images nightly and on `workflow_dispatch`. The lint job of every CI run vets the module with the tag `e2e` (`go vet -tags e2e ./...`) for Linux, macOS and Windows, so the tests always compile. `e2e-forge` itself is outside the required check `All checks passed`: it pulls the forges' images from their own registries, whose outage should not block a merge; read its result before merging.
+The job `e2e-forge` in `.github/workflows/ci.yml` runs the script once per image: the latest Gitea and Forgejo (28.1.0 and 16.0.5) on every pull request and push, all five images nightly and on `workflow_dispatch`. The lint job of every CI run vets the module with the tag `e2e` (`go vet -tags e2e ./...`) for Linux, macOS and Windows, so the tests always compile. `e2e-forge` itself is outside the required check `All checks passed`: it pulls the forges' images from their own registries, whose outage should not block a merge; read its result before merging.
 
 ## Without the script
 
@@ -143,7 +143,7 @@ bash scripts/e2e/gitlab.sh --only-seed gitlab/gitlab-ce:17.11.7-ce.0   # boot, s
 bash scripts/e2e/gitlab.sh --only-seed --keep gitlab/gitlab-ce:18.11.12-ce.0
 ```
 
-A cold GitLab boots in 3 to 6 minutes on a Linux host with 4 CPUs (expected; not yet measured on a hosted runner). Docker Desktop on Windows took 10 to 12 minutes for 17.11.7 and 19.4.1 on 2026-09-27, and 16 for 18.11.12 with other containers busy: raise the 15-minute wait with `TOUCHMARK_E2E_READY_TIMEOUT` (seconds) on a slow machine. The runner image matches the GitLab minor (`gitlab/gitlab-runner:v17.11.4`, `v18.11.4`, `v19.4.1`); the script pulls it when it is missing.
+A cold GitLab boots in 3 to 6 minutes on a Linux host with 4 CPUs (expected; not yet measured on a hosted runner). Docker Desktop on Windows took 10 to 12 minutes for 17.11.7 and 19.4.1 on 2026-09-27, and 16 for 18.11.12 with other containers busy: raise the 15-minute wait with `TOUCHMARK_E2E_READY_TIMEOUT` (seconds) on a slow machine. The runner image matches the GitLab minor (`gitlab/gitlab-runner:alpine-v17.11.4`, `alpine-v18.11.4`, `alpine-v19.4.1`): the Alpine images have git 2.47 to 2.54, and the jobs that run `plan` need 2.45, which the Ubuntu images (git 2.43) lack. The script pulls the image when it is missing.
 
 `--keep` leaves GitLab, the runner, the network, the volume with the binary and the env file with the tokens in place, publishes GitLab on a loopback port and prints how to rerun the tests and how to remove everything. `--only-seed` stops after the seeding and its checks; with `--keep` it gives a seeded instance to work against. Without `--keep`, the script removes all it created on exit, also after a failure or Ctrl-C: the containers with their anonymous volumes (the GitLab image declares `/etc/gitlab`, `/var/log/gitlab` and `/var/opt/gitlab`, about 0.5 GB per run; the runner image `/etc/gitlab-runner` and `/home/gitlab-runner`), the network, the volume with the binary and the env file. `gitea.sh` removes the forge's `/data` volume the same way.
 
@@ -162,7 +162,7 @@ A cold GitLab boots in 3 to 6 minutes on a Linux host with 4 CPUs (expected; not
    | `jdoe` | a person, with a personal access token | Owner | `api, read_user, read_repository, write_repository` |
 
    Which path an image takes, checked on 2026-09-27: CE 18.11.12 answers 404 to `GET /service_accounts` (there the API is EE code, `ee/lib/api/service_accounts.rb`, which the `gitlab-ce` image lacks), so its reader and writer are group access token bots (`group_<id>_bot_<hex>`); CE 19.4.1 has instance service accounts (`touchmark-reader`, `touchmark-writer`). The script logs the path, and the tests get it in `TOUCHMARK_E2E_GITLAB_ACCOUNTS`. The checks: every token acts as its account, only root is an administrator, the scopes by `GET /personal_access_tokens/self`, the roles by the reader's `GET /groups/:id/members/all/:user_id` in `acme` and `acme/sub`, and the reader cannot create a project.
-5. Creates an instance runner with `POST /user/runners` (a `glrt-` token), starts `gitlab/gitlab-runner` of the same minor in GitLab's network namespace with the binary at `/opt/touchmark/touchmark`, registers it with the shell executor (the token reaches `gitlab-runner register` through the environment) and waits until GitLab reports it `online`.
+5. Creates an instance runner with `POST /user/runners` (a `glrt-` token), starts `gitlab/gitlab-runner` (Alpine) of the same minor in GitLab's network namespace with the binary at `/opt/touchmark/touchmark`, registers it with the shell executor (the token reaches `gitlab-runner register` through the environment) and waits until GitLab reports it `online`.
 6. Runs `go test -tags e2e -count=1 -race -v ./internal/e2e/gitlab/...` in `golang:1.27`, in GitLab's network namespace.
 
 touchmark sends a credential over plain http only to loopback ([Tokens and git](threat-model.md#tokens-and-git)). So GitLab's `external_url` is `http://localhost`, and the tests and the runner share its network namespace: clone URLs in API answers and `CI_SERVER_URL` in jobs are the URL touchmark uses. GitLab's nginx listens on IPv4 only; Go, git and curl fall back from `::1` to `127.0.0.1`, busybox `wget` does not.

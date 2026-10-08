@@ -7,8 +7,8 @@
 #        [--template DIR [--touchmark-image REF]] IMAGE|all
 #
 #   IMAGE       a Gitea or Forgejo image, told apart by its name:
-#               docker.gitea.com/gitea:1.27.3, codeberg.org/forgejo/forgejo:16.0.5, ...
-#   all         the four supported images, one after the other
+#               docker.gitea.com/gitea:28.1.0, codeberg.org/forgejo/forgejo:16.0.5, ...
+#   all         the five supported images, one after the other
 #   --keep      keep the forge, its network and an env file with the tokens
 #               for debugging, and publish the forge on a loopback port; the
 #               script prints how to reach and remove them
@@ -77,6 +77,7 @@ export MSYS_NO_PATHCONV=1
 readonly SUPPORTED_IMAGES=(
 	docker.gitea.com/gitea:1.26.4
 	docker.gitea.com/gitea:1.27.3
+	docker.gitea.com/gitea:28.1.0
 	codeberg.org/forgejo/forgejo:15.0.9
 	codeberg.org/forgejo/forgejo:16.0.5
 )
@@ -332,12 +333,12 @@ seed() {
 
 	api "$admin_token" POST /orgs \
 		"{\"username\":\"$ORG\",\"visibility\":\"private\",\"repo_admin_change_team_access\":false}" >/dev/null
-	local units='"units":["repo.code","repo.issues","repo.pulls"]'
+	# units_map only: Gitea 28 refuses a team with both units and units_map.
 	readers_id=$(api "$admin_token" POST "/orgs/$ORG/teams" \
-		"{\"name\":\"readers\",\"permission\":\"read\",\"includes_all_repositories\":true,\"can_create_org_repo\":false,$units,\"units_map\":{\"repo.code\":\"read\",\"repo.issues\":\"read\",\"repo.pulls\":\"read\"}}" |
+		"{\"name\":\"readers\",\"permission\":\"read\",\"includes_all_repositories\":true,\"can_create_org_repo\":false,\"units_map\":{\"repo.code\":\"read\",\"repo.issues\":\"read\",\"repo.pulls\":\"read\"}}" |
 		json_id)
 	writers_id=$(api "$admin_token" POST "/orgs/$ORG/teams" \
-		"{\"name\":\"writers\",\"permission\":\"write\",\"includes_all_repositories\":true,\"can_create_org_repo\":false,$units,\"units_map\":{\"repo.code\":\"write\",\"repo.issues\":\"write\",\"repo.pulls\":\"write\"}}" |
+		"{\"name\":\"writers\",\"permission\":\"write\",\"includes_all_repositories\":true,\"can_create_org_repo\":false,\"units_map\":{\"repo.code\":\"write\",\"repo.issues\":\"write\",\"repo.pulls\":\"write\"}}" |
 		json_id)
 	owners_id=$(api "$admin_token" GET "/orgs/$ORG/teams" | { grep -o '"id":[0-9]*,"name":"Owners"' || true; } | sed 's/[^0-9]//g' | head -n 1)
 	[ -n "$readers_id" ] && [ -n "$writers_id" ] && [ -n "$owners_id" ] || die "cannot read the ids of the teams of $ORG"

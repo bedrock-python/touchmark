@@ -177,7 +177,7 @@ func (l *lexer) str() (string, error) {
 				if l.pos+6 > len(l.src) {
 					return bad()
 				}
-				n, err := strconv.ParseUint(l.src[l.pos+2:l.pos+6], 16, 32)
+				n, err := strconv.ParseUint(l.src[l.pos+2:l.pos+6], 16, 16)
 				if err != nil {
 					return bad()
 				}

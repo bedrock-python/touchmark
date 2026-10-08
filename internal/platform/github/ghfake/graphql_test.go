@@ -79,6 +79,8 @@ func TestGraphQLValidation(t *testing.T) {
 			"Field 'defaultBranchRef' returns Ref but has no selections. Did you mean 'defaultBranchRef { ... }'?", nil},
 		{"enum", `{ repository(owner: "acme", name: "api") { pullRequests(first: 1, states: [BOGUS]) { totalCount } } }`,
 			"argumentLiteralsIncompatible", "", nil},
+		{"Int out of range", `{ repository(owner: "acme", name: "api") { pullRequests(first: 2147483648) { totalCount } } }`,
+			"argumentLiteralsIncompatible", "", nil},
 		{"fragment type", `{ repository(owner: "acme", name: "api") { ... on Nope { id } } }`, "undefinedType",
 			"No such type Nope, so it can't be a fragment condition", nil},
 		{"undeclared variable", `query V { repository(owner: $o, name: "api") { id } }`, "variableNotDefined",
@@ -119,6 +121,15 @@ func TestGraphQLValidation(t *testing.T) {
 		got = w.graphql(tok, q, map[string]any{"owner": "acme", "name": "api"})
 		if field(got, "data", "repository", "name") != "api" {
 			t.Errorf("variables: %v", got)
+		}
+		// Int is a signed 32-bit integer.
+		q = `query P($n: Int) { repository(owner: "acme", name: "api") { pullRequests(first: $n) { totalCount } } }`
+		got = w.graphql(tok, q, map[string]any{"n": 2147483648})
+		if msg := field(got, "errors", 0, "message"); msg != "Variable $n of type Int was provided invalid value" {
+			t.Errorf("an Int out of range: %v", got)
+		}
+		if got = w.graphql(tok, q, map[string]any{"n": 2147483647}); field(got, "data", "repository") == nil {
+			t.Errorf("the largest Int: %v", got)
 		}
 	})
 	t.Run("anonymous", func(t *testing.T) {

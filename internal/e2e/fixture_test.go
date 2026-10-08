@@ -159,7 +159,9 @@ func (fx *fixture) createOrg(t testing.TB, name string) {
 }
 
 // team creates a team of org with access to the code, issues and pull
-// requests of its repositories (all of them with all) and the members.
+// requests of its repositories (all of them with all) and the members:
+// units_map only, since Gitea 28 refuses a team with both units and
+// units_map.
 func (fx *fixture) team(t testing.TB, org, name, access string, all bool, members ...account) int64 {
 	t.Helper()
 	var team struct {
@@ -167,7 +169,6 @@ func (fx *fixture) team(t testing.TB, org, name, access string, all bool, member
 	}
 	fx.admin().ok(t, http.MethodPost, "/orgs/"+org+"/teams", map[string]any{
 		"name": name, "permission": access, "includes_all_repositories": all, "can_create_org_repo": false,
-		"units":     []string{"repo.code", "repo.issues", "repo.pulls"},
 		"units_map": map[string]string{"repo.code": access, "repo.issues": access, "repo.pulls": access},
 	}, &team)
 	for _, m := range members {

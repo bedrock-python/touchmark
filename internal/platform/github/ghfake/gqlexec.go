@@ -511,7 +511,7 @@ func (e *executor) literalFits(v gqlValue, t *gqlTypeRef) bool {
 	}
 	switch t.name {
 	case "Int":
-		return v.kind == valInt
+		return v.kind == valInt && isInt32(v.s)
 	case "Float":
 		return v.kind == valInt || v.kind == valFloat
 	case "Boolean":
@@ -702,10 +702,10 @@ func (e *executor) coerce(v any, t *gqlTypeRef) (any, string) {
 		if !ok {
 			return nil, "Could not coerce value to Int"
 		}
-		i, err := n.Int64()
-		if err != nil {
+		if !isInt32(n.String()) {
 			return nil, "Could not coerce value to Int"
 		}
+		i, _ := strconv.ParseInt(n.String(), 10, 32)
 		return i, ""
 	case "Float":
 		n, ok := v.(json.Number)
@@ -730,6 +730,12 @@ func (e *executor) coerce(v any, t *gqlTypeRef) (any, string) {
 		return nil, "Could not coerce value to " + t.name
 	}
 	return s, ""
+}
+
+// isInt32 reports whether s is a GraphQL Int: a signed 32-bit integer.
+func isInt32(s string) bool {
+	_, err := strconv.ParseInt(s, 10, 32)
+	return err == nil
 }
 
 // sortedKeys returns the keys of a set, sorted.
@@ -757,7 +763,7 @@ func (e *executor) literal(v gqlValue, t *gqlTypeRef) any {
 		if t != nil && t.named() == "ID" {
 			return v.s
 		}
-		n, _ := strconv.ParseInt(v.s, 10, 64)
+		n, _ := strconv.ParseInt(v.s, 10, 32)
 		return n
 	case valFloat:
 		f, _ := strconv.ParseFloat(v.s, 64)

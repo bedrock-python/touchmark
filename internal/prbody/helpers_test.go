@@ -27,39 +27,59 @@ const (
 )
 
 // flavors are the platforms of the golden bodies.
-var flavors = []string{"github", "gitlab", "gitea"}
+var flavors = []string{"github", "gitlab", "gitea", "bitbucket"}
 
 // capsOf returns the capabilities that matter to bodies, as the drivers
 // report them (and fake.CapsFor does).
 func capsOf(flavor string) platform.Caps {
 	c := platform.Caps{Flavor: flavor, MaxBody: 58000}
-	if flavor == "gitlab" {
+	switch flavor {
+	case "gitlab":
 		c.MaxBody = 200000
 		c.QuickActions = true
+	case "bitbucket":
+		c.MaxBody = 60000
+		c.Marker = platform.MarkerInRefDef
+		c.NoLabels = true
 	}
 	return c
 }
 
-// testMarker is a real marker line of the test hub.
+// testMarker is a real marker line of the test hub, in the comment frame.
 func testMarker(t testing.TB) string {
 	t.Helper()
-	line, err := encodedMarker()
+	return markerFor(t, "")
+}
+
+// markerFor is a real marker line of the test hub in the frame of
+// flavor's Caps.Marker.
+func markerFor(t testing.TB, flavor string) string {
+	t.Helper()
+	encode := encodedMarker
+	if capsOf(flavor).Marker == platform.MarkerInRefDef {
+		encode = encodedRefDef
+	}
+	line, err := encode()
 	if err != nil {
 		t.Fatal(err)
 	}
 	return line
 }
 
-// encodedMarker encodes the marker once: gzip at the best level is slow
-// enough to dominate the fuzzers.
-var encodedMarker = sync.OnceValues(func() (string, error) {
-	return marker.Encode(marker.Marker{Key: testKey, Data: marker.Data{
-		V: marker.Version, Stream: "sync", Hub: "acme-eng", FP: hubFP,
-		DecidedAt: hubCommit, ContentCommit: hubCommit, Engine: "0.2.0",
-		Packs: []string{"agents"}, TitleSet: "chore: sync engineering assets",
-		LabelsSet: []string{"engineering-assets"},
-	}})
-})
+// testData is the marker of the test hub.
+var testData = marker.Marker{Key: testKey, Data: marker.Data{
+	V: marker.Version, Stream: "sync", Hub: "acme-eng", FP: hubFP,
+	DecidedAt: hubCommit, ContentCommit: hubCommit, Engine: "0.2.0",
+	Packs: []string{"agents"}, TitleSet: "chore: sync engineering assets",
+	LabelsSet: []string{"engineering-assets"},
+}}
+
+// encodedMarker and encodedRefDef encode the marker once: gzip at the best
+// level is slow enough to dominate the fuzzers.
+var (
+	encodedMarker = sync.OnceValues(func() (string, error) { return marker.Encode(testData) })
+	encodedRefDef = sync.OnceValues(func() (string, error) { return marker.EncodeFrame(testData, marker.FrameRefDef) })
+)
 
 // golden compares got with testdata/<name>, or rewrites it with -update.
 func golden(t *testing.T, name, got string) {
@@ -89,7 +109,7 @@ func golden(t *testing.T, name, got string) {
 func decoded(body string) string {
 	lines := strings.Split(body, "\n")
 	for i, line := range lines {
-		if !strings.HasPrefix(line, "<!-- touchmark:") {
+		if !marker.IsLine(line) {
 			continue
 		}
 		m, err := marker.Parse(line)
@@ -100,7 +120,11 @@ func decoded(body string) string {
 		if err != nil {
 			continue
 		}
-		lines[i] = line[:strings.Index(line, " data=")] + " data=" + string(js) + " -->"
+		end := " -->"
+		if !strings.HasPrefix(line, "<!-- ") {
+			end = `"`
+		}
+		lines[i] = line[:strings.Index(line, " data=")] + " data=" + string(js) + end
 	}
 	return strings.Join(lines, "\n")
 }

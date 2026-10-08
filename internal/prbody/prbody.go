@@ -155,10 +155,11 @@ type Input struct {
 	// assertion runs whatever QuickActions says), and Flavor names things
 	// ("merge request" and "!N" on GitLab).
 	Caps platform.Caps
-	// Marker is the encoded marker line, written last.
+	// Marker is the encoded marker line, written last, in the frame of
+	// Caps.Marker (marker.EncodeFrame).
 	//
 	// "" renders the human part alone: the body without the marker, fitted
-	// into Caps.MaxBody less room for the longest marker marker.Encode
+	// into Caps.MaxBody less room for the longest marker marker.EncodeFrame
 	// writes (marker.MaxLine) and the blank line before it. Since the marker
 	// records the hash of the human part (marker.Data.Body), that is how a
 	// body is built: human, then its hash into the marker, then human +
@@ -213,8 +214,8 @@ const (
 //
 // Errors wrap ErrIntro (the intro breaks CheckIntro), ErrTooLarge or
 // ErrUnsafe; an unknown Change.Action, a HubURL that is not a plain http(s)
-// URL, or a Marker that is neither "" nor one "<!-- touchmark:… -->" line
-// are errors too.
+// URL, or a Marker that is neither "" nor one marker line in a frame of
+// marker.EncodeFrame are errors too.
 func Render(in Input) (string, error) {
 	r, err := newRenderer(in)
 	if err != nil {
@@ -810,11 +811,19 @@ func moreLine(shown, more int, one, many string) string {
 }
 
 // checkMarker accepts one "<!-- touchmark:… -->" line whose comment ends
-// only at the end of the line.
+// only at the end of the line, or one `[touchmark]: # "touchmark:…"`
+// reference definition whose title ends only at the end of the line (the
+// two frames of marker.EncodeFrame).
 func checkMarker(m string) error {
+	const refDef = `[touchmark]: # "touchmark:`
 	switch {
 	case strings.ContainsAny(m, "\r\n"):
 		return errors.New("the marker is not one line")
+	case strings.HasPrefix(m, refDef):
+		if !strings.HasSuffix(m, `"`) || strings.IndexByte(m[len(refDef):], '"') != len(m)-len(refDef)-1 ||
+			strings.Contains(m, `\`) {
+			return fmt.Errorf("%.40q… is not a marker reference definition", m)
+		}
 	case !strings.HasPrefix(m, "<!-- touchmark:") || !strings.HasSuffix(m, " -->") || strings.Index(m, "-->") != len(m)-len("-->"):
 		return fmt.Errorf("%.40q… is not a marker comment", m)
 	}

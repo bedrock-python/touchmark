@@ -100,6 +100,8 @@ func TestParseRefDef(t *testing.T) {
 	}
 	refused := []struct{ name, line string }{
 		{"no closing quote", strings.TrimSuffix(line, `"`)},
+		{"no closing quote, comment end", strings.TrimSuffix(line, `"`) + commentEnd},
+		{"no closing quote, comment end escaped", escapeAll(strings.TrimSuffix(line, `"`) + commentEnd)},
 		{"trailing blank", line + " "},
 		{"CR", line + "\r"},
 		{"single quotes", strings.Replace(strings.Replace(line, `# "`, `# '`, 1), `"`, `'`, 1)},
@@ -132,6 +134,7 @@ func TestIsLine(t *testing.T) {
 		{escapeAll(line), true},
 		{line + "\r", true},
 		{strings.TrimSuffix(line, `"`), true},
+		{strings.TrimSuffix(line, `"`) + commentEnd, true},
 		{`[touchmark]: # "touchmark:v9 x"`, true},
 		{"<!-- touchmark:recreate -->", true},
 		{"- [ ] <!-- touchmark:recreate --> Rebuild this branch", false},

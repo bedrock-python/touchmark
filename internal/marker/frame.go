@@ -52,10 +52,12 @@ func IsLine(line string) bool {
 
 // asComment returns line in the comment frame, which Parse and Find read:
 // line itself when it starts with "<!-- touchmark:"; for a reference
-// definition, `[touchmark]: # "<payload>"` becomes "<!-- <payload> -->"
-// (its payload left open when the closing quote is missing, so that Parse
-// refuses it). ok is false for any other line. Nothing is trimmed: the
-// callers trim the trailing blanks and carriage return they accept.
+// definition, `[touchmark]: # "<payload>"` becomes "<!-- <payload> -->".
+// A reference definition without its closing quote is still a marker line
+// (ok is true), but its comment form never ends in " -->", so Parse refuses
+// it even when the payload itself ends in " -->". ok is false for any other
+// line. Nothing is trimmed: the callers trim the trailing blanks and
+// carriage return they accept.
 //
 // A reference definition is read after unescape: Bitbucket Cloud returns an
 // edited description with backslashes before punctuation ("\[touchmark\]",
@@ -74,7 +76,10 @@ func asComment(line string) (string, bool) {
 	if payload, ok := strings.CutSuffix(rest, refDefClose); ok {
 		return commentOpen + payload + commentEnd, true
 	}
-	return commentOpen + rest, true
+	// No closing quote: the comment form ends in a quote, never in " -->",
+	// whatever the payload ends in, so Parse refuses it while Find and
+	// Strip still see a marker line.
+	return commentOpen + rest + refDefClose, true
 }
 
 // unescape undoes Markdown's backslash escapes in s: a backslash before

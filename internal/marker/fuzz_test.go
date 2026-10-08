@@ -16,7 +16,7 @@ func seedLines(t testing.TB) []string {
 		line := mustEncode(t, v.m)
 		lines = append(lines, line, line[:len(line)/2], strings.Replace(line, "v1", "v2", 1), line+"\r")
 		rd := refDef(line)
-		lines = append(lines, rd, escapeAll(rd), rd[:len(rd)/2], rd+"\r")
+		lines = append(lines, rd, escapeAll(rd), rd[:len(rd)/2], rd+"\r", strings.TrimSuffix(rd, refDefClose)+commentEnd)
 	}
 	lines = append(lines,
 		lineWithData(gz(t, bytes.Repeat([]byte{' '}, 8<<20))),
@@ -26,6 +26,7 @@ func seedLines(t testing.TB) []string {
 		"<!-- touchmark:v1 hub= fp= stream= key= data= -->",
 		`[touchmark]: # "touchmark:v1 hub= fp= stream= key= data="`,
 		`\[touchmark\]: \# "touchmark:v1\"`,
+		`[touchmark]: # "touchmark:v1 hub= fp= stream= key= data= -->`,
 	)
 	return lines
 }
@@ -42,6 +43,9 @@ func FuzzParse(f *testing.F) {
 		m, err := Parse(line)
 		if err != nil {
 			return
+		}
+		if !strings.HasPrefix(line, commentPrefix) && !strings.HasSuffix(unescape(line), refDefClose) {
+			t.Fatalf("accepted a reference definition without its closing quote: %.80q", line)
 		}
 		if m.FP16 != FP16(m.Data.FP) || m.Hub != m.Data.Hub || m.Stream != m.Data.Stream {
 			t.Fatalf("header does not match the data: %s", describeMarker(m))

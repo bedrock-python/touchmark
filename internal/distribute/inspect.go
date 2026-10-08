@@ -594,6 +594,14 @@ func (r *run) inspectFull(ctx context.Context, t *target, optIn *config.OptIn, s
 	if hasKept && (len(kept.Marker.Key) > 0 || touches(w.Decision, kept.PR.Number)) {
 		w.Open = &kept
 	}
+	if pushes(w.Decision) {
+		protected, err := r.readNoPush(ctx, w)
+		if err != nil {
+			r.fail(ctx, t, "read the protection of the target's branches", err, "internal")
+			return nil
+		}
+		r.blockProtected(w, protected)
+	}
 	r.checkSigning(w)
 	w.NeedPerms = needPerms(w.Decision.Steps)
 	r.fillBody(w, sel, reads)
@@ -767,6 +775,53 @@ func (r *run) readRules(ctx context.Context, w *Work) (platform.Rules, error) {
 		rules.SignedCommits, rules.NoForcePush, rules.NoDelete = false, nil, nil
 	}
 	return rules, nil
+}
+
+// readNoPush reads which of the branches w's decision pushes to a
+// protection rule keeps the writer from pushing to, when the provider's
+// identity is a platform.PushGuard (GitLab's and Gitea's writers; a plan's
+// reader never is one). Without one it returns none: such a push meets the
+// rule at run time, refused before it writes. A transient failure is tried
+// three times.
+func (r *run) readNoPush(ctx context.Context, w *Work) ([]platform.Protected, error) {
+	g, ok := w.t.prov.reader.(platform.PushGuard)
+	if !ok {
+		return nil, nil
+	}
+	var branches []string
+	for _, s := range w.Decision.Steps {
+		if s.Kind == decide.StepPush || s.Kind == decide.StepRecreateBranch {
+			branches = uniqueNonEmpty(append(branches, s.Branch))
+		}
+	}
+	var out []platform.Protected
+	err := r.retry(ctx, w.t.prov, func() error {
+		var err error
+		out, err = g.NoPush(ctx, w.t.repo, branches)
+		return err
+	})
+	return out, err
+}
+
+// blockProtected blocks w's decision as rules:protected-branch when a
+// protection rule keeps the writer from a branch it pushes to, with a
+// warning that names the rule, before any write: what a push would end in.
+// Memory upkeep, which pushes nothing, stays.
+func (r *run) blockProtected(w *Work, protected []platform.Protected) {
+	if len(protected) == 0 {
+		return
+	}
+	d := w.Decision
+	var upkeep []decide.Step
+	for _, s := range d.Steps {
+		if memoryUpkeep(s) {
+			upkeep = append(upkeep, s)
+		}
+	}
+	w.Decision = decide.TargetDecision{Outcome: decide.OutcomeBlocked, Reason: decide.ReasonRulesProtected, PR: d.PR, Branch: d.Branch, Steps: upkeep}
+	for _, p := range protected {
+		w.t.res.Warnings = append(w.t.res.Warnings, fmt.Sprintf("branch %s is protected (%s), and the writer may not push to it", p.Branch, p.Rule))
+	}
 }
 
 // checkSigning decides how a push of w is signed. A signature is needed with

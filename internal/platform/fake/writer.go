@@ -18,10 +18,16 @@ import (
 // Writer returns the platform.Writer of account as. It reads like Reader(as)
 // and writes where Grant or GrantWrite allowed it.
 func (p *Platform) Writer(as platform.Account) platform.Writer {
-	if p.preflight {
-		return &preflightWriter{writer{reader{p: p, as: as}}}
+	w := writer{reader{p: p, as: as}}
+	switch {
+	case p.preflight && p.pushGuard:
+		return &preflightGuardWriter{preflightWriter{w}}
+	case p.preflight:
+		return &preflightWriter{w}
+	case p.pushGuard:
+		return &guardWriter{w}
 	}
-	return &writer{reader{p: p, as: as}}
+	return &w
 }
 
 type writer struct{ reader }

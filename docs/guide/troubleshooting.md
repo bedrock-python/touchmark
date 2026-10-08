@@ -47,6 +47,11 @@ A run whose hub commit is no longer the tip of the default branch ends `supersed
 
 `plan` runs with the reader, which cannot see what the writer may bypass: `plan` can
 predict a rule block that `distribute` will not hit. `doctor` checks with the writer.
+`distribute --dry-run` and `distribute` read, with the writer, the protected branches
+that keep it from pushing to the sync branch (GitLab's protected branches; on Gitea and
+Forgejo, the protection of a sync branch that exists already) and block the target
+before any write; other rules show at the first push, which they refuse before anything
+is written.
 
 ## A target is deferred or failed
 

@@ -196,6 +196,23 @@ func testPreflight(t *testing.T, fx Fixture) {
 	}
 }
 
+// testPushGuard checks platform.PushGuard, for the drivers whose writer is
+// one: on a repository without protection, neither the default branch nor
+// a sync branch (one that does not exist yet, one that does) is listed,
+// and the call writes nothing.
+func testPushGuard(t *testing.T, fx Fixture) {
+	g, ok := fx.Writer().(platform.PushGuard)
+	if !ok {
+		t.Skip("the writer tells no protected branches upfront")
+	}
+	repo := fx.CreateRepo(t, RepoSpec{Name: "pushguard", Files: readme})
+	fx.CreateBranch(t, repo, OtherBranch)
+	got, err := g.NoPush(t.Context(), repo, []string{repo.DefaultBranch, SyncBranch, OtherBranch, ""})
+	if err != nil || len(got) > 0 {
+		t.Errorf("NoPush = %+v, %v on a repository without protection", got, err)
+	}
+}
+
 // ruleOfError returns the Rule of err's *platform.Error.
 func ruleOfError(err error) string {
 	var pe *platform.Error

@@ -34,6 +34,10 @@ const (
 	// because it would force the branch (GitHub's non_fast_forward): a
 	// report reason "rules:<rule>".
 	ReasonRulesNoForce = "rules:non-fast-forward"
+	// ReasonRulesProtected is the reason of a push to a branch a
+	// protection rule keeps the writer from pushing to at all (GitLab's
+	// protected branches, Gitea's branch protection, GitHub's).
+	ReasonRulesProtected = "rules:protected-branch"
 )
 
 // CommentAutoDeclined is the Reason of the StepComment that follows the

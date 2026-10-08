@@ -246,7 +246,7 @@
       "pattern": "^[a-z][a-z0-9-]{0,31}$"
     },
     "providerType": {
-      "description": "github: github.com, GHE.com or GitHub Enterprise Server; gitlab; gitea; forgejo; bitbucket: Bitbucket Cloud, read only for now (plan reads it; distribute, doctor and setup do not support it yet).",
+      "description": "github: github.com, GHE.com or GitHub Enterprise Server; gitlab; gitea; forgejo; bitbucket: Bitbucket Cloud (plan, distribute and doctor; setup does not set up a hub on it yet).",
       "enum": ["github", "gitlab", "gitea", "forgejo", "bitbucket"]
     },
     "sign": {

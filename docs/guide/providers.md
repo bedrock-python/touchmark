@@ -2,8 +2,8 @@
 
 One hub can deliver to GitHub, GitLab, Gitea and Forgejo at once, including
 self-managed instances. Each platform is a **provider** in `hub.yml`, with its own reader
-and writer; `targets.yml` names repositories by provider. Bitbucket Cloud can be read
-already, not written to yet: see [Bitbucket Cloud](#bitbucket-cloud-reads-only).
+and writer; `targets.yml` names repositories by provider. Bitbucket Cloud is a provider
+too, delivered to from a hub on another platform: see [Bitbucket Cloud](#bitbucket-cloud).
 
 ## One provider: the shorthand
 
@@ -126,25 +126,36 @@ on GitHub or GitLab can still deliver to them: add them as providers, and keep t
 write token in the GitHub environment or the GitLab protected variable, where the probe
 covers it.
 
-## Bitbucket Cloud (reads only)
+## Bitbucket Cloud
 
 A provider of type `bitbucket` is Bitbucket Cloud at `https://bitbucket.org` (leave `url`
-out). This release reads it: `plan` resolves its targets, reads their opt-in files and
-their pull requests, and reports what a delivery would do. Delivering does not work yet:
-`distribute` and `doctor` stop at a `bitbucket` provider, and `setup` has nothing for it.
-Bitbucket Data Center is not supported.
+out). `plan`, `distribute` and `doctor` work on it from a hub on GitHub or GitLab, or
+wherever you run touchmark; a hub whose own CI is Bitbucket Pipelines is not supported
+yet, and `setup` has nothing for it. Bitbucket Data Center is not supported.
 
 ```yaml
 # hub.yml
 providers:
   - id: bb
     type: bitbucket
-    writer: "{3f2a8d4e-1b6c-4f0a-9e7d-5c2b1a0f9e8d}"   # the bot account's UUID, in braces
+    writer: "{3f2a8d4e-1b6c-4f0a-9e7d-5c2b1a0f9e8d}"   # the writer account's UUID, in braces
 ```
 
-- **Credentials.** `TOUCHMARK_BB_READ_TOKEN` is an API token of a bot account with read
-  access to the repositories (app passwords are gone; repository, project and workspace
-  access tokens are not supported, since they cannot tell who they are).
+**Accounts.** Make two bot accounts (Atlassian accounts that only touchmark uses), each
+with an API token; app passwords are gone, and repository, project and workspace access
+tokens are not supported, since they cannot tell who they are. A token's scopes do not
+narrow the repositories it reaches, the account's permissions do: that is why the writer
+is an account of its own.
+
+| | Reader | Writer |
+|---|---|---|
+| Variable | `TOUCHMARK_BB_READ_TOKEN` | `TOUCHMARK_BB_WRITE_TOKEN` |
+| Scopes (all `…:bitbucket`) | `read:user`, `read:workspace`, `read:repository`, `read:pullrequest` | the reader's, plus `write:repository` and `write:pullrequest`; no admin or delete scope |
+| Repositories | read access to the targets | write access to the targets only (directly, through a group or the project); not admin, and no access to the hub |
+
+API tokens expire within a year, and Bitbucket's API shows neither their expiry nor
+their scopes: `doctor` reports both as unknown, so keep a reminder to rotate them.
+
 - **Accounts are UUIDs.** Bitbucket finds no account by its nickname, so `writer`,
   `known_authors` and `automation_accounts` name accounts by their UUID in braces, as
   `GET https://api.bitbucket.org/2.0/user` shows it.
@@ -152,8 +163,31 @@ providers:
   `https://bitbucket.org/acme/billing` work. Bitbucket has no topics: `check` refuses
   `topics` on a Bitbucket entry; select repositories with `match` (`acme/svc-*`) or list
   them with `repo`.
+- **No labels.** Bitbucket pull requests have none: `pr.labels` sets nothing there, and
+  touchmark records no label as set.
+- **Drafts** are Bitbucket's own draft flag (`pr.draft`).
+- **Closing.** touchmark closes its own pull request by declining it, after writing the
+  close into its description. Bitbucket can never reopen a declined pull request, nor
+  change it: a pull request touchmark closed stays closed, and the next proposal is a new
+  one. Remembering a person's decline is not supported yet: touchmark never proposes the
+  declined content again, but cannot write its acknowledgment into the declined pull
+  request, so the target reports a failure on each run until a later release records it
+  another way.
+- **Branch restrictions** are readable with admin rights only, which the writer should
+  not have: `doctor` shows `rules` as unknown, and a push a restriction refuses
+  ("Permission denied to update branch") is `blocked:rules:protected-branch`.
+- **The marker.** Bitbucket shows HTML comments in descriptions as text, so the marker
+  is a Markdown link reference definition there, which renders as nothing:
+  `[touchmark]: # "touchmark:v1 hub=… fp=… stream=sync key=… data=…"`, the same payload as
+  the comment elsewhere. An edit on the website may add backslashes before punctuation
+  and Windows line endings; touchmark reads the marker either way.
+- **Commit author.** Bitbucket links a commit to the account one of whose confirmed
+  addresses is the author's: touchmark authors the writer's commits with its account's
+  primary confirmed address, and with `<uuid>@touchmark.invalid` (an address that can
+  belong to no one) when the account has none.
 - **Pace.** Bitbucket allows an account about 1 000 API requests an hour, so touchmark
-  reads 15 times a minute by default, with two targets at once; `limits` overrides it.
+  reads 15 times a minute by default, with two targets at once, and writes at most once a
+  second; `limits` overrides it.
 
 ## Moving
 

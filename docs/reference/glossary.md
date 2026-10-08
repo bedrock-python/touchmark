@@ -38,7 +38,9 @@ history. `touchmark manifest` prints it.
 
 **marker** — the HTML comment at the end of a sync pull request's description:
 `<!-- touchmark:v1 hub=… fp=… stream=sync key=sha256:… data=… -->`. It records the
-fingerprint and what the pull request carries.
+fingerprint and what the pull request carries. On Bitbucket Cloud, which shows HTML
+comments as text, the same payload is a Markdown link reference definition:
+`[touchmark]: # "touchmark:v1 hub=… fp=… stream=sync key=sha256:… data=…"`.
 
 **opt-in file** — `.engineering-assets.yml` at a target's root. Its presence is consent;
 it can add packs and `ignore` paths, and `enabled: false` in it opts the target out.

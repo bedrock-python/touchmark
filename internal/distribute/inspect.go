@@ -603,6 +603,7 @@ func (r *run) inspectFull(ctx context.Context, t *target, optIn *config.OptIn, s
 		r.blockProtected(w, protected)
 	}
 	r.checkSigning(w)
+	w.refreshOptIn()
 	w.NeedPerms = needPerms(w.Decision.Steps)
 	r.fillBody(w, sel, reads)
 	if err := r.reportDecision(w, prs, reads); err != nil {

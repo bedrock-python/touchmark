@@ -1,6 +1,7 @@
 package distribute
 
 import (
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -319,5 +320,139 @@ func TestRunOptInChangeElsewhere(t *testing.T) {
 				t.Errorf("the body changed:\n%s\nwas\n%s", after.Body, before.Body)
 			}
 		})
+	}
+}
+
+// TestRunBitbucketBlockedOptIn: an opt-in change while the open pull
+// request is blocked reaches its marker in one body-only edit, even though
+// the decision writes nothing else to it, so that a decline of it then
+// holds under the new opt-in state instead of lapsing at once. The blocks:
+// someone else's pull request on the sync branch (branch-in-use), and a
+// rule against force pushes the plan reads ahead (rules:non-fast-forward).
+func TestRunBitbucketBlockedOptIn(t *testing.T) {
+	t.Parallel()
+	t0 := time.Date(2026, 9, 2, 12, 0, 0, 0, time.UTC)
+	optIn2 := "version: 1\nignore: [notes/**]\n"
+
+	t.Run("branch-in-use", func(t *testing.T) {
+		t.Parallel()
+		g := bbWorld(t)
+		api := g.optedIn("acme/api", nil)
+		g.bbStep("the first run", nil, report.OutcomeOpened, "", 1, 2)
+		foreign := g.p.AddPR(api.ID, platform.PR{Head: branch, Author: g.person, Title: "wip", Body: "My changes."})
+		g.ok()
+		g.bbStep("someone else's pull request on the sync branch", nil, report.OutcomeBlocked, "branch-in-use", foreign, 0)
+		before := g.p.PR(api.ID, 1)
+
+		g.push(api, "main", g.person, optInName, optIn2)
+		g.bbStep("the opt-in file changed while blocked", nil, report.OutcomeBlocked, "branch-in-use", foreign, 1)
+		g.bbCheckRefreshed(api, before, optIn2)
+
+		g.p.SetPRState(api.ID, foreign, platform.Closed, &g.person, t0)
+		g.p.SetPRState(api.ID, 1, platform.Closed, &g.person, t0.Add(time.Minute))
+		g.ok()
+		g.bbStep("#1 declined", nil, report.OutcomeDeclined, "", 1, 0)
+	})
+
+	t.Run("rules:non-fast-forward", func(t *testing.T) {
+		t.Parallel()
+		g := newGitWorld(t, fake.WithFlavor(fake.Bitbucket), fake.WithPreflight())
+		api := g.optedIn("acme/api", nil)
+		g.bbStep("the first run", nil, report.OutcomeOpened, "", 1, 2)
+		g.p.AddRuleset(api.ID, fake.Ruleset{Branches: []string{"touchmark/*"}, NonFastForward: true})
+		g.ok()
+		g.edit = bbHubChange(g)
+		g.bbStep("the hub changed, force pushes refused", nil, report.OutcomeBlocked, "rules:non-fast-forward", 1, 0)
+		before := g.p.PR(api.ID, 1)
+
+		g.push(api, "main", g.person, optInName, optIn2)
+		g.bbStep("the opt-in file changed while blocked", nil, report.OutcomeBlocked, "rules:non-fast-forward", 1, 1)
+		g.bbCheckRefreshed(api, before, optIn2)
+
+		// Declined, and the hub proposes what #1 carries again: the decline
+		// holds.
+		g.p.SetPRState(api.ID, 1, platform.Closed, &g.person, t0)
+		g.ok()
+		g.edit = nil
+		g.bbStep("#1 declined", nil, report.OutcomeDeclined, "", 1, 0)
+	})
+
+	// Bitbucket Cloud's driver cannot read branch restrictions ahead: the
+	// push meets the rule at run time, and the edit after it does not
+	// happen. The marker is refreshed then instead, once.
+	t.Run("rules at run time", func(t *testing.T) {
+		t.Parallel()
+		g := bbWorld(t)
+		api := g.optedIn("acme/api", nil)
+		g.bbStep("the first run", nil, report.OutcomeOpened, "", 1, 2)
+		g.p.AddRuleset(api.ID, fake.Ruleset{Branches: []string{"touchmark/*"}, NonFastForward: true})
+		g.ok()
+		g.edit = bbHubChange(g)
+		edits := func(what string, want int) {
+			t.Helper()
+			rep := g.run(g.deps(ModeDistribute), ModeDistribute)
+			tg := wantAPI(t, rep, report.OutcomeBlocked, "rules:non-fast-forward", 1)
+			n := 0
+			for _, w := range g.p.Writes() {
+				if strings.HasPrefix(w, "EditPR") {
+					n++
+				}
+			}
+			if n != want || tg.Writes != want {
+				t.Errorf("%s: %d edits (report %d writes), want %d: %q", what, n, tg.Writes, want, g.p.Writes())
+			}
+		}
+		edits("the hub changed, force pushes refused", 0)
+		before := g.p.PR(api.ID, 1)
+
+		g.push(api, "main", g.person, optInName, optIn2)
+		edits("the opt-in file changed while blocked", 1)
+		g.bbCheckRefreshed(api, before, optIn2)
+		edits("again", 0)
+
+		g.p.SetPRState(api.ID, 1, platform.Closed, &g.person, t0)
+		g.ok()
+		g.edit = nil
+		g.bbStep("#1 declined", nil, report.OutcomeDeclined, "", 1, 0)
+	})
+}
+
+// wantAPI is want for the target acme/api.
+func wantAPI(t *testing.T, rep *report.Delivery, outcome report.Outcome, reason string, pr int64) report.DeliveryTarget {
+	t.Helper()
+	return want(t, rep, "gh:acme/api", outcome, reason, pr)
+}
+
+// bbHubChange is a deps edit under which the hub proposes a new AGENTS.md.
+func bbHubChange(g *gitWorld) func(*Deps) {
+	agents3 := version("AGENTS.md", 3)
+	man, cur := manifestAndCurrent()
+	v := provenance.Version{OID: oid(agents3), Size: int64(len(agents3))}
+	man.Add("AGENTS.md", "base", v)
+	cur["base"]["AGENTS.md"] = provenance.File{Pack: "base", Path: "AGENTS.md", OID: v.OID, Size: v.Size, Mode: "100644"}
+	g.blobs[v.OID] = []byte(agents3)
+	return func(d *Deps) { d.Manifest, d.Current = man, cur }
+}
+
+// bbCheckRefreshed checks that open pull request #1 of r, before as it
+// was, now records the opt-in file optIn in its marker, and that nothing
+// else of its description or marker changed.
+func (g *gitWorld) bbCheckRefreshed(r platform.Repo, before platform.PR, optIn string) {
+	g.t.Helper()
+	after := g.p.PR(r.ID, 1)
+	m := g.bbCheckBody(after)
+	if after.State != platform.Open || m.Data.OptIn != optInHash(g.t, optIn) {
+		g.t.Errorf("#1: %s, optin %q", after.State, m.Data.OptIn)
+	}
+	if a, b := marker.Strip(after.Body), marker.Strip(before.Body); a != b {
+		g.t.Errorf("#1: the description changed beyond its marker:\n%s\nwas\n%s", a, b)
+	}
+	was, _ := marker.Find(before.Body, []string{hubFP})
+	was.Data.OptIn = m.Data.OptIn
+	if !reflect.DeepEqual(was, m) {
+		g.t.Errorf("#1: the marker changed beyond its optin:\n%+v\nwas\n%+v", m, was)
+	}
+	if after.Title != before.Title {
+		g.t.Errorf("#1: title %q, was %q", after.Title, before.Title)
 	}
 }

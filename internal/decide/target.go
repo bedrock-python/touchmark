@@ -82,6 +82,13 @@ const (
 	// StepConsumeRecreate unticks the recreate control and writes
 	// recreate_for = Expect into the open PR's marker, before the push.
 	StepConsumeRecreate
+	// StepRefreshMarker writes the current opt-in state into the marker of
+	// an open own PR no other step writes to: one body-only edit, the rest
+	// of the body and of the marker kept. DecideTarget never asks for it:
+	// the caller adds it where closed PRs are immutable, whose memory reads
+	// a decline's opt-in state from the marker the PR had while open
+	// (MemoryConfig.ClosedImmutable).
+	StepRefreshMarker
 )
 
 // String returns the step name for plans, messages and tests.
@@ -107,6 +114,8 @@ func (k StepKind) String() string {
 		return "revoke"
 	case StepConsumeRecreate:
 		return "consume-recreate"
+	case StepRefreshMarker:
+		return "refresh-marker"
 	}
 	return "unknown"
 }

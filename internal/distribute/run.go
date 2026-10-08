@@ -176,8 +176,11 @@ type WriteDeps struct {
 //     else the platform's API commit (Caps.Commit.API: phase F commits
 //     through the stage ref), else, outside ModePlan, which never holds
 //     the key and plans as if it could sign, a push becomes
-//     blocked:cannot-sign (memory upkeep stays). The report gets the
-//     outcome, reason and PR; an unchanged target whose StepEditPR writes
+//     blocked:cannot-sign (memory upkeep stays). Where closed pull
+//     requests are immutable, each open own pull request whose marker's
+//     optin is stale and that no step writes to gets a body-only edit that
+//     records the current opt-in state (Work.refreshOptIn). The report gets
+//     the outcome, reason and PR; an unchanged target whose StepEditPR writes
 //     (decide.PlanPREdit on the rendered description, or content to
 //     rewrite) is updated:title or updated:body, and one that writes
 //     nothing marks the step idle.

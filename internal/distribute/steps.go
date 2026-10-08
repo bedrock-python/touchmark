@@ -84,7 +84,15 @@ func (x *targetExec) prepare(ctx context.Context) ([]writeAct, bool) {
 		}
 		acts = append(acts, a...)
 	}
-	what, err := x.leak(ctx, acts)
+	fallback, err := x.fallbacks(acts)
+	if err != nil {
+		x.end(report.OutcomeFailed, "internal", fmt.Sprintf("prepare the record of the opt-in state: %v", err))
+		x.progress()
+		return nil, false
+	}
+	x.fallback = fallback
+	checked := append(slices.Clip(acts), fallback...)
+	what, err := x.leak(ctx, checked)
 	switch {
 	case err != nil:
 		x.fail("read the commit to push", gitFailure(err))
@@ -94,7 +102,7 @@ func (x *targetExec) prepare(ctx context.Context) ([]writeAct, bool) {
 		x.progress()
 		return nil, false
 	}
-	if err := unsafeText(acts); err != nil {
+	if err := unsafeText(checked); err != nil {
 		x.end(report.OutcomeFailed, "internal", err.Error()+"; nothing is written")
 		x.progress()
 		return nil, false
@@ -163,6 +171,8 @@ func (p *preparer) step(ctx context.Context, s decide.Step) ([]writeAct, error) 
 		return p.comment(s)
 	case decide.StepAck, decide.StepRevoke:
 		return p.remember(s)
+	case decide.StepRefreshMarker:
+		return p.refresh(s)
 	}
 	return nil, fmt.Errorf("unknown step %d", s.Kind)
 }
@@ -358,6 +368,84 @@ func (p *preparer) remember(s decide.Step) ([]writeAct, error) {
 	}
 	body = keptBody(body, line)
 	return []writeAct{{kind: actEdit, pr: s.PR, edit: platform.PREdit{Body: &body}, desc: desc}}, nil
+}
+
+// refresh writes the current opt-in state into the marker of an open pull
+// request of touchmark's that no other step writes to (Work.refreshOptIn):
+// the body as last read, people's part of it made inert (keptBody), with
+// the marker's optin replaced and nothing else of it. Nothing when that
+// marker's optin is current already.
+func (p *preparer) refresh(s decide.Step) ([]writeAct, error) {
+	x := p.x
+	pr, m, err := x.known(s.PR)
+	if err != nil {
+		return nil, err
+	}
+	if !x.w.staleOptIn(m) {
+		return nil, nil
+	}
+	a, err := x.refreshAct(pr, m)
+	if err != nil {
+		return nil, err
+	}
+	return []writeAct{a}, nil
+}
+
+// refreshAct is the edit that writes the current opt-in state into the
+// marker m of the open pull request pr: one body-only edit.
+func (x *targetExec) refreshAct(pr platform.PR, m marker.Marker) (writeAct, error) {
+	d := dataCopy(m.Data)
+	d.OptIn = x.w.OptInHash
+	x.stamp(&d, false)
+	line, err := x.markerLine(m.Key, d)
+	if err != nil {
+		return writeAct{}, err
+	}
+	body := keptBody(pr.Body, line)
+	return writeAct{kind: actEdit, pr: pr.Number, edit: platform.PREdit{Body: &body},
+		desc: fmt.Sprintf("recorded the opt-in state in #%d", pr.Number)}, nil
+}
+
+// fallbacks returns, where closed pull requests are immutable, the edits
+// that record the current opt-in state in each open pull request of
+// touchmark's whose marker's optin is stale (Work.staleOptIn) and which
+// acts write to only after their first push: should that push be refused
+// (a branch restriction, which Bitbucket Cloud's driver cannot read ahead
+// of the push), those writes do not happen, and perform makes these
+// instead (recordOptIn). They are rendered with the other writes, so that
+// their texts are checked before the first write.
+func (x *targetExec) fallbacks(acts []writeAct) ([]writeAct, error) {
+	if !x.t.prov.caps.ClosedImmutable {
+		return nil, nil
+	}
+	first := slices.IndexFunc(acts, func(a writeAct) bool { return a.kind == actPush && !a.soft })
+	if first < 0 {
+		return nil, nil
+	}
+	seen := map[int64]bool{}
+	for _, a := range acts[:first] {
+		if a.kind == actEdit {
+			seen[a.pr] = true
+		}
+	}
+	var out []writeAct
+	for _, a := range acts[first+1:] {
+		if a.kind != actEdit || seen[a.pr] {
+			continue
+		}
+		seen[a.pr] = true
+		pr, m, err := x.known(a.pr)
+		if err != nil || pr.State != platform.Open || !x.w.staleOptIn(m) {
+			continue
+		}
+		f, err := x.refreshAct(pr, m)
+		if err != nil {
+			return nil, err
+		}
+		f.soft = true
+		out = append(out, f)
+	}
+	return out, nil
 }
 
 // render renders the human part of the pull request body once per work,

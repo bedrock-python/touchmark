@@ -127,11 +127,54 @@ func (x *targetExec) perform(ctx context.Context, acts []writeAct) (conflict str
 			x.end(report.OutcomeFailed, "internal", fmt.Sprintf("unknown write %d", a.kind))
 			return "", false
 		}
+		if !ok && a.kind == actPush && !a.soft {
+			x.recordOptIn(ctx)
+		}
 		if !ok || conflict != "" {
 			return conflict, ok
 		}
 	}
 	return "", true
+}
+
+// recordOptIn makes the fallback edits (targetExec.fallbacks) once a push
+// was refused and the target ended blocked: the edits after the push will
+// not happen, and the open pull request's marker must record the current
+// opt-in state before a person declines it, on a platform whose declined
+// pull requests no one can edit. They are secondary writes: a failure is a
+// warning, and the outcome stays. Nothing once the run is over, or when
+// the target ended otherwise (failed, deferred: the provider is out of
+// budget or its credential refused).
+func (x *targetExec) recordOptIn(ctx context.Context) {
+	if x.res.Outcome != report.OutcomeBlocked {
+		return
+	}
+	for _, a := range x.fallback {
+		if x.ex.stoppedAt(x.runCtx, x.now()) != "" {
+			return
+		}
+		x.mark = x.block.Writes()
+		var pr platform.PR
+		err := x.retryWrite(ctx, func() error {
+			var err error
+			pr, err = x.tw.EditPR(ctx, a.pr, a.edit)
+			return err
+		}, func() (bool, error) {
+			got, ok, err := x.editApplied(ctx, a)
+			if ok {
+				pr = got
+			}
+			return ok, err
+		})
+		if err != nil {
+			x.warn(fmt.Sprintf("the opt-in state was not recorded in #%d: %v", a.pr, err))
+			continue
+		}
+		if pr.Number == a.pr {
+			x.remember(pr)
+		}
+		x.op("edit-pr", a.pr, "", "", a.desc)
+	}
 }
 
 // doPush pushes a commit to a branch, or deletes it, with a lease, and

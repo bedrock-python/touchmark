@@ -80,6 +80,45 @@ func (w *Work) staleOptIn(m marker.Marker) bool {
 	return w.t.prov.caps.ClosedImmutable && m.Key != "" && m.Data.OptIn != w.OptInHash
 }
 
+// refreshOptIn adds a decide.StepRefreshMarker for each open own pull
+// request of w whose marker's optin is stale (Work.staleOptIn) and that no
+// step of the final decision writes to, after every rule that rewrites the
+// decision in phase C (blockProtected, checkSigning): one body-only edit
+// each, which the estimates count. Without it, a decline of such a pull
+// request would be read from the opt-in state it was opened under, and
+// would lapse at once. Only where closed pull requests are immutable
+// (staleOptIn is false elsewhere).
+//
+// Which pull requests it writes to, and why:
+//   - Only w.Own: pull requests of touchmark's authors that carry a valid
+//     marker of this hub. A foreign pull request (the one that blocks
+//     branch-in-use, a fork's, another hub's) and a marker-invalid one are
+//     never there; an adopted one has no marker key, so it is never stale.
+//   - A pull request a step writes to already gets the current optin: an
+//     edit (Work.staleOptIn makes it write), a close (a close of touchmark's
+//     is no decline), a consumed recreate (an edit follows it).
+//   - blocked:branch-in-use, blocked:rules:*, blocked:permission:workflows
+//     and blocked:cannot-sign keep our open pull request without writing to
+//     it: it gets the edit. The edit moves no branch, so the foreign pull
+//     request or the rule that blocks the push plays no part.
+//   - blocked:edited edits the kept pull request already (its Paused or
+//     NothingMore block); a duplicate left open on an edited or foreign
+//     branch gets the edit, which touches no commit of people's.
+//   - blocked:branch-taken has no own open pull request (DecideTarget's
+//     rule 3): there is nothing to refresh.
+//   - blocked:marker-invalid writes memory upkeep only (DecideTarget's rule
+//     1); the edit is upkeep of the same kind, on a pull request that is
+//     ours by its marker, and leaves the marker-invalid one alone.
+func (w *Work) refreshOptIn() {
+	d := &w.Decision
+	for _, o := range w.Own {
+		if o.PR.State != platform.Open || !w.staleOptIn(o.Marker) || touches(*d, o.PR.Number) {
+			continue
+		}
+		d.Steps = append(d.Steps, decide.Step{Kind: decide.StepRefreshMarker, PR: o.PR.Number, Branch: o.PR.Head})
+	}
+}
+
 // operations are the operations of the run: operations.yml of the default
 // branch, then those given as flags in a local run; both apply.
 func (r *run) operations() []*config.Operations {

@@ -67,7 +67,10 @@ import (
 //     AutoDeclinedComment by Step.Reason;
 //     - StepAck: EditPR of the declined PR: marker ack and optin, body with
 //     prbody.AddControl(repropose);
-//     - StepRevoke: EditPR of the declined PR: marker revoked.
+//     - StepRevoke: EditPR of the declined PR: marker revoked;
+//     - StepRefreshMarker: EditPR of an open own PR, the body as last read
+//     with the marker's optin set to the opt-in file's hash (nothing when
+//     it is current already).
 //     Before writing any text (body, comment, commit message, branch
 //     name), Write.Redact.Contains → failed:secret-exposure, nothing
 //     written.
@@ -148,6 +151,12 @@ import (
 //     in a warning) and no target starts; a target's block of writes has 10
 //     minutes from its start (then failed:transient), and never lasts past
 //     Write.Deadline by more than the grace (then deferred:deadline).
+//   - Where closed pull requests are immutable, a push refused for good
+//     that ends the target blocked is followed by the edits that record
+//     the current opt-in state in the open own pull requests the writes
+//     after it would have edited, when their marker's optin is stale
+//     (fallbacks, recordOptIn): secondary writes, rendered and checked with
+//     the others before the first write.
 //   - An edit step phase C found idle (Work.idle) is skipped; every other
 //     edit renders the body as phase C did (Work.humanBody), so that the
 //     run writes what its plan showed.

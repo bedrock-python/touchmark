@@ -83,7 +83,10 @@ request was open:
   in its marker the state of the opt-in file it is proposed under, which the
   acknowledgment records elsewhere. When the file changes while the pull request is
   open, the next run records the new state, with one edit of the description even when
-  the proposed changes stay the same.
+  the proposed changes stay the same, and even when the target is blocked
+  (`branch-in-use`, `rules:*`, …): when the run writes nothing else to the pull
+  request, that edit changes only the marker. A push a branch restriction refuses at
+  run time is followed by that edit too.
 - **A decline** holds while the opt-in file is parsed the same as that recorded state,
   and lapses when the team edits `packs` or `ignore`, as an acknowledged decline does
   elsewhere. A declined path becoming `local` or `ignored` lifts it too.
@@ -118,6 +121,9 @@ request was open:
 - Closed pull requests of the multi-gitter era, without a marker, are never declines:
   their content is unknown.
 - On Bitbucket Cloud the opt-in state of a decline is the one recorded by the last run
-  before the decline. When the team changes `packs` or `ignore` and declines the pull
-  request before touchmark runs again, the decline counts from the earlier state and has
-  lapsed already: the content is proposed once more, under the new choice.
+  before the decline, whatever that run decided for the target. When the team changes
+  `packs` or `ignore` and declines the pull request before touchmark runs again, the
+  decline counts from the earlier state and has lapsed already: the content is proposed
+  once more, under the new choice. A blocked target does not widen that window: its run
+  records the state as well. Only a run that writes nothing to the target at all (a
+  failed or deferred target, `blocked:mass-close`) leaves it open until the next run.

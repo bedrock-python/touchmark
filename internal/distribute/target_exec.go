@@ -67,6 +67,9 @@ type targetExec struct {
 	// edited is "title" or "body" when an edit of the open pull request
 	// wrote, for unchanged decisions (updated:title, updated:body).
 	edited string
+	// fallback are the edits that record the opt-in state should a push be
+	// refused (fallbacks, recordOptIn).
+	fallback []writeAct
 }
 
 func newTargetExec(q *provQueue, w *Work) *targetExec {

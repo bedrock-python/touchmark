@@ -7,9 +7,9 @@
 You need Docker and bash (Git Bash on Windows). Nothing else: the tests run in `golang:1.27`.
 
 ```sh
-bash scripts/e2e/gitea.sh docker.gitea.com/gitea:1.27.3
+bash scripts/e2e/gitea.sh docker.gitea.com/gitea:28.1.0
 bash scripts/e2e/gitea.sh codeberg.org/forgejo/forgejo:16.0.5
-bash scripts/e2e/gitea.sh all                          # Gitea 1.26.4, 1.27.3, Forgejo 15.0.9 (LTS), 16.0.5
+bash scripts/e2e/gitea.sh all                          # Gitea 1.26.4, 1.27.3, 28.1.0, Forgejo 15.0.9 (LTS), 16.0.5
 bash scripts/e2e/gitea.sh --run TestFacts all          # one test, every image
 bash scripts/e2e/gitea.sh --keep docker.gitea.com/gitea:1.26.4
 bash scripts/e2e/gitea.sh --require-signin --run TestVisibility all
@@ -109,7 +109,7 @@ Each test prints what it learned as `FINDING` lines. The run ends with a summary
 
 ## CI
 
-The job `e2e-forge` in `.github/workflows/ci.yml` runs the script once per image: the latest Gitea and Forgejo (1.27.3 and 16.0.5) on every pull request and push, all four images nightly and on `workflow_dispatch`. The lint job of every CI run vets the module with the tag `e2e` (`go vet -tags e2e ./...`) for Linux, macOS and Windows, so the tests always compile. `e2e-forge` itself is outside the required check `All checks passed`: it pulls the forges' images from their own registries, whose outage should not block a merge; read its result before merging.
+The job `e2e-forge` in `.github/workflows/ci.yml` runs the script once per image: the latest Gitea and Forgejo (28.1.0 and 16.0.5) on every pull request and push, all five images nightly and on `workflow_dispatch`. The lint job of every CI run vets the module with the tag `e2e` (`go vet -tags e2e ./...`) for Linux, macOS and Windows, so the tests always compile. `e2e-forge` itself is outside the required check `All checks passed`: it pulls the forges' images from their own registries, whose outage should not block a merge; read its result before merging.
 
 ## Without the script
 

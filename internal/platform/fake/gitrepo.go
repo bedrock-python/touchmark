@@ -72,6 +72,8 @@ const (
 	hookSigned   = "FAKE_SIGNED_BRANCHES"
 	hookNoForce  = "FAKE_NOFORCE_BRANCHES"
 	hookNoDelete = "FAKE_NODELETE_BRANCHES"
+	// Branch patterns of the protected branches the pusher may not push to.
+	hookNoPush = "FAKE_NOPUSH_BRANCHES"
 )
 
 // preReceiveHook is the pre-receive hook of every bare repository, with
@@ -81,6 +83,9 @@ const (
 //     is judged by its diff, so moving a branch across others' workflow
 //     changes counts, and a new ref by its diff from the default branch
 //     (or from nothing in an empty repository); PushWorkflows;
+//   - a protected branch the pusher may not push to (a NoPush ruleset):
+//     any update, creation or deletion, with GitLab's message ("You are
+//     not allowed to push code to protected branches on this project.");
 //   - the rulesets that hold the pusher (rules.go): the deletion of a
 //     branch that refuses it ("Cannot delete this protected branch"), and,
 //     for other updates, a force push to a branch that refuses them
@@ -103,6 +108,10 @@ while read -r old new ref; do
 	*[!0]*) ;;
 	*)
 		case $ref in refs/heads/*) ;; *) continue ;; esac
+		if [ -n "$FAKE_NOPUSH_BRANCHES" ] && matches "${ref#refs/heads/}" $FAKE_NOPUSH_BRANCHES; then
+			echo "GitLab: You are not allowed to push code to protected branches on this project." >&2
+			exit 1
+		fi
 		if [ -n "$FAKE_NODELETE_BRANCHES" ] && matches "${ref#refs/heads/}" $FAKE_NODELETE_BRANCHES; then
 			echo "error: GH013: Repository rule violations found for $ref." >&2
 			echo "" >&2
@@ -126,6 +135,10 @@ while read -r old new ref; do
 	fi
 	case $ref in refs/heads/*) ;; *) continue ;; esac
 	branch=${ref#refs/heads/}
+	if [ -n "$FAKE_NOPUSH_BRANCHES" ] && matches "$branch" $FAKE_NOPUSH_BRANCHES; then
+		echo "GitLab: You are not allowed to push code to protected branches on this project." >&2
+		exit 1
+	fi
 	forced=
 	unsigned=
 	if [ -n "$FAKE_NOFORCE_BRANCHES" ] && matches "$branch" $FAKE_NOFORCE_BRANCHES; then

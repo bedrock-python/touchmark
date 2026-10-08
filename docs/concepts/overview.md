@@ -35,7 +35,9 @@ your-org/engineering-assets
 
 `plan` and `distribute` run the same pipeline; `plan` stops before writing, with the
 read account. `distribute --dry-run` runs it with the write account and also stops
-before writing, and its report is the same as `plan`'s.
+before writing. Its report is `plan`'s, except where the write account knows more: its
+permissions, and on GitLab, Gitea and Forgejo the protected branches it may not push to,
+which block a target before any write (`rules:protected-branch`).
 
 | Phase | What happens |
 |---|---|

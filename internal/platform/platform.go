@@ -374,7 +374,7 @@ type Committer interface {
 	Commit(ctx context.Context, r Repo, req CommitRequest) (Commit, error)
 }
 
-// Checker runs write-identity checks for doctor and preflight. Optional.
+// Checker runs write-identity checks for doctor. Optional.
 //
 // With repositories, Check reports the checks of each of them (Finding.Repo
 // its path): "access" (the identity may push and write pull requests),
@@ -401,8 +401,9 @@ type KeyChecker interface {
 
 // Preflighter tells, before any write, which platform rules delivery to r
 // will meet (signatures, force pushes, deletions, the permission to change
-// CI files). Optional: without it the core knows no rules upfront, as on
-// GitLab, Gitea and Forgejo, where pushes find them at run time.
+// CI files). Optional: without it the core knows none of these upfront, as
+// on GitLab, Gitea and Forgejo, where pushes find them at run time (a
+// PushGuard still tells the branches the writer may not push to at all).
 type Preflighter interface {
 	// Preflight reads the rules on branches of r (the default branch and
 	// the sync branch, which may not exist yet).
@@ -428,6 +429,25 @@ type Rules struct {
 	// files in r (GitHub: the App installation's Workflows permission).
 	// Only a write identity knows; a reader leaves both false.
 	WorkflowsKnown, Workflows bool
+}
+
+// PushGuard tells, before any write, which branches a protection rule
+// keeps the write identity from pushing to at all (GitLab's protected
+// branches, Gitea's and Forgejo's branch protection). Optional.
+type PushGuard interface {
+	// NoPush returns the branches among branches, the default branch
+	// aside, that a rule the identity can read keeps it from pushing to,
+	// each with the rule. A rule it cannot read never lists a branch:
+	// the push finds it. Only a rate limit, a refused credential or the
+	// end of ctx fail the call; any other failure leaves branches out.
+	NoPush(ctx context.Context, r Repo, branches []string) ([]Protected, error)
+}
+
+// Protected is a branch a protection rule keeps the identity from pushing
+// to, and the rule (its name or pattern; empty when the platform does not
+// show it).
+type Protected struct {
+	Branch, Rule string
 }
 
 // BatchReader reads one file from many repositories per request (GitHub

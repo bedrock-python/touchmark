@@ -109,10 +109,10 @@ type gitRequest struct {
 	// the default branch, the base of a new branch).
 	denyWorkflows bool
 	branch        string
-	// signed, noForce and noDelete are the branch patterns of the rulesets
-	// that hold the pusher (rules.go): signatures required, force pushes
-	// refused, deletions refused.
-	signed, noForce, noDelete []string
+	// signed, noForce, noDelete and noPush are the branch patterns of the
+	// rulesets that hold the pusher (rules.go): signatures required, force
+	// pushes refused, deletions refused, every push refused.
+	signed, noForce, noDelete, noPush []string
 }
 
 // credential is who a request's Basic credentials name: an account, with
@@ -211,7 +211,7 @@ func (p *Platform) admit(r *http.Request, repoPath string, push bool) (gitReques
 		}
 		workflows := grant.Workflows && (c.target == nil || c.target.perms.Workflows)
 		req.denyWorkflows = p.caps.WorkflowPerm && !workflows
-		req.signed, req.noForce, req.noDelete = p.hookRules(st, a)
+		req.signed, req.noForce, req.noDelete, req.noPush = p.hookRules(st, a)
 	}
 	return req, 0, ""
 }
@@ -339,6 +339,9 @@ func (s *GitServer) backend(w http.ResponseWriter, r *http.Request, req gitReque
 	}
 	if len(req.noDelete) > 0 {
 		env = append(env, hookNoDelete+"="+strings.Join(req.noDelete, " "))
+	}
+	if len(req.noPush) > 0 {
+		env = append(env, hookNoPush+"="+strings.Join(req.noPush, " "))
 	}
 	h := &cgi.Handler{
 		Path:   g.bin,

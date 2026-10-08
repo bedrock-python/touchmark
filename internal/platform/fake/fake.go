@@ -167,6 +167,7 @@ type Platform struct {
 	// Rules and API commits (rules.go): preflight and apiCommits are set
 	// by options only; workflowsHidden and apiUnsigned by their setters.
 	preflight       bool
+	pushGuard       bool
 	apiCommits      bool
 	workflowsHidden bool
 	apiUnsigned     bool

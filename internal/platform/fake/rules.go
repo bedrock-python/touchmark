@@ -33,6 +33,12 @@ import (
 // flavors with Caps.WorkflowPerm. HideRules and HideWorkflows make those
 // unknown, as for an identity that cannot read them.
 //
+// A ruleset with NoPush is a protected branch the accounts it holds may
+// not push to at all, as GitLab's and Gitea's branch protection: the git
+// server refuses their pushes to it, creations and deletions included, with
+// GitLab's message. WithPushGuard makes Writer a platform.PushGuard that
+// reports those branches (HideRules hides them).
+//
 // WithAPICommits sets Caps.Commit and makes the per-target writers of
 // Target platform.Committers (git mode only): Commit makes the commit on
 // the platform, signed (a gpgsig header) unless SetAPISigning turned
@@ -52,6 +58,9 @@ type Ruleset struct {
 	NonFastForward bool
 	// Deletion refuses deleting the branch.
 	Deletion bool
+	// NoPush refuses every push to the branch, as a protected branch that
+	// does not let the account push (GitLab, Gitea).
+	NoPush bool
 	// Bypass lists the accounts the ruleset does not hold (an App on the
 	// bypass list).
 	Bypass []platform.Account
@@ -61,6 +70,11 @@ type Ruleset struct {
 // (see Ruleset).
 func WithPreflight() Option {
 	return func(p *Platform) { p.preflight = true }
+}
+
+// WithPushGuard makes Writer implement platform.PushGuard (see Ruleset).
+func WithPushGuard() Option {
+	return func(p *Platform) { p.pushGuard = true }
 }
 
 // WithAPICommits makes the per-target writers implement
@@ -207,10 +221,10 @@ func (rs Ruleset) holds(account platform.Account) bool {
 }
 
 // hookRules returns the patterns of the branches on which the rulesets of s
-// that hold account require signatures, forbid force pushes and forbid
-// deletions, in the shell's case syntax of the pre-receive hook. Called
-// with mu held.
-func (p *Platform) hookRules(s *repoState, account platform.Account) (signed, noForce, noDelete []string) {
+// that hold account require signatures, forbid force pushes, forbid
+// deletions and forbid any push, in the shell's case syntax of the
+// pre-receive hook. Called with mu held.
+func (p *Platform) hookRules(s *repoState, account platform.Account) (signed, noForce, noDelete, noPush []string) {
 	for _, rs := range s.rulesets {
 		if !rs.holds(account) {
 			continue
@@ -235,8 +249,11 @@ func (p *Platform) hookRules(s *repoState, account platform.Account) (signed, no
 		if rs.Deletion {
 			noDelete = append(noDelete, pats...)
 		}
+		if rs.NoPush {
+			noPush = append(noPush, pats...)
+		}
 	}
-	return signed, noForce, noDelete
+	return signed, noForce, noDelete, noPush
 }
 
 // shellQuotePattern escapes the characters a branch name may hold that a
@@ -277,6 +294,60 @@ func (p *Platform) rulesOf(ctx context.Context, as platform.Account, r platform.
 		}
 		return out, nil
 	})
+}
+
+// noPushOf is NoPush of the PushGuard forms of Writer: the branches of r,
+// the default branch aside, that a NoPush ruleset holding as covers, each
+// with the ruleset's first pattern that matches it; none while the rules
+// are hidden.
+func (p *Platform) noPushOf(ctx context.Context, as platform.Account, r platform.Repo, branches []string) ([]platform.Protected, error) {
+	op := ops["NoPush"]
+	return do(ctx, p, &as, "NoPush", append([]string{r.Path}, branches...), func() ([]platform.Protected, error) {
+		s, err := p.repoOf(op, r)
+		if err != nil {
+			return nil, err
+		}
+		if s.rulesHidden {
+			return nil, nil
+		}
+		var out []platform.Protected
+		for _, b := range dedupe(branches) {
+			if b == "" || b == s.repo.DefaultBranch {
+				continue
+			}
+			for _, rs := range s.rulesets {
+				if !rs.NoPush || !rs.holds(as) || !rs.matches(b, s.repo.DefaultBranch) {
+					continue
+				}
+				rule := rs.Branches[0]
+				for _, pat := range rs.Branches {
+					if (Ruleset{Branches: []string{pat}}).matches(b, s.repo.DefaultBranch) {
+						rule = pat
+						break
+					}
+				}
+				out = append(out, platform.Protected{Branch: b, Rule: rule})
+				break
+			}
+		}
+		return out, nil
+	})
+}
+
+// guardWriter is a writer that tells the branches it may not push to
+// (WithPushGuard); preflightGuardWriter also reads the rules
+// (WithPreflight).
+type (
+	guardWriter          struct{ writer }
+	preflightGuardWriter struct{ preflightWriter }
+)
+
+func (w *guardWriter) NoPush(ctx context.Context, repo platform.Repo, branches []string) ([]platform.Protected, error) {
+	return w.p.noPushOf(ctx, w.as, repo, branches)
+}
+
+func (w *preflightGuardWriter) NoPush(ctx context.Context, repo platform.Repo, branches []string) ([]platform.Protected, error) {
+	return w.p.noPushOf(ctx, w.as, repo, branches)
 }
 
 // preflightReader is a reader that reads the rules (WithPreflight).

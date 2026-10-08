@@ -165,7 +165,11 @@ type WriteDeps struct {
 //     force pushes are decide's NoForcePush (blocked:rules:non-fast-forward
 //     under our open pull request, a branch created afresh without one).
 //     Rules the identity cannot read (Rules.Known false) change nothing.
-//     Then the signature (checkSigning): providers[].sign "always", or a
+//     A decision that still pushes asks the writer, when it is a
+//     platform.PushGuard (GitLab, Gitea and Forgejo), which branches it
+//     pushes to a protection rule keeps it from: one is blocked
+//     rules:protected-branch before any write (blockProtected), memory
+//     upkeep aside. Then the signature (checkSigning): providers[].sign "always", or a
 //     rule requiring signed commits, needs one; the signing key makes it,
 //     else the platform's API commit (Caps.Commit.API: phase F commits
 //     through the stage ref), else, outside ModePlan, which never holds

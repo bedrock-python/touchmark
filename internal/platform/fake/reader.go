@@ -31,6 +31,7 @@ var ops = map[string]string{
 	"Close":        "close",
 	"Snapshot":     "snapshot",
 	"Preflight":    "preflight",
+	"NoPush":       "read branch protection",
 	"Commit":       "commit",
 	// The checks of doctor (checker.go).
 	"Check":           "check",

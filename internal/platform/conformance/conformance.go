@@ -215,6 +215,7 @@ func Run(t *testing.T, newFixture func(t *testing.T) Fixture) {
 		{"EnsureLabels", testEnsureLabels},
 		{"Commit", testCommit},
 		{"Preflight", testPreflight},
+		{"PushGuard", testPushGuard},
 		{"Concurrent", testConcurrent},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

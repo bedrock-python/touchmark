@@ -228,6 +228,41 @@ func (w *writer) branchRules(ctx context.Context, op, owner, name string, branch
 	return platform.Finding{Check: "rules", Status: status, Detail: strings.Join(notes, "; ")}, nil
 }
 
+// NoPush lists the branches among branches, the default branch aside,
+// that branch protection keeps the writer from pushing to
+// (platform.PushGuard): GET /repos/{owner}/{repo}/branches/{branch} of
+// each, protected and not user_can_push, which the server works out for
+// the caller, with effective_branch_protection_name as the rule when the
+// server shows it (it does not to a writer without admin rights). The API knows existing branches only, so a protection that
+// covers a sync branch not created yet shows at its first push; so does
+// anything it cannot read.
+func (w *writer) NoPush(ctx context.Context, r platform.Repo, branches []string) ([]platform.Protected, error) {
+	const op = "read branch protection"
+	owner, name, err := repoPath(op, r)
+	if err != nil {
+		return nil, nil
+	}
+	var out []platform.Protected
+	for _, b := range uniqueBranches(branches) {
+		if b == r.DefaultBranch {
+			continue
+		}
+		var br apiRepoBranch
+		_, err := w.c.get(ctx, op, w.c.endpoint("repos", owner, name, "branches", b), nil, &br)
+		switch {
+		case err == nil:
+		case stops(err):
+			return nil, err
+		default:
+			continue
+		}
+		if br.Protected && !br.UserCanPush {
+			out = append(out, platform.Protected{Branch: b, Rule: br.EffectiveRef})
+		}
+	}
+	return out, nil
+}
+
 // uniqueBranches returns the non-empty branches, each once, in order.
 func uniqueBranches(branches []string) []string {
 	var out []string
@@ -289,4 +324,5 @@ func keyBlob(line string) string {
 var (
 	_ platform.Checker    = (*writer)(nil)
 	_ platform.KeyChecker = (*writer)(nil)
+	_ platform.PushGuard  = (*writer)(nil)
 )

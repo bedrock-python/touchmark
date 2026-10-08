@@ -84,11 +84,11 @@ type apiKey struct {
 // Developer is ok, Maintainer or Owner warn (a leaked key could read the
 // target's CI variables and change its protected branches), below
 // Developer fails. "rules" from the protected branches (Developer reads
-// them): a protected branch whose name or wildcard covers a
-// sync branch and does not let the writer push fails
-// (blocked:rules:protected-branch), one that lets it push without force
-// pushes warns (a rebuild is refused), a rule for a group the writer may
-// belong to is unknown; push rules (EE) show only at push time.
+// them), the most permissive of those whose name or wildcard covers a sync
+// branch deciding, as GitLab does: when none lets the writer push it fails
+// (blocked:rules:protected-branch), when none allows force pushes it warns
+// (a rebuild is refused), and when only a group the writer may belong to
+// could push it is unknown; push rules (EE) show only at push time.
 func (w *writer) Check(ctx context.Context, repos []platform.Repo, branches []string) ([]platform.Finding, error) {
 	if len(repos) == 0 {
 		return w.identityChecks(ctx)
@@ -277,14 +277,64 @@ func (w *writer) accessLevel(ctx context.Context, op string, self platform.Accou
 	return level, nil
 }
 
-// protectedRules grades the protected branches that cover the sync
-// branches, for the writer with level on the project.
-func (w *writer) protectedRules(ctx context.Context, op, id string, self platform.Account, level int, branches []string) (platform.Finding, error) {
-	var rules []apiProtectedBranch
-	complete, err := listAll(ctx, w.c, op, w.c.projectURL(id, "protected_branches"), nil, maxProtectedPages, func(b apiProtectedBranch) error {
+// listProtected lists the protected branches of project id; complete is
+// false when it has more than touchmark reads.
+func (w *writer) listProtected(ctx context.Context, op, id string) (rules []apiProtectedBranch, complete bool, err error) {
+	complete, err = listAll(ctx, w.c, op, w.c.projectURL(id, "protected_branches"), nil, maxProtectedPages, func(b apiProtectedBranch) error {
 		rules = append(rules, b)
 		return nil
 	})
+	return rules, complete, err
+}
+
+// branchVerdict is what the protected branches that match one branch let
+// the writer do there. GitLab applies the most permissive of the rules
+// that match a branch, to pushes and to force pushes alike.
+type branchVerdict struct {
+	// rules are the names of the protected branches that match it; none
+	// when it is not protected.
+	rules []string
+	// push is ok when one of them lets the writer push, unknown when none
+	// does but one lets a group push, whose members the writer cannot read,
+	// and fail otherwise.
+	push platform.FindingStatus
+	// force is set when one of them allows force pushes.
+	force bool
+}
+
+// verdictOf grades branch under rules for the writer (selfID, with level on
+// the project).
+func verdictOf(rules []apiProtectedBranch, branch string, selfID int64, level int) branchVerdict {
+	v := branchVerdict{push: platform.FindingOK}
+	group := false
+	pushes := false
+	for _, rule := range rules {
+		if !protectedMatch(rule.Name, branch) {
+			continue
+		}
+		v.rules = append(v.rules, rule.Name)
+		v.force = v.force || rule.AllowForcePush
+		switch canPush(rule.Push, selfID, level) {
+		case platform.FindingOK:
+			pushes = true
+		case platform.FindingUnknown:
+			group = true
+		}
+	}
+	switch {
+	case len(v.rules) == 0, pushes:
+	case group:
+		v.push = platform.FindingUnknown
+	default:
+		v.push = platform.FindingFail
+	}
+	return v
+}
+
+// protectedRules grades the protected branches that cover the sync
+// branches, for the writer with level on the project.
+func (w *writer) protectedRules(ctx context.Context, op, id string, self platform.Account, level int, branches []string) (platform.Finding, error) {
+	rules, complete, err := w.listProtected(ctx, op, id)
 	if err != nil {
 		return platform.Finding{}, err
 	}
@@ -301,23 +351,21 @@ func (w *writer) protectedRules(ctx context.Context, op, id string, self platfor
 		if b == "" {
 			continue
 		}
-		for _, rule := range rules {
-			if !protectedMatch(rule.Name, b) {
-				continue
-			}
-			switch canPush(rule.Push, selfID, level) {
-			case platform.FindingFail:
-				worse(platform.FindingFail)
-				notes = append(notes, fmt.Sprintf("protected branch %s keeps the writer from pushing to %s: blocked:rules:protected-branch", rule.Name, b))
-			case platform.FindingUnknown:
-				worse(platform.FindingUnknown)
-				notes = append(notes, fmt.Sprintf("protected branch %s covers %s and lets a group push, whose members the writer cannot read", rule.Name, b))
-			default:
-				if !rule.AllowForcePush {
-					worse(platform.FindingWarn)
-					notes = append(notes, fmt.Sprintf("protected branch %s covers %s without force pushes: a rebuild of the sync branch is refused", rule.Name, b))
-				}
-			}
+		v := verdictOf(rules, b, selfID, level)
+		if len(v.rules) == 0 {
+			continue
+		}
+		names := strings.Join(v.rules, ", ")
+		switch {
+		case v.push == platform.FindingFail:
+			worse(platform.FindingFail)
+			notes = append(notes, fmt.Sprintf("protected branch %s keeps the writer from pushing to %s: blocked:rules:protected-branch", names, b))
+		case v.push == platform.FindingUnknown:
+			worse(platform.FindingUnknown)
+			notes = append(notes, fmt.Sprintf("protected branch %s covers %s and lets a group push, whose members the writer cannot read", names, b))
+		case !v.force:
+			worse(platform.FindingWarn)
+			notes = append(notes, fmt.Sprintf("protected branch %s covers %s without force pushes: a rebuild of the sync branch is refused", names, b))
 		}
 	}
 	if !complete {
@@ -329,6 +377,63 @@ func (w *writer) protectedRules(ctx context.Context, op, id string, self platfor
 	}
 	notes = append(notes, "push rules show only at push time")
 	return platform.Finding{Check: "rules", Status: status, Detail: strings.Join(notes, "; ")}, nil
+}
+
+// NoPush lists the branches among branches, the default branch aside,
+// that protected branches keep the writer from pushing to
+// (platform.PushGuard): the rules that match the branch all deny the
+// writer, and none lets a group push. One request lists the protected
+// branches; the project and the writer's access level are read only when
+// one matches. A listing touchmark cannot read whole, or anything else it
+// cannot read, leaves the branches out: their pushes find the rules. Push
+// rules (EE) show only at push time.
+func (w *writer) NoPush(ctx context.Context, r platform.Repo, branches []string) ([]platform.Protected, error) {
+	const op = "read protected branches"
+	var want []string
+	for _, b := range branches {
+		if b != "" && b != r.DefaultBranch && !slices.Contains(want, b) {
+			want = append(want, b)
+		}
+	}
+	if len(want) == 0 {
+		return nil, nil
+	}
+	unread := func(err error) ([]platform.Protected, error) {
+		if stops(err) {
+			return nil, err
+		}
+		return nil, nil
+	}
+	id := projectID(r)
+	rules, complete, err := w.listProtected(ctx, op, id)
+	if err != nil {
+		return unread(err)
+	}
+	if !complete || !slices.ContainsFunc(want, func(b string) bool {
+		return slices.ContainsFunc(rules, func(rule apiProtectedBranch) bool { return protectedMatch(rule.Name, b) })
+	}) {
+		return nil, nil
+	}
+	self, err := w.c.selfAccount(ctx)
+	if err != nil {
+		return unread(err)
+	}
+	p, err := w.c.getProject(ctx, op, id)
+	if err != nil {
+		return unread(err)
+	}
+	level, err := w.accessLevel(ctx, op, self, p)
+	if err != nil {
+		return unread(err)
+	}
+	selfID, _ := strconv.ParseInt(self.ID, 10, 64)
+	var out []platform.Protected
+	for _, b := range want {
+		if v := verdictOf(rules, b, selfID, level); v.push == platform.FindingFail {
+			out = append(out, platform.Protected{Branch: b, Rule: strings.Join(v.rules, ", ")})
+		}
+	}
+	return out, nil
 }
 
 // protectedMatch reports whether a protected branch name, where '*' is a
@@ -432,4 +537,5 @@ func keyBlob(line string) string {
 var (
 	_ platform.Checker    = (*writer)(nil)
 	_ platform.KeyChecker = (*writer)(nil)
+	_ platform.PushGuard  = (*writer)(nil)
 )

@@ -6,9 +6,9 @@
 // It models only what touchmark uses, and each behavior is taken from
 // GitHub's documentation, from read-only calls to public github.com data,
 // or assumed where neither settles it; the table below names the source
-// of every one. Assumed behaviors are what the live GitHub sandbox must
-// confirm (docs/project/e2e.md, live sandbox scenarios); a test that
-// depends on one of them proves only the fake.
+// of every one. Assumed behaviors are what only a live GitHub can
+// confirm (docs/project/e2e.md, what only a live GitHub confirms); a
+// test that depends on one of them proves only the fake.
 //
 // # Layout
 //
@@ -46,7 +46,7 @@
 // Sources: "docs" (docs.github.com or the public schema, read 2026-09-24
 // to 2026-09-29), "observed" (read-only calls to public repositories on
 // 2026-09-29), "reports" (public issue reports, not documentation), and
-// "assumed" (needs the live sandbox).
+// "assumed" (needs a live GitHub).
 //
 //	Apps, JWTs and tokens
 //	  JWT RS256; iat not ahead, exp ahead and <= 10 min;        docs apps/creating-github-apps/authenticating-with-a-github-app/

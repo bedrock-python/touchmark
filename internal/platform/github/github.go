@@ -52,8 +52,8 @@
 //     GHES 3.19; GET /hash-algorithm exists on github.com and GHE.com, not
 //     in GHES 3.19.
 //
-// What only a live GitHub sandbox can confirm is listed in
-// docs/project/e2e.md (live sandbox scenarios) and marked "unverified"
+// What only a live GitHub can confirm is listed in docs/project/e2e.md
+// (what only a live GitHub confirms) and marked "unverified"
 // where the code depends on it.
 //
 // The driver never retries or paces (internal/throttle does), never knows

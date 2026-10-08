@@ -130,10 +130,10 @@ When something fails:
 
 ## After a release: the template and the hubs
 
-The hub template (`bedrock-python/engineering-assets-template`) and the bedrock-python hub name touchmark by commit and image digest. Until the first release they carry placeholders marked `TODO(release)`: `bedrock-python/touchmark@0000… # v0.1.0` in `.github/workflows`, and `ghcr.io/bedrock-python/touchmark:0.1.0@sha256:0000…` in `.gitlab-ci.yml` and `.gitea/workflows`. A hub created from a template with placeholders fails at the Action's step or at the image pull.
+The hub template (`bedrock-python/engineering-assets-template`) and the bedrock-python hub name touchmark by commit and image digest: the Action in `.github/workflows` by the commit of its tag, with `# vX.Y.Z` after it, and in the template the image as `ghcr.io/bedrock-python/touchmark:X.Y.Z@<digest>` in `.gitlab-ci.yml` and `.gitea/workflows`. Dependabot proposes the next release of the Action and Renovate the image's, after their cooldown; a release of our own can be pinned at once:
 
-1. In each of them, replace every placeholder with the release: the tag's commit (`git rev-parse vX.Y.Z^{commit}`, with `# vX.Y.Z` after it) and the image `ghcr.io/bedrock-python/touchmark:X.Y.Z@<digest>`, the digest from `docker buildx imagetools inspect ghcr.io/bedrock-python/touchmark:X.Y.Z --format '{{ .Manifest.Digest }}'`, and delete the `TODO(release)` lines. Afterwards Dependabot moves the Action and Renovate the image.
-2. Run `bash scripts/validate.sh --release` there: it fails while a placeholder is left.
+1. In each of them, pin the release: the tag's commit (`git rev-parse vX.Y.Z^{commit}`) and the image's digest from `docker buildx imagetools inspect ghcr.io/bedrock-python/touchmark:X.Y.Z --format '{{ .Manifest.Digest }}'`.
+2. Run `bash scripts/validate.sh --release` there: it checks that touchmark is pinned to a release everywhere.
 3. Run the template's pipelines against the published image ([e2e.md](e2e.md), "The hub template"): `scripts/e2e/gitea.sh` and `scripts/e2e/gitlab.sh` with `--template <template> --touchmark-image ghcr.io/bedrock-python/touchmark@<digest> --run TestTemplate`, and the GitHub dry run `TestTemplateWorkflow` with `TOUCHMARK_E2E_TEMPLATE` in the Docker run of the suite.
 4. Merge the change through a pull request in each repository.
 
@@ -141,7 +141,7 @@ Once, when the template is first published:
 
 - *Settings → General*: tick **Template repository**.
 - *Settings → Actions → General*: **Disable actions**. The template's workflows are a hub's: they deliver from the default branch and check every pull request of a hub, and in the template itself, with the placeholder `id` and no keys, every run would fail (`check` rejects the placeholder by design). touchmark's own CI checks the template instead (`ci.yml`, job `template`). Dependabot's version updates still open pull requests there.
-- A GitLab mirror `gitlab.com/bedrock-python/engineering-assets-template`: create it, and turn **CI/CD** off in its *Settings → General → Visibility, project features, permissions*, for the same reason. Keep it in sync from outside the template: a workflow placed in the template is copied into every hub created from it. Offer it in the template's README and in [GitLab](../getting-started/gitlab.md) only once it exists; until then both give the template's URL on GitHub to import.
+- There is no GitLab mirror of the template: on GitLab a hub imports the template from its URL on GitHub ([GitLab](../getting-started/gitlab.md)).
 
 ## Try a release locally
 

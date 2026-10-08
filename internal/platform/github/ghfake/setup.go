@@ -54,8 +54,7 @@ func (s *Server) addAccount(login, typ string, plan Plan) (*account, error) {
 
 // noreplyDomain is the domain of noreply commit addresses: github.com's,
 // or users.noreply.<host> on GHES (assumed: GHES documents the noreply
-// address without its form; the sandbox or a GHES administrator confirms
-// it).
+// address without its form; a GHES administrator confirms it).
 func (s *Server) noreplyDomain() string {
 	if s.flavor != GHES {
 		return "users.noreply.github.com"

@@ -24,8 +24,8 @@ import (
 
 // basicUser is the user name of git's Basic credentials: GitHub takes
 // "x-access-token" with an installation token, and a personal access token
-// as the password whatever the name (unverified for fine-grained tokens:
-// the sandbox checks it). The CLI and the driver register the Basic form
+// as the password whatever the name (unverified for fine-grained
+// tokens). The CLI and the driver register the Basic form
 // of this user for masking.
 const basicUser = "x-access-token"
 

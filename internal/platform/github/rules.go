@@ -65,8 +65,8 @@ func (d *reader) Preflight(ctx context.Context, r platform.Repo, branches []stri
 // with the App on its bypass list lets it push as if the rule were not
 // there), "pull_requests_only" and "never" keep it, and so does a ruleset
 // the writer cannot read. The installation token the writer reads with
-// acts as the App, as its per-target token does (unverified: the sandbox
-// confirms that a bypassing App reads "always"). The default branch's
+// acts as the App, as its per-target token does (unverified: only a live
+// GitHub shows that a bypassing App reads "always"). The default branch's
 // rules stay: the person who merges meets them, not the writer.
 func (w *writer) Preflight(ctx context.Context, r platform.Repo, branches []string) (platform.Rules, error) {
 	rules, err := w.c.rules(ctx, r, branches, true)

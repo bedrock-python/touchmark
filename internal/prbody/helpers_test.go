@@ -41,6 +41,7 @@ func capsOf(flavor string) platform.Caps {
 		c.MaxBody = 60000
 		c.Marker = platform.MarkerInRefDef
 		c.NoLabels = true
+		c.ClosedImmutable = true
 	}
 	return c
 }

@@ -148,7 +148,10 @@ type Input struct {
 	// GiteaWorkflows warns that a new .gitea/workflows or .forgejo/workflows
 	// turns off the target's .github/workflows on Gitea and Forgejo.
 	GiteaWorkflows bool
-	// Controls to show, unticked.
+	// Controls to show, unticked. A platform whose descriptions cannot
+	// carry them (Caps.BodyControls false: Bitbucket Cloud) shows neither:
+	// the paused block asks for a recreate entry in .touchmark/operations.yml
+	// instead.
 	ShowRecreate  bool
 	ShowRepropose bool
 	// Caps of the platform: MaxBody and QuickActions matter here (the "/"
@@ -211,6 +214,13 @@ const (
 //     the hub commit per target).
 //   - GitLab bodies say "merge request" and refer to "!N"; the others "pull
 //     request" and "#N".
+//   - Where descriptions cannot carry tick boxes (Caps.BodyControls false)
+//     the body shows no control whatever ShowRecreate and ShowRepropose
+//     say: the paused block names a recreate entry of
+//     .touchmark/operations.yml instead of the control. There, and where a
+//     closed pull request can never be edited (Caps.ClosedImmutable), the
+//     footnote names the forget_declines entry that has declined changes
+//     proposed again, since no control in a declined pull request can.
 //
 // Errors wrap ErrIntro (the intro breaks CheckIntro), ErrTooLarge or
 // ErrUnsafe; an unknown Change.Action, a HubURL that is not a plain http(s)
@@ -271,6 +281,9 @@ func newRenderer(in Input) (*renderer, error) {
 	hub, err := parseHubURL(in.HubURL, in.ContentCommit)
 	if err != nil {
 		return nil, err
+	}
+	if !in.Caps.BodyControls() {
+		in.ShowRecreate, in.ShowRepropose = false, false
 	}
 	r := &renderer{in: in, intro: intro, noun: "pull request", sigil: "#", optIn: "the opt-in file"}
 	if in.Caps.Flavor == "gitlab" {
@@ -713,8 +726,12 @@ func (r *renderer) pausedBlock() *cuttable {
 		items = append(items, item)
 	}
 	suffix := ""
-	if r.in.ShowRecreate {
+	switch {
+	case r.in.ShowRecreate:
 		suffix = "\n\nTo rebuild the branch and drop the other commits, tick **Rebuild this branch** below."
+	case !r.in.Caps.BodyControls():
+		suffix = "\n\nTo rebuild the branch and drop the other commits, ask the hub's maintainers to add a `recreate` entry " +
+			"with this branch's head to `.touchmark/operations.yml`."
 	}
 	return newCuttable(prefix, "\n", suffix, items, len(r.pending), "change", "changes")
 }
@@ -779,7 +796,20 @@ func (r *renderer) note() string {
 	return "---\n\nIf this " + r.noun + " is closed without merging, touchmark remembers it and does not propose the same changes again; " +
 		"a new one comes when the hub changes these files. " +
 		"Editing `packs` or `ignore` in " + r.optIn + " resets that memory, and `ignore` opts a file out for good. " +
+		r.forgetHint() +
 		"touchmark rewrites this description, so please comment instead of editing it."
+}
+
+// forgetHint is the footnote's sentence on the forget_declines entry, where
+// nothing in a declined pull request can bring its changes back: its
+// description carries no control, or can never be edited once declined.
+// "" elsewhere.
+func (r *renderer) forgetHint() string {
+	if r.in.Caps.BodyControls() && !r.in.Caps.ClosedImmutable {
+		return ""
+	}
+	return "To have the same changes proposed again sooner, the hub's maintainers can add a `forget_declines` entry " +
+		"with the number of this " + r.noun + " to `.touchmark/operations.yml`. "
 }
 
 // actionText is how a change reads in the table and the lists.

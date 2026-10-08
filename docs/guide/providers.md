@@ -167,12 +167,20 @@ their scopes: `doctor` reports both as unknown, so keep a reminder to rotate the
   touchmark records no label as set.
 - **Drafts** are Bitbucket's own draft flag (`pr.draft`).
 - **Closing.** touchmark closes its own pull request by declining it, after writing the
-  close into its description. Bitbucket can never reopen a declined pull request, nor
-  change it: a pull request touchmark closed stays closed, and the next proposal is a new
-  one. Remembering a person's decline is not supported yet: touchmark never proposes the
-  declined content again, but cannot write its acknowledgment into the declined pull
-  request, so the target reports a failure on each run until a later release records it
-  another way.
+  close into its description in the same edit. Bitbucket can never reopen a declined pull
+  request, nor change it: a pull request touchmark closed stays closed, and the next
+  proposal is a new one.
+- **Declines** are remembered without writing to the declined pull request: while a pull
+  request is open, its marker records the state of the opt-in file it is proposed under
+  (touchmark brings it up to date when the file changes), and a person's decline holds
+  while the opt-in file is parsed the same. touchmark leaves no comment on it; the report
+  says `declined`. To have declined content proposed again, edit `packs` or `ignore`, or
+  add a `forget_declines` entry, which acts while it is present on Bitbucket (see
+  [Memory of declined pull requests](../concepts/memory.md#on-bitbucket-cloud)).
+- **No tick boxes.** *Rebuild this branch* and *Propose this content again* rest on HTML
+  comments, which Bitbucket shows as text: descriptions there carry neither. A paused
+  pull request asks for a `recreate` entry in `.touchmark/operations.yml` instead, and the
+  footnote names `forget_declines`.
 - **Branch restrictions** are readable with admin rights only, which the writer should
   not have: `doctor` shows `rules` as unknown, and a push a restriction refuses
   ("Permission denied to update branch") is `blocked:rules:protected-branch`.

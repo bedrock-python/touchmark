@@ -37,7 +37,7 @@ cleanup to stay safe:
 | Entry | Acts | Then |
 |---|---|---|
 | `recreate` | while the sync branch's head is exactly `head` | a new push to the branch makes it inert |
-| `forget_declines` | once: touchmark marks pull request `pr` revoked | inert |
+| `forget_declines` | once: touchmark marks pull request `pr` revoked; on Bitbucket Cloud, while the entry is present (see below) | inert |
 | `allow_mass_close` | up to `max` closes in a run, until the end of `until` (UTC) | inert after the date |
 | `adopt_unmarked` | until the end of `until` (UTC) | inert after the date |
 
@@ -62,6 +62,15 @@ A target's team can do two of these themselves, from the pull request:
   head at that moment;
 - tick **Propose this content again** in a declined pull request: the same as
   `forget_declines`, or simply reopen it.
+
+On Bitbucket Cloud descriptions carry no tick boxes, and a declined pull request can
+never be reopened or edited: a `recreate` entry is the only way to rebuild a paused
+branch, and a `forget_declines` entry the only way, besides editing `packs` or `ignore`,
+to have declined content proposed again. touchmark cannot mark the declined pull request revoked there, so the entry acts
+on every run while it is present: keep it until the pull request it brings is merged or
+closed. Removed earlier, the decline is in force again; an open pull request stays, as
+memory never closes one, and its description then names the decline under *Previously
+declined*.
 
 ## On your machine
 

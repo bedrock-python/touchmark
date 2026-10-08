@@ -56,7 +56,7 @@ func TestProtectedBranch(t *testing.T) {
 	dry := s.decode(s.run(0, map[string]string{s.envVar("WRITE_TOKEN"): s.e.Writer.Token},
 		"distribute", "--dry-run", "--hub", s.hub, "--hub-fp", s.fp, "--format", "json"))
 	s.want("a dry run", dry, s.expect(map[string]string{
-		"alpha": "blocked:rules:protected-branch", "beta": "opened", "delta": "opened",
+		"alpha": "blocked:rules:protected-branch", "beta": "opened:", "delta": "opened:",
 	}))
 	alphaWarned("a dry run", dry)
 

@@ -820,7 +820,11 @@ func (r *run) blockProtected(w *Work, protected []platform.Protected) {
 	}
 	w.Decision = decide.TargetDecision{Outcome: decide.OutcomeBlocked, Reason: decide.ReasonRulesProtected, PR: d.PR, Branch: d.Branch, Steps: upkeep}
 	for _, p := range protected {
-		w.t.res.Warnings = append(w.t.res.Warnings, fmt.Sprintf("branch %s is protected (%s), and the writer may not push to it", p.Branch, p.Rule))
+		rule := ""
+		if p.Rule != "" {
+			rule = " (" + p.Rule + ")"
+		}
+		w.t.res.Warnings = append(w.t.res.Warnings, fmt.Sprintf("branch %s is protected%s, and the writer may not push to it", p.Branch, rule))
 	}
 }
 

@@ -1,7 +1,6 @@
 package gitea
 
 import (
-	"cmp"
 	"context"
 	"fmt"
 	"slices"
@@ -233,7 +232,8 @@ func (w *writer) branchRules(ctx context.Context, op, owner, name string, branch
 // that branch protection keeps the writer from pushing to
 // (platform.PushGuard): GET /repos/{owner}/{repo}/branches/{branch} of
 // each, protected and not user_can_push, which the server works out for
-// the caller. The API knows existing branches only, so a protection that
+// the caller, with effective_branch_protection_name as the rule when the
+// server shows it (it does not to a writer without admin rights). The API knows existing branches only, so a protection that
 // covers a sync branch not created yet shows at its first push; so does
 // anything it cannot read.
 func (w *writer) NoPush(ctx context.Context, r platform.Repo, branches []string) ([]platform.Protected, error) {
@@ -257,7 +257,7 @@ func (w *writer) NoPush(ctx context.Context, r platform.Repo, branches []string)
 			continue
 		}
 		if br.Protected && !br.UserCanPush {
-			out = append(out, platform.Protected{Branch: b, Rule: cmp.Or(br.EffectiveRef, b)})
+			out = append(out, platform.Protected{Branch: b, Rule: br.EffectiveRef})
 		}
 	}
 	return out, nil

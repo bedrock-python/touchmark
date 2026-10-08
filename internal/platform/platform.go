@@ -444,7 +444,8 @@ type PushGuard interface {
 }
 
 // Protected is a branch a protection rule keeps the identity from pushing
-// to, and the rule (its name or pattern).
+// to, and the rule (its name or pattern; empty when the platform does not
+// show it).
 type Protected struct {
 	Branch, Rule string
 }

@@ -17,7 +17,8 @@ import (
 //   - alpha protects touchmark/* after the first run opened its pull
 //     request: after a pack change, a dry run and distribute block it
 //     rules:protected-branch before any write, with a warning naming the
-//     rule, the pull request as it was.
+//     branch (the forge does not show the writer the rule's name), the
+//     pull request as it was.
 //   - beta protects touchmark/* before the first run: the sync branch does
 //     not exist, so the protection shows at its first push, refused with
 //     the same reason and nothing written.
@@ -66,8 +67,11 @@ func TestProtectedBranch(t *testing.T) {
 		s.want(c.what, c.rep, map[string]string{"alpha": "blocked:rules:protected-branch #1"})
 		noWrites(c.what, c.rep, "alpha")
 		for _, tg := range c.rep.Targets {
-			if tg.Path == s.repos["alpha"] && !strings.Contains(strings.Join(tg.Warnings, " "), "is protected (touchmark/*)") {
-				t.Errorf("%s: alpha's warnings %q do not name the rule", c.what, tg.Warnings)
+			if tg.Path == s.repos["alpha"] && !strings.Contains(strings.Join(tg.Warnings, " "), "branch "+s.branch+" is protected") {
+				t.Errorf("%s: alpha's warnings %q do not name the protected branch", c.what, tg.Warnings)
+			}
+			if tg.Path == s.repos["alpha"] && c.what == "a dry run" {
+				finding(t, "protected-branch-predicted", "alpha, touchmark/* protected after its pull request opened, a dry run: %s:%s %q", tg.Outcome, tg.Reason, tg.Warnings)
 			}
 		}
 	}

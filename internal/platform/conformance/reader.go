@@ -361,6 +361,78 @@ func testReadFileEmptyRepo(t *testing.T, fx Fixture) {
 	wantErr(t, "ReadFile in an empty repository", err, platform.ErrNotFound, platform.ClassNotFound)
 }
 
+// testReadFiles checks platform.BatchReader, for the drivers whose reader
+// is one: one path read across repositories where it is a regular file, an
+// executable, binary content, a file over the limit, a symlink, a
+// submodule, a directory, missing, and an empty repository comes back as
+// ReadFile reads it in each: the same file, or an error of the same kind
+// (ErrNotFound, ErrNotRegular, ErrTooLarge). A nested path through a
+// symlinked directory is never a file.
+func testReadFiles(t *testing.T, fx Fixture) {
+	ctx := t.Context()
+	br, ok := fx.Reader().(platform.BatchReader)
+	if !ok {
+		t.Skip("the reader reads files one by one")
+	}
+	const p, max = "cfg.yml", 1024
+	specs := []RepoSpec{
+		{Name: "batch-file", Files: []File{{Path: p, Content: []byte("version: 1\n")}}},
+		{Name: "batch-exec", Files: []File{{Path: p, Mode: "100755", Content: []byte("#!/bin/sh\necho batch\n")}}},
+		{Name: "batch-binary", Files: []File{{Path: p, Content: []byte{0, 1, 2, 0xff, 0xfe, 0}}}},
+		{Name: "batch-large", Files: []File{{Path: p, Content: bytes.Repeat([]byte("x"), 2*max)}}},
+		{Name: "batch-link", Files: []File{readme[0], {Path: p, Mode: "120000", Content: []byte("README.md")}}},
+		{Name: "batch-sub", Files: []File{readme[0], {Path: p, Mode: "160000", Content: []byte("0123456789abcdef0123456789abcdef01234567")}}},
+		{Name: "batch-dir", Files: []File{{Path: p + "/inner.md", Content: []byte("inner\n")}}},
+		{Name: "batch-missing", Files: readme},
+		{Name: "batch-empty"},
+	}
+	repos := make([]platform.Repo, len(specs))
+	for i, s := range specs {
+		repos[i] = fx.CreateRepo(t, s)
+	}
+	files, err := br.ReadFiles(ctx, repos, p, max)
+	var fe platform.FileErrors
+	if err != nil && !errors.As(err, &fe) {
+		t.Fatalf("ReadFiles: %v", err)
+	}
+	if len(files) != len(repos) || (fe != nil && len(fe) != len(repos)) {
+		t.Fatalf("ReadFiles: %d files, %d errors for %d repositories", len(files), len(fe), len(repos))
+	}
+	for i, r := range repos {
+		want, wantErr := fx.Reader().ReadFile(ctx, r, "", p, max)
+		var got error
+		if fe != nil {
+			got = fe[i]
+		}
+		if wantErr == nil {
+			if f := files[i]; got != nil || f.OID != want.OID || f.Mode != want.Mode || !bytes.Equal(f.Content, want.Content) {
+				t.Errorf("%s: ReadFiles = %s %s %q, %v; ReadFile = %s %s %q", specs[i].Name, f.Mode, f.OID, f.Content, got, want.Mode, want.OID, want.Content)
+			}
+			continue
+		}
+		if got == nil {
+			t.Errorf("%s: ReadFiles read %q; ReadFile failed: %v", specs[i].Name, files[i].Content, wantErr)
+			continue
+		}
+		for _, sentinel := range []error{platform.ErrNotFound, platform.ErrNotRegular, platform.ErrTooLarge} {
+			if errors.Is(got, sentinel) != errors.Is(wantErr, sentinel) {
+				t.Errorf("%s: ReadFiles: %v; ReadFile: %v", specs[i].Name, got, wantErr)
+			}
+		}
+	}
+
+	linked := fx.CreateRepo(t, RepoSpec{Name: "batch-dirlink", Files: []File{
+		{Path: "docs/" + p, Content: []byte("behind the link\n")},
+		{Path: "conf", Mode: "120000", Content: []byte("docs")},
+	}})
+	files, err = br.ReadFiles(ctx, []platform.Repo{linked}, "conf/"+p, max)
+	if err == nil {
+		t.Errorf("ReadFiles through a symlinked directory = %q", files[0].Content)
+	} else if !errors.Is(err, platform.ErrNotFound) && !errors.Is(err, platform.ErrNotRegular) {
+		t.Errorf("ReadFiles through a symlinked directory: %v; want ErrNotFound or ErrNotRegular", err)
+	}
+}
+
 func testRemote(t *testing.T, fx Fixture) {
 	repo := fx.CreateRepo(t, RepoSpec{Name: "remote", Files: readme})
 	rem, err := fx.Reader().Remote(t.Context(), repo)

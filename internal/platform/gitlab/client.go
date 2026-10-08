@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/bedrock-python/touchmark/internal/auth"
 	"github.com/bedrock-python/touchmark/internal/config"
@@ -49,6 +50,10 @@ type client struct {
 	web, host string
 	token     string // "" when anonymous
 	auth      *httpx.Auth
+	// gqlAuth is the token as a bearer token, for GraphQL; noGraphQL is set
+	// once the instance turned a GraphQL request down (ReadFiles).
+	gqlAuth   *httpx.Auth
+	noGraphQL atomic.Bool
 	masks     *redact.Registry
 
 	mu    sync.Mutex
@@ -98,6 +103,7 @@ func newClient(p config.ResolvedProvider, cred auth.Credential, hc *httpx.Client
 		c.token = cred.Token
 		c.masks.Add(cred.Token, basicUser)
 		c.auth = &httpx.Auth{Hosts: []string{strings.ToLower(apiURL.Host)}, Name: tokenHeader, Header: c.apiHeader}
+		c.gqlAuth = &httpx.Auth{Hosts: []string{strings.ToLower(apiURL.Host)}, Name: "Authorization", Header: c.bearerHeader}
 	case auth.App:
 		return nil, fmt.Errorf("gitlab: provider %s: a GitHub App cannot sign in to GitLab; use a token of a service account or a group access token", p.ID)
 	default:
@@ -126,6 +132,10 @@ func baseURL(what, raw string) (string, *url.URL, error) {
 
 // apiHeader is the PRIVATE-TOKEN header of API requests.
 func (c *client) apiHeader(context.Context) (string, error) { return c.token, nil }
+
+// bearerHeader is the Authorization header of GraphQL requests
+// (https://docs.gitlab.com/api/graphql/#authentication).
+func (c *client) bearerHeader(context.Context) (string, error) { return "Bearer " + c.token, nil }
 
 // gitHeader is the Authorization header of git over HTTPS.
 func (c *client) gitHeader(ctx context.Context) (string, error) {

@@ -192,6 +192,7 @@ func Run(t *testing.T, newFixture func(t *testing.T) Fixture) {
 		{"ReadFile/symlink", testReadFileSymlink},
 		{"ReadFile/submodule", testReadFileSubmodule},
 		{"ReadFile/empty-repo", testReadFileEmptyRepo},
+		{"ReadFiles", testReadFiles},
 		{"Remote", testRemote},
 		{"PRs", testPRs},
 		{"PRs/fork", testPRsFork},

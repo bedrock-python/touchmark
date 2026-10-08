@@ -2,8 +2,9 @@
 // (bitbucket.org, REST API 2.0). Bitbucket Data Center has another API and
 // is not served here.
 //
-// This release reads only: NewReader serves plan, and NewWriter refuses
-// with ClassUnsupported until the writer comes.
+// NewReader serves plan; NewWriter serves distribute and doctor: it opens,
+// edits, declines and comments on pull requests and pushes over git, and
+// reports the writer's access for doctor (platform.Checker).
 //
 // Authentication is an API token of a bot account (app passwords are gone:
 // their creation closed on 2025-09-09). The API gets
@@ -38,7 +39,15 @@
 //     commit hashes are short (12 digits); there are no labels;
 //   - limits are per account and hour (1 000 requests to
 //     /2.0/repositories/*), answered with 429 and x-ratelimit-* headers
-//     whose reset is in seconds.
+//     whose reset is in seconds;
+//   - only open pull requests can be changed (PUT …/pullrequests/{id}), and a
+//     declined one can never be reopened; a pull request is closed by
+//     declining it (POST …/decline);
+//   - an account's permission on a repository (admin, write, read) is
+//     GET /2.0/user/workspaces/{workspace}/permissions/repositories, filtered
+//     by the repository's uuid; branch restrictions are readable with admin
+//     rights only, so a push meets them ("Permission denied to update
+//     branch …").
 //
 // The driver never retries or paces (internal/throttle does), never knows
 // about packs or markers, and masks secrets in its errors.
@@ -65,17 +74,33 @@ func NewReader(p config.ResolvedProvider, c auth.Credential, client *httpx.Clien
 	return &reader{c: cl}, nil
 }
 
-// errNoWriter is why NewWriter refuses.
-var errNoWriter = errors.New("the Bitbucket writer comes in a later release; plan reads Bitbucket Cloud already")
-
-// NewWriter refuses with ClassUnsupported: this release reads Bitbucket
-// Cloud only, so distribute and doctor cannot run for a bitbucket provider
-// yet.
-func NewWriter(config.ResolvedProvider, auth.Credential, *httpx.Client) (platform.Writer, error) {
-	return nil, &platform.Error{Op: "new writer", Class: platform.ClassUnsupported, Err: errNoWriter}
+// NewWriter returns the write driver for provider p with credential c, an
+// API token of the bot account that writes (a write identity is never
+// anonymous). Target checks the account's permission on the repository
+// (write or admin) and returns a TargetWriter bound to it; Bitbucket cannot
+// mint narrower tokens, so Close only retires the TargetWriter: later calls
+// through it fail with ClassAuth. Self also reads the account's primary
+// confirmed address (GET /2.0/user/emails), the author of its commits.
+func NewWriter(p config.ResolvedProvider, c auth.Credential, client *httpx.Client) (platform.Writer, error) {
+	if c.Kind == 0 {
+		return nil, errors.New("bitbucket: the write driver needs a token")
+	}
+	cl, err := newClient(p, c, client)
+	if err != nil {
+		return nil, err
+	}
+	cl.wantEmail = true
+	return &writer{reader: reader{c: cl}}, nil
 }
 
 // reader is platform.Reader over one identity.
 type reader struct{ c *client }
 
-var _ platform.Reader = (*reader)(nil)
+// writer is platform.Writer: a reader that can mint TargetWriters.
+type writer struct{ reader }
+
+var (
+	_ platform.Reader  = (*reader)(nil)
+	_ platform.Writer  = (*writer)(nil)
+	_ platform.Checker = (*writer)(nil)
+)

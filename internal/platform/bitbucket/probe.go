@@ -3,7 +3,10 @@ package bitbucket
 import (
 	"context"
 	"errors"
+	"net/url"
 	"regexp"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/bedrock-python/touchmark/internal/platform"
@@ -57,6 +60,8 @@ func (d *reader) Probe(context.Context) (platform.Caps, error) {
 		Flavor:  "bitbucket",
 		MaxBody: maxBody,
 		Draft:   platform.DraftNative,
+		// Pull requests have no labels.
+		NoLabels: true,
 		// closed_by names who declined or merged a pull request.
 		CloserKnown: true,
 		// The API escapes HTML in descriptions: an HTML comment would show.
@@ -93,10 +98,62 @@ func (c *client) selfAccount(ctx context.Context) (platform.Account, error) {
 		return platform.Account{}, shapeError(op, "GET /user: no uuid")
 	}
 	a := toAccount(&u)
+	if c.wantEmail {
+		email, err := c.primaryEmail(ctx, op)
+		if err != nil {
+			return platform.Account{}, err
+		}
+		a.Email = email
+	}
 	c.mu.Lock()
 	c.self = &a
 	c.mu.Unlock()
 	return a, nil
+}
+
+// maxEmailPages bounds the listing of the account's addresses.
+const maxEmailPages = 5
+
+// apiEmail is an address of GET /2.0/user/emails (the OpenAPI description
+// does not describe its answer; these are the fields the API sends).
+type apiEmail struct {
+	Email       string `json:"email"`
+	IsPrimary   bool   `json:"is_primary"`
+	IsConfirmed bool   `json:"is_confirmed"`
+}
+
+// primaryEmail returns the primary address of the credential's account
+// when it is confirmed (GET /2.0/user/emails, scope read:user:bitbucket, the
+// scope GET /2.0/user needs too): the commit author touchmark gives the
+// writer's commits, which Bitbucket links to the account by that address.
+// "" when the account has none or the listing fails for another reason
+// than a rate limit, a refused credential or the end of ctx, which fail the
+// call: the core then authors commits with a placeholder address.
+func (c *client) primaryEmail(ctx context.Context, op string) (string, error) {
+	found := ""
+	q := url.Values{"pagelen": {strconv.Itoa(repoPageLen)}}
+	_, err := listAll(ctx, c, op, c.endpoint("user", "emails"), q, maxEmailPages, func(e apiEmail) error {
+		if found == "" && e.IsPrimary && e.IsConfirmed && validEmail(e.Email) {
+			found = e.Email
+		}
+		return nil
+	})
+	switch {
+	case err != nil && stops(err):
+		return "", err
+	case err != nil:
+		return "", nil
+	}
+	return found, nil
+}
+
+// validEmail reports whether s can be a commit author's address: one "@"
+// between non-empty parts, and nothing git would refuse or misread (no
+// angle brackets, blanks or control characters).
+func validEmail(s string) bool {
+	local, domain, ok := strings.Cut(s, "@")
+	return ok && local != "" && domain != "" && !strings.Contains(domain, "@") &&
+		!strings.ContainsFunc(s, func(r rune) bool { return r <= ' ' || r == '<' || r == '>' || r == 0x7f })
 }
 
 // Lookup resolves a login to its account: a uuid in braces or an Atlassian

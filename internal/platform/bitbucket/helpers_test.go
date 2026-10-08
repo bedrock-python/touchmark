@@ -1,6 +1,7 @@
 package bitbucket
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -28,14 +29,18 @@ import (
 // them.
 
 // apiServer is an httptest server that answers the routes a test declares
-// and records every request. An undeclared route fails the test. Routes
-// are paths under /2.0 as sent, escaped ("/users/%7B…%7D").
+// and records every request. An undeclared route fails the test, and so
+// does any write unless the test is the writer's (allowWrites), whose
+// writes are declared routes too. Routes are paths under /2.0 as sent,
+// escaped ("/users/%7B…%7D").
 type apiServer struct {
 	t      *testing.T
 	srv    *httptest.Server
 	mu     sync.Mutex
 	routes map[string]http.HandlerFunc
 	calls  []apiCall
+	// allowWrites lets the writer's tests write (their declared routes).
+	allowWrites bool
 }
 
 // apiCall is one request the server received.
@@ -43,6 +48,7 @@ type apiCall struct {
 	Method, Path string // Path escaped, under /2.0
 	Query        url.Values
 	Auth         string // Authorization
+	Body         []byte
 }
 
 func newAPIServer(t *testing.T) *apiServer {
@@ -52,6 +58,9 @@ func newAPIServer(t *testing.T) *apiServer {
 	t.Cleanup(s.srv.Close)
 	// The read driver never writes.
 	t.Cleanup(func() {
+		if s.allowWrites {
+			return
+		}
 		for _, c := range s.writes() {
 			t.Errorf("the reader wrote: %s %s", c.Method, c.Path)
 		}
@@ -63,10 +72,11 @@ func newAPIServer(t *testing.T) *apiServer {
 func (s *apiServer) base() string { return s.srv.URL }
 
 func (s *apiServer) serve(w http.ResponseWriter, r *http.Request) {
-	_, _ = io.Copy(io.Discard, r.Body)
+	body, _ := io.ReadAll(r.Body)
+	r.Body = io.NopCloser(bytes.NewReader(body))
 	p := r.URL.EscapedPath()
 	s.mu.Lock()
-	s.calls = append(s.calls, apiCall{Method: r.Method, Path: p, Query: r.URL.Query(), Auth: r.Header.Get("Authorization")})
+	s.calls = append(s.calls, apiCall{Method: r.Method, Path: p, Query: r.URL.Query(), Auth: r.Header.Get("Authorization"), Body: body})
 	h := s.routes[r.Method+" "+p]
 	s.mu.Unlock()
 	if h == nil {

@@ -7,8 +7,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -184,17 +186,34 @@ type apiMessage struct {
 	Error struct {
 		Message string `json:"message"`
 		Detail  string `json:"detail"`
+		// Fields are messages about fields of a write's request, by field,
+		// each a list of messages or one ({"reviewers": ["Malformed
+		// reviewers list"]}, as Renovate reads them; the OpenAPI description
+		// leaves them out).
+		Fields map[string]json.RawMessage `json:"fields"`
 	} `json:"error"`
 }
 
-// text returns the message and its detail on one line.
+// text returns the message, its detail and the messages of its fields
+// ("reviewers: Malformed reviewers list"), by field name, on one line.
 func (m apiMessage) text() string {
-	parts := make([]string, 0, 2)
+	parts := make([]string, 0, 2+len(m.Error.Fields))
 	if m.Error.Message != "" {
 		parts = append(parts, m.Error.Message)
 	}
 	if m.Error.Detail != "" && m.Error.Detail != m.Error.Message {
 		parts = append(parts, m.Error.Detail)
+	}
+	for _, k := range slices.Sorted(maps.Keys(m.Error.Fields)) {
+		var list []string
+		if json.Unmarshal(m.Error.Fields[k], &list) != nil {
+			var one string
+			if json.Unmarshal(m.Error.Fields[k], &one) != nil {
+				continue
+			}
+			list = []string{one}
+		}
+		parts = append(parts, k+": "+strings.Join(list, ", "))
 	}
 	return strings.Join(strings.FieldsFunc(strings.Join(parts, "; "), func(r rune) bool {
 		return unicode.IsSpace(r) || unicode.IsControl(r)
@@ -278,6 +297,11 @@ func seconds(n int64) time.Duration {
 		return maxRetryAfter
 	}
 	return time.Duration(n) * time.Second
+}
+
+// closedError is the error of a TargetWriter used after Close.
+func closedError(op string) error {
+	return &platform.Error{Op: op, Class: platform.ClassAuth, Err: errors.New("the target writer is closed")}
 }
 
 // invalid is a ClassInvalid error of op: the request was wrong.

@@ -98,8 +98,8 @@ func runSetup(ctx context.Context, e *env, o *options, s *setupOptions) (err err
 	case "gitea", "forgejo":
 		return giteaRefusal(platform)
 	case "bitbucket":
-		return configErrorf("setup does not set up bitbucket yet: touchmark reads Bitbucket Cloud (plan), and its writer, " +
-			"which delivery and setup need, comes in a later release")
+		return configErrorf("setup does not set up bitbucket yet: a hub on Bitbucket Pipelines comes in a later release; " +
+			"a hub on GitHub or GitLab delivers to Bitbucket Cloud as one of its providers")
 	case "github", "gitlab":
 	default:
 		return usageErrorf("unknown platform %q: setup sets up github or gitlab", platform)

@@ -151,3 +151,15 @@ func TestBlobID(t *testing.T) {
 		}
 	}
 }
+
+// TestMessageFields: the messages of a write's fields join the message, by
+// field name, whether a field has a list of messages or one.
+func TestMessageFields(t *testing.T) {
+	m := parseMessage(`{"type": "error", "error": {"message": "Bad request", "fields": {` +
+		`"reviewers": ["Malformed reviewers list", "x is the author and cannot be included as a reviewer."], ` +
+		`"destination": "branch not found", "odd": {"a": 1}}}}`)
+	want := "Bad request; destination: branch not found; reviewers: Malformed reviewers list, x is the author and cannot be included as a reviewer."
+	if got := m.text(); got != want {
+		t.Errorf("text = %q\nwant %q", got, want)
+	}
+}

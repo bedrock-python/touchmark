@@ -1,7 +1,6 @@
 package bitbucket
 
 import (
-	"errors"
 	"net/http"
 	"slices"
 	"strings"
@@ -21,13 +20,13 @@ func TestProbe(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := platform.Caps{
-		Flavor: "bitbucket", MaxBody: 60000, Draft: platform.DraftNative, CloserKnown: true,
+		Flavor: "bitbucket", MaxBody: 60000, Draft: platform.DraftNative, CloserKnown: true, NoLabels: true,
 		Marker: platform.MarkerInRefDef, RuntimeOnly: []string{"branch-restrictions"},
 		Limits: platform.Limits{Reads: 2, GitReads: 2, ReadsPerMinute: 15, MinInterval: time.Second},
 	}
 	if caps.Flavor != want.Flavor || caps.MaxBody != want.MaxBody || caps.Draft != want.Draft || !caps.CloserKnown ||
 		caps.Marker != want.Marker || !slices.Equal(caps.RuntimeOnly, want.RuntimeOnly) || caps.Limits != want.Limits ||
-		caps.LabelsByID || caps.QuickActions || caps.WorkflowPerm || caps.Commit.API {
+		caps.LabelsByID || caps.QuickActions || caps.WorkflowPerm || caps.Commit.API || !caps.NoLabels {
 		t.Errorf("Probe = %+v\nwant %+v", caps, want)
 	}
 	if calls := f.requests("", ""); len(calls) != 0 {
@@ -148,9 +147,20 @@ func TestNewReaderAndWriter(t *testing.T) {
 	if _, err := NewReader(s.provider(), tok, nil); err == nil {
 		t.Error("NewReader without an HTTP client: no error")
 	}
-	w, err := NewWriter(s.provider(), tok, client)
-	wantClass(t, "NewWriter", err, platform.ClassUnsupported, nil)
-	if w != nil || !errors.Is(err, errNoWriter) || !strings.Contains(err.Error(), "the Bitbucket writer comes in a later release") {
-		t.Errorf("NewWriter = %v, %v; want no writer and the reason", w, err)
+	for name, tc := range map[string]struct {
+		p    config.ResolvedProvider
+		c    auth.Credential
+		want string
+	}{
+		"anonymous": {s.provider(), auth.Credential{}, "the write driver needs a token"},
+		"an app":    {s.provider(), auth.Credential{Kind: auth.App, AppID: "1", AppKey: []byte("k")}, "a GitHub App cannot sign in to Bitbucket"},
+		"no api":    {noAPI, tok, "api_url is empty"},
+	} {
+		if w, err := NewWriter(tc.p, tc.c, client); err == nil || w != nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: NewWriter = %v, %v; want %q", name, w, err, tc.want)
+		}
+	}
+	if w, err := NewWriter(s.provider(), tok, client); err != nil || w == nil {
+		t.Errorf("NewWriter = %v, %v; want a writer", w, err)
 	}
 }

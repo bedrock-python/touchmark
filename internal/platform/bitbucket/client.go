@@ -56,6 +56,10 @@ type client struct {
 	auth      *httpx.Auth
 	masks     *redact.Registry
 
+	// wantEmail makes selfAccount read the account's primary address, for
+	// the commits of a writer.
+	wantEmail bool
+
 	mu   sync.Mutex
 	self *platform.Account // cached by selfAccount
 	// commits maps "<repository uuid> <short hash>" to the full commit id

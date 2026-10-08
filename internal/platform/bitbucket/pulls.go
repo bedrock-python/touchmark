@@ -57,6 +57,9 @@ type apiPR struct {
 	CreatedOn   *time.Time    `json:"created_on"`
 	UpdatedOn   *time.Time    `json:"updated_on"`
 	Links       apiLinks      `json:"links"`
+	// Reviewers are sent by GET …/pullrequests/{id} only (nil when absent,
+	// as in listings); EditPR sends them back.
+	Reviewers []apiAccount `json:"reviewers"`
 }
 
 // apiText is rendered markup: raw is what was typed.

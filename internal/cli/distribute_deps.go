@@ -32,8 +32,7 @@ import (
 type distributeDriver func(config.ResolvedProvider, auth.Credential, *httpx.Client) (platform.Writer, error)
 
 // The write drivers of distribute by provider type: Gitea and Forgejo,
-// GitLab and GitHub, and Bitbucket Cloud's, which refuses for now
-// (drivers.go). Tests install the fake platform here; tests that do must
+// GitLab, GitHub and Bitbucket Cloud (drivers.go). Tests install the fake platform here; tests that do must
 // not run in parallel.
 var distributeDrivers = map[string]distributeDriver{}
 

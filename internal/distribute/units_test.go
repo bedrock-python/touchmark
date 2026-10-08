@@ -242,7 +242,7 @@ func TestPushRuleGiteaUnsignedRefusal(t *testing.T) {
 
 // TestPushRuleBitbucketBranchRestriction: Bitbucket Cloud refuses a push
 // that a branch restriction forbids with "Permission denied to update
-// branch …" and "pre-receive hook declined" (RFC-0003 §1.1): the rule is
+// branch …" and "pre-receive hook declined": the rule is
 // the protected branch, not the hook, whatever the branch is called.
 func TestPushRuleBitbucketBranchRestriction(t *testing.T) {
 	const oid = "3f786850e387550fdab836ed7e6dc881de23001b"

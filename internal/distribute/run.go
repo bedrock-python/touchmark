@@ -140,7 +140,9 @@ type WriteDeps struct {
 //  7. memory: decide.BuildMemory over own closed PRs with the opt-in hash
 //     (config.OptIn.Hash), paths local, retired-local or ignored in the
 //     per-path plan, operations forget_declines and ticked repropose
-//     controls (prbody.Ticked on closed bodies); Cooldown for the key.
+//     controls (prbody.Ticked on closed bodies, where descriptions carry
+//     controls: Caps.BodyControls), and Caps.ClosedImmutable; Cooldown for
+//     the key.
 //  8. the commit, when D is not empty: BuildCommit of D on B with the hub's
 //     blobs, the writer as author and committer (with the platform's
 //     no-reply address when it gives no email), dated

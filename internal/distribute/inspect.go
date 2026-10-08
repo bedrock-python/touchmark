@@ -658,7 +658,7 @@ func (r *run) decideTarget(w *Work, prs prSet, reads branchReads, ops decide.Tar
 		CooldownUntil:        until,
 		CooldownDeclined:     declined,
 		Ops:                  ops,
-		RecreateTicked:       hasKept && prbody.Ticked(kept.PR.Body, prbody.ControlRecreate),
+		RecreateTicked:       hasKept && p.caps.BodyControls() && prbody.Ticked(kept.PR.Body, prbody.ControlRecreate),
 		PlatformWorkflowPerm: p.caps.WorkflowPerm,
 		CanWorkflows:         can,
 		WorkflowsDiffer:      reads.differ,

@@ -9,21 +9,15 @@ import (
 	"github.com/bedrock-python/touchmark/internal/decide"
 	"github.com/bedrock-python/touchmark/internal/marker"
 	"github.com/bedrock-python/touchmark/internal/platform"
+	"github.com/bedrock-python/touchmark/internal/platform/fake"
 	"github.com/bedrock-python/touchmark/internal/report"
 )
 
-// bitbucketLike gives the fake what the core reads of Bitbucket Cloud's
-// capabilities (the driver's Probe): no labels, the marker as a Markdown
-// reference definition, native drafts, a known closer and no permission of
-// its own for CI files. The fake refuses any label on such a platform.
-func bitbucketLike(c *platform.Caps) {
-	c.NoLabels = true
-	c.Marker = platform.MarkerInRefDef
-	c.Draft = platform.DraftNative
-	c.CloserKnown = true
-	c.WorkflowPerm = false
-	c.LabelsByID = false
-}
+// noLabels gives the fake a platform without labels whose closed pull
+// requests can still be edited (the core's handling of the two
+// capabilities is independent; Bitbucket Cloud, fake.Bitbucket, has both).
+// The fake refuses any label on such a platform.
+func noLabels(c *platform.Caps) { c.NoLabels = true }
 
 // lastLine returns the last line of body.
 func lastLine(body string) string { return body[strings.LastIndexByte(body, '\n')+1:] }
@@ -50,7 +44,7 @@ func noLabelCalls(t *testing.T, w *exWorld) {
 // label, write nothing; a content change and a close keep the frame and
 // still ask for no label.
 func TestExecuteNoLabelsLifecycle(t *testing.T) {
-	w := newExWorld(t, exConfig{git: true, caps: bitbucketLike})
+	w := newExWorld(t, exConfig{git: true, flavor: fake.Bitbucket})
 	if len(w.hub.PR.Labels) == 0 {
 		t.Fatal("fixture: hub.yml sets no labels")
 	}
@@ -111,7 +105,7 @@ func TestExecuteNoLabelsLifecycle(t *testing.T) {
 // and the pull request's marker in the comment frame (one written before)
 // is still found and replaced.
 func TestExecuteRefDefSweepClose(t *testing.T) {
-	w := newExWorld(t, exConfig{caps: bitbucketLike})
+	w := newExWorld(t, exConfig{flavor: fake.Bitbucket})
 	tg := w.target("acme/gone", exOptIn, "version: 1\n")
 	n := w.addPR(tg, platform.PR{Head: exBranch, Author: w.writer, Title: exTitle, Body: w.ownBody(w.missing(), nil)})
 	pr := w.pr(tg, n)
@@ -137,7 +131,7 @@ func TestExecuteRefDefSweepClose(t *testing.T) {
 // The comment after a third auto-close does not advise exempting labels a
 // platform without labels never set.
 func TestExecuteNoLabelsAutoDeclinedComment(t *testing.T) {
-	w := newExWorld(t, exConfig{caps: bitbucketLike})
+	w := newExWorld(t, exConfig{caps: noLabels})
 	stale := w.p.AddAccount("stale[bot]", platform.KindBot)
 	tg := w.target("acme/docs", exOptIn, "version: 1\n")
 	var last int64

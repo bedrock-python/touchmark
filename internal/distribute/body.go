@@ -280,9 +280,10 @@ func (p *provider) markerFrame() marker.Frame {
 // (blocked:edited, blocked:branch-taken) why (decide.Branch.Detail). It
 // renders the description when the decision writes one, and applies field
 // ownership (decide.PlanPREdit) to every StepEditPR: an edit that changes
-// nothing and rewrites no content is skipped (Work.idle), and an unchanged
-// target whose edit writes is reported as updated:title when only the title
-// changes, else updated:body.
+// nothing, rewrites no content and finds the marker's optin current
+// (Work.staleOptIn) is skipped (Work.idle), and an unchanged target whose
+// edit writes is reported as updated:title when only the title changes,
+// else updated:body.
 func (r *run) reportDecision(w *Work, prs prSet, reads branchReads) error {
 	res := &w.t.res
 	d := w.Decision
@@ -315,13 +316,14 @@ func (r *run) reportDecision(w *Work, prs prSet, reads branchReads) error {
 		desired := decide.DesiredPR{Title: r.hub.PR.Title, Body: human, Labels: w.t.prov.prLabels(r.hub), Base: s.Base,
 			DraftPrefix: draftPrefix(w.t.prov.caps)}
 		edit, _, writes := decide.PlanPREdit(o.PR, o.Marker, desired)
-		if !writes && !s.Content {
+		stale := w.staleOptIn(o.Marker)
+		if !writes && !s.Content && !stale {
 			w.idle[i] = true
 			continue
 		}
 		if changed != "body" {
 			changed = "body"
-			if titleOnly(edit, o.Marker, human) && !s.Content {
+			if titleOnly(edit, o.Marker, human) && !s.Content && !stale {
 				changed = "title"
 			}
 		}

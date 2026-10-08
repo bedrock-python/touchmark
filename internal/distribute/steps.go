@@ -233,7 +233,8 @@ func (p *preparer) create(ctx context.Context, s decide.Step) ([]writeAct, error
 }
 
 // editOpen edits the open pull request's fields touchmark owns: nothing
-// when PlanPREdit changes nothing and Content is not set.
+// when PlanPREdit changes nothing, Content is not set and the marker's
+// optin is current (Work.staleOptIn; a stale one is brought up to date).
 func (p *preparer) editOpen(ctx context.Context, s decide.Step) ([]writeAct, error) {
 	x := p.x
 	pr, m, err := x.known(s.PR)
@@ -253,12 +254,16 @@ func (p *preparer) editOpen(ctx context.Context, s decide.Step) ([]writeAct, err
 		DraftPrefix: draftPrefix(x.t.prov.caps),
 	})
 	empty := m.Key == ""
-	if !changed && !s.Content && !empty {
+	stale := x.w.staleOptIn(m)
+	if !changed && !s.Content && !empty && !stale {
 		return nil, nil
 	}
 	key := m.Key
 	if s.Content || empty {
 		next, key = x.withContent(ctx, next, p.pushed, x.branchOf(s.Branch))
+	}
+	if stale {
+		next.OptIn = x.w.OptInHash
 	}
 	// A consumed recreate is done once the branch is rebuilt: by this run's
 	// push, or by the push of a run that stopped before this edit. Any other
@@ -279,7 +284,7 @@ func (p *preparer) editOpen(ctx context.Context, s decide.Step) ([]writeAct, err
 	}
 	body := human + "\n\n" + line
 	field := "body"
-	if titleOnly(edit, m, human) && !s.Content && !empty {
+	if titleOnly(edit, m, human) && !s.Content && !empty && !stale {
 		field = "title"
 	}
 	edit.Body = &body

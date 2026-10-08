@@ -361,9 +361,10 @@ func (w *exWorld) work(t *target, edit func(*exState)) *Work {
 			in.ForeignOpen = append(in.ForeignOpen, pr)
 		}
 	}
+	caps := w.prov.caps
 	repropose := map[int64]bool{}
 	for _, o := range in.Own {
-		if o.PR.State == platform.Closed && prbody.Ticked(o.PR.Body, prbody.ControlRepropose) {
+		if caps.BodyControls() && o.PR.State == platform.Closed && prbody.Ticked(o.PR.Body, prbody.ControlRepropose) {
 			repropose[o.PR.Number] = true
 		}
 	}
@@ -372,13 +373,14 @@ func (w *exWorld) work(t *target, edit func(*exState)) *Work {
 		OptIn:     wk.OptInHash,
 		Repropose: repropose,
 		Now:       exEpoch,
-		Config:    decide.MemoryConfig{Writers: map[string]bool{w.writer.ID: true}, CloserKnown: w.prov.caps.CloserKnown},
+		Config: decide.MemoryConfig{Writers: map[string]bool{w.writer.ID: true}, CloserKnown: caps.CloserKnown,
+			ClosedImmutable: caps.ClosedImmutable},
 	})
 	in.CooldownUntil, in.CooldownDeclined = in.Memory.Cooldown(wk.Key, exEpoch, 0)
 	in.PlatformWorkflowPerm, in.CanWorkflows = w.prov.caps.WorkflowPerm, true
 	in.Now = exEpoch
 	for _, o := range in.Own {
-		if o.PR.State == platform.Open && prbody.Ticked(o.PR.Body, prbody.ControlRecreate) {
+		if caps.BodyControls() && o.PR.State == platform.Open && prbody.Ticked(o.PR.Body, prbody.ControlRecreate) {
 			in.RecreateTicked = true
 		}
 	}

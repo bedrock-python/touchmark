@@ -20,13 +20,14 @@ func TestProbe(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := platform.Caps{
-		Flavor: "bitbucket", MaxBody: 60000, Draft: platform.DraftNative, CloserKnown: true, NoLabels: true,
+		Flavor: "bitbucket", MaxBody: 60000, Draft: platform.DraftNative, CloserKnown: true, NoLabels: true, ClosedImmutable: true,
 		Marker: platform.MarkerInRefDef, RuntimeOnly: []string{"branch-restrictions"},
 		Limits: platform.Limits{Reads: 2, GitReads: 2, ReadsPerMinute: 15, MinInterval: time.Second},
 	}
 	if caps.Flavor != want.Flavor || caps.MaxBody != want.MaxBody || caps.Draft != want.Draft || !caps.CloserKnown ||
 		caps.Marker != want.Marker || !slices.Equal(caps.RuntimeOnly, want.RuntimeOnly) || caps.Limits != want.Limits ||
-		caps.LabelsByID || caps.QuickActions || caps.WorkflowPerm || caps.Commit.API || !caps.NoLabels {
+		caps.LabelsByID || caps.QuickActions || caps.WorkflowPerm || caps.Commit.API || !caps.NoLabels || !caps.ClosedImmutable ||
+		caps.BodyControls() {
 		t.Errorf("Probe = %+v\nwant %+v", caps, want)
 	}
 	if calls := f.requests("", ""); len(calls) != 0 {

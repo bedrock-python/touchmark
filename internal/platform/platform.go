@@ -303,13 +303,32 @@ type Caps struct {
 	NoLabels bool
 	// CloserKnown is set when PR.ClosedBy is reliable.
 	CloserKnown bool
-	Marker      MarkerStore
-	Commit      struct{ API, SignedByPlatform, CAS bool }
+	// ClosedImmutable is set when a pull request closed without merging can
+	// never be edited again, by anyone (Bitbucket Cloud's declined pull
+	// requests): the core never plans a write to the body of a closed pull
+	// request there. Memory then reads a decline from what the marker held
+	// while the pull request was open (its optin), and a forget_declines
+	// entry acts while it is present instead of once (see
+	// decide.MemoryConfig.ClosedImmutable).
+	ClosedImmutable bool
+	Marker          MarkerStore
+	Commit          struct{ API, SignedByPlatform, CAS bool }
 	// RuntimeOnly lists checks the writer cannot read upfront, e.g.
 	// "push_rules" on GitLab.
 	RuntimeOnly []string
 	Limits      Limits
 }
+
+// BodyControls reports whether pull request descriptions on the platform
+// can carry touchmark's tick boxes ("Rebuild this branch", "Propose this
+// content again"). Each is a task list item tagged with an HTML comment,
+// which renderers hide; a platform that escapes HTML in descriptions would
+// show the tag as text, and it is the same platform whose marker is a
+// Markdown reference definition (MarkerInRefDef). There the description
+// offers no tick box, says to ask for a rebuild or a new proposal through
+// .touchmark/operations.yml instead, and the core reads no tick box from
+// it.
+func (c Caps) BodyControls() bool { return c.Marker != MarkerInRefDef }
 
 // Reader is one provider from hub.yml under one identity. Implementations
 // are safe for concurrent use: the core inspects targets in parallel.

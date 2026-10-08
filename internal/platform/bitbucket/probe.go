@@ -64,6 +64,8 @@ func (d *reader) Probe(context.Context) (platform.Caps, error) {
 		NoLabels: true,
 		// closed_by names who declined or merged a pull request.
 		CloserKnown: true,
+		// A declined pull request can never be changed again.
+		ClosedImmutable: true,
 		// The API escapes HTML in descriptions: an HTML comment would show.
 		Marker:      platform.MarkerInRefDef,
 		RuntimeOnly: []string{branchRestrictions},

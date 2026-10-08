@@ -211,7 +211,7 @@ func (p *preparer) create(ctx context.Context, s decide.Step) ([]writeAct, error
 	hub := x.r.hub
 	d.TitleSet = hub.PR.Title
 	d.Body = decide.BodyHash(human)
-	d.LabelsSet = slices.Clone(hub.PR.Labels)
+	d.LabelsSet = slices.Clone(x.t.prov.prLabels(hub))
 	x.stamp(&d, true)
 	line, err := x.markerLine(key, d)
 	if err != nil {
@@ -226,7 +226,7 @@ func (p *preparer) create(ctx context.Context, s decide.Step) ([]writeAct, error
 		Base:   base,
 		Title:  hub.PR.Title,
 		Body:   human + "\n\n" + line,
-		Labels: slices.Clone(hub.PR.Labels),
+		Labels: slices.Clone(x.t.prov.prLabels(hub)),
 		Draft:  hub.PR.Draft,
 	}
 	return []writeAct{{kind: actCreate, branch: s.Branch, newPR: np, desc: "opened a pull request from " + s.Branch}}, nil
@@ -248,7 +248,7 @@ func (p *preparer) editOpen(ctx context.Context, s decide.Step) ([]writeAct, err
 	edit, next, changed := decide.PlanPREdit(pr, m, decide.DesiredPR{
 		Title:       hub.PR.Title,
 		Body:        human,
-		Labels:      hub.PR.Labels,
+		Labels:      x.t.prov.prLabels(hub),
 		Base:        s.Base,
 		DraftPrefix: draftPrefix(x.t.prov.caps),
 	})
@@ -321,7 +321,7 @@ func (p *preparer) comment(s decide.Step) ([]writeAct, error) {
 	case decide.OutcomeDeclined:
 		text = prbody.DeclinedComment(s.PR, x.declinedPaths(s.PR), x.r.optIn)
 	case decide.CommentAutoDeclined:
-		text = prbody.AutoDeclinedComment(s.PR, x.declinedPaths(s.PR), x.r.optIn, x.r.hub.PR.Labels)
+		text = prbody.AutoDeclinedComment(s.PR, x.declinedPaths(s.PR), x.r.optIn, x.t.prov.prLabels(x.r.hub))
 	default:
 		return nil, fmt.Errorf("unknown comment %q", s.Reason)
 	}
@@ -472,7 +472,9 @@ func (x *targetExec) stamp(d *marker.Data, content bool) {
 }
 
 // markerLine encodes the marker of d under key, as this hub (its id and
-// current fingerprint) writes it.
+// current fingerprint) writes it, in the frame of the target's platform
+// (Caps.Marker: a Markdown reference definition on Bitbucket Cloud, which
+// escapes HTML).
 func (x *targetExec) markerLine(key string, d marker.Data) (string, error) {
 	if key == "" {
 		return "", errors.New("the marker has no content key")
@@ -480,7 +482,7 @@ func (x *targetExec) markerLine(key string, d marker.Data) (string, error) {
 	d.V = marker.Version
 	d.Stream = cmp.Or(d.Stream, decide.StreamSync)
 	d.Hub, d.FP = x.r.hub.ID, x.r.fps[0]
-	return marker.Encode(marker.Marker{Key: key, Data: d})
+	return marker.EncodeFrame(marker.Marker{Key: key, Data: d}, x.t.prov.markerFrame())
 }
 
 // leak returns which text of the writes holds a registered secret ("the edit

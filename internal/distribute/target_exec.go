@@ -99,7 +99,7 @@ func (x *targetExec) run(ctx context.Context) {
 	// The block of writes starts once the provider's budget has room for it,
 	// and before the deadline: its time runs from then, and the per-target
 	// credential is minted after that wait, right before the writes.
-	block, err := x.t.prov.throttle().Block(ctx, writesOf(x.w, len(x.r.hub.PR.Labels) > 0))
+	block, err := x.t.prov.throttle().Block(ctx, writesOf(x.w, x.t.prov.createsLabels(x.r.hub)))
 	if err != nil {
 		outcome, reason := x.outcomeOf(err)
 		x.end(outcome, reason, "wait for the provider's budget: "+err.Error())

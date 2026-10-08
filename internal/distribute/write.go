@@ -249,8 +249,10 @@ func pushOutcome(res gitx.PushResult) (report.Outcome, string) {
 // pushRule names the rule a push refused by policy met, from the server's
 // message: GitHub's rule against force pushes ("Cannot force-push to this
 // branch": non-fast-forward, as the preflight names it), its rulesets
-// (GH013) and branch protection (GH006, "protected branch"), a pre-receive
-// hook, a deletion rule; "push" when the message names none.
+// (GH013) and branch protection (GH006, "protected branch"), Bitbucket
+// Cloud's branch restrictions ("Permission denied to update branch …",
+// which comes with "pre-receive hook declined"), a pre-receive hook, a
+// deletion rule; "push" when the message names none.
 func pushRule(msg string) string {
 	m := strings.ToLower(msg)
 	switch {
@@ -258,7 +260,8 @@ func pushRule(msg string) string {
 		return "non-fast-forward"
 	case strings.Contains(m, "gh013"), strings.Contains(m, "rule violation"):
 		return "ruleset"
-	case strings.Contains(m, "gh006"), strings.Contains(m, "protected branch"):
+	case strings.Contains(m, "gh006"), strings.Contains(m, "protected branch"),
+		strings.Contains(m, "permission denied to update branch"):
 		return "protected-branch"
 	case strings.Contains(m, "delet"):
 		return "deletion"

@@ -519,12 +519,12 @@ func listMarkers(items []string) string {
 }
 
 // markerFingerprints returns the fingerprints of the valid v1 markers in
-// body whose hub id is id, in the order they appear.
+// body, in either frame, whose hub id is id, in the order they appear.
 func markerFingerprints(body, id string) []string {
 	var out []string
 	for line := range strings.SplitSeq(body, "\n") {
 		line = strings.TrimRight(line, " \t\r")
-		if !strings.HasPrefix(line, "<!-- touchmark:v1 ") {
+		if !marker.IsLine(line) {
 			continue
 		}
 		m, err := marker.Parse(line)

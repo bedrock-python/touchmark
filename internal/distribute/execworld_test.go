@@ -108,6 +108,8 @@ type exConfig struct {
 	flavor fake.Flavor
 	git    bool
 	hubYML string
+	// caps changes the flavor's capabilities.
+	caps func(*platform.Caps)
 }
 
 // newExWorld builds a world; in git mode it serves the fake over HTTP.
@@ -123,6 +125,11 @@ func newExWorld(t *testing.T, c exConfig) *exWorld {
 		c.hubYML = exHubYML
 	}
 	p := fake.New("github.com", fake.WithFlavor(c.flavor))
+	if c.caps != nil {
+		caps := p.Caps()
+		c.caps(&caps)
+		p.SetCaps(caps)
+	}
 	w := &exWorld{
 		t:      t,
 		ctx:    t.Context(),

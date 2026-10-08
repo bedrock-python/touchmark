@@ -203,7 +203,7 @@ func (t *target) createPR(ctx context.Context, np platform.NewPR) (platform.PR, 
 		if err := p.checkText(op, np.Body); err != nil {
 			return platform.PR{}, err
 		}
-		if err := checkLabels(op, np.Labels); err != nil {
+		if err := t.p.checkLabels(op, np.Labels); err != nil {
 			return platform.PR{}, err
 		}
 		if s.repo.PRsDisabled {
@@ -310,7 +310,7 @@ func (t *target) editPR(ctx context.Context, number int64, e platform.PREdit) (p
 		if e.Base != nil && (*e.Base == "" || *e.Base == pr.Head) {
 			return platform.PR{}, invalid(op, "base %q is empty or the head", *e.Base)
 		}
-		if err := checkLabels(op, e.AddLabels); err != nil {
+		if err := t.p.checkLabels(op, e.AddLabels); err != nil {
 			return platform.PR{}, err
 		}
 		reopen := e.State != nil && *e.State == platform.Open && pr.State == platform.Closed
@@ -400,7 +400,7 @@ func (t *target) EnsureLabels(ctx context.Context, names []string) ([]string, er
 		return nil, err
 	}
 	return write(ctx, t, "EnsureLabels", []string{t.repoArg()}, func(s *repoState) ([]string, error) {
-		if err := checkLabels(op, names); err != nil {
+		if err := t.p.checkLabels(op, names); err != nil {
 			return nil, err
 		}
 		ids := make([]string, len(names))
@@ -463,7 +463,12 @@ func (p *Platform) checkText(op, text string) error {
 	return nil
 }
 
-func checkLabels(op string, names []string) error {
+// checkLabels refuses blank label names, and any label on a flavor
+// without labels (Caps.NoLabels), where the core must ask for none.
+func (p *Platform) checkLabels(op string, names []string) error {
+	if p.caps.NoLabels && len(names) > 0 {
+		return invalid(op, "labels %q on a platform without labels", names)
+	}
 	for _, n := range names {
 		if strings.TrimSpace(n) == "" {
 			return invalid(op, "blank label name")

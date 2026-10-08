@@ -33,7 +33,7 @@ func mayNeedSignature(w *Work) bool {
 
 // writesByPath estimates w's writes by both paths.
 func (r *run) writesByPath(w *Work) pathWrites {
-	labels := len(r.hub.PR.Labels) > 0
+	labels := w.t.prov.createsLabels(r.hub)
 	return pathWrites{git: writesWith(w, labels, false), api: writesWith(w, labels, mayNeedSignature(w))}
 }
 

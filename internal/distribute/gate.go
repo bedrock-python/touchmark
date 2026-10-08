@@ -316,7 +316,7 @@ const (
 // stage ref, the commit, the refs), and for a StepCreatePR one more on
 // GitHub for its labels and one for the label a first pull request creates
 // where the platform needs a call of its own for it (createsLabel: hub.yml
-// sets labels).
+// sets labels on a platform that has them).
 func writesOf(w *Work, createsLabel bool) int {
 	return writesWith(w, createsLabel, w.viaAPI)
 }
@@ -355,13 +355,12 @@ func writesWith(w *Work, createsLabel, api bool) int {
 // estimate sets every reported target's estimated writes, the sum over its
 // works (writesOf), and sums them per provider into Cost.
 func (r *run) estimate(kept []*target, sweeps []*Work) {
-	createsLabel := len(r.hub.PR.Labels) > 0
 	reported := r.reported(kept, sweeps)
 	for _, t := range reported {
 		t.res.Writes = 0
 	}
 	for _, w := range r.works(kept, sweeps) {
-		w.t.res.Writes += writesOf(w, createsLabel)
+		w.t.res.Writes += writesOf(w, w.t.prov.createsLabels(r.hub))
 	}
 	r.recount(reported)
 }

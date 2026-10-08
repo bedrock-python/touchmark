@@ -51,8 +51,9 @@ import (
 //     - StepDeleteBranch: Push delete with lease Step.Expect;
 //     - StepCreatePR: body from prbody.Render (Work.Body, Decision.Blocks,
 //     the recreate control only when paused, the marker line
-//     marker.Encode of Work.Marker with TitleSet, Body hash and LabelsSet
-//     set), title pr.title, labels pr.labels, draft pr.draft; ErrExists →
+//     marker.EncodeFrame of Work.Marker with TitleSet, Body hash and
+//     LabelsSet set, in the frame of Caps.Marker), title pr.title, labels
+//     pr.labels (none where Caps.NoLabels), draft pr.draft; ErrExists →
 //     if the returned PR is ours, re-inspect once, else
 //     blocked:branch-in-use;
 //     - StepEditPR: decide.PlanPREdit(open PR, marker, DesiredPR{title,

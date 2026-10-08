@@ -260,8 +260,7 @@ func (c *client) toAccount(u *apiUser) platform.Account {
 // noreply is the id-based noreply address of an account: users.noreply.
 // github.com on github.com
 // (https://docs.github.com/account-and-profile/reference/email-addresses-reference),
-// users.noreply.<host> elsewhere (unverified on GHE.com and GHES: the
-// sandbox and a GHES administrator confirm it).
+// users.noreply.<host> elsewhere (unverified on GHE.com and GHES).
 func (c *client) noreply(id int64, login string) string {
 	host := c.host
 	if name, _, err := net.SplitHostPort(host); err == nil {

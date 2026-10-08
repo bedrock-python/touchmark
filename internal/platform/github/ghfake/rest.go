@@ -344,7 +344,7 @@ func getOrg(c *call) response {
 // type (all, public, private, forks, sources, member) and sorted by
 // created (newest first), updated, pushed or full_name (A to Z). An
 // installation token also sees public repositories its installation does
-// not cover (assumed; needs the live sandbox). The user forms list public
+// not cover (assumed; needs a live GitHub). The user forms list public
 // repositories only, whoever asks (docs:
 // rest/repos/repos#list-repositories-for-a-user, "Lists public
 // repositories for the specified user").

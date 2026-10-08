@@ -124,7 +124,8 @@ bash scripts/e2e/gitlab.sh all     # every supported GitLab with a runner; about
 CI runs the Gitea and Forgejo tests on every pull request; a maintainer adds the label
 `e2e-gitlab` to run the GitLab ones. A change to the image, the Action or what the hub
 template's CI files rely on also gets a run of the template's pipelines (`--template`).
-GitHub's tests run against a fake of its API; the live ones need a sandbox organisation.
+GitHub's tests run against a fake of its API; on github.com touchmark runs for real in the
+bedrock-python hub.
 [End-to-end tests](https://bedrock-python.github.io/touchmark/project/e2e/) has the
 details.
 

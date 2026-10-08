@@ -8,6 +8,8 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/bedrock-python/touchmark/internal/marker"
 )
 
 // CheckIntro reports whether intro, the content of pr.intro_file, may open
@@ -23,6 +25,9 @@ import (
 //     a mention in hundreds of pull requests is a notification storm;
 //   - no "<!-- touchmark:" comment, the form of markers and controls: a
 //     ticked control copied into the intro would act in every target;
+//   - no marker line in the reference definition frame
+//     (`[touchmark]: # "touchmark:…"`, marker.IsLine), which Bitbucket
+//     bodies carry;
 //   - every code fence and HTML comment closed, every CommonMark HTML
 //     block that only its own end condition ends (a line starting with
 //     <pre, <script, <style or <textarea, <!--, <?, <! and a letter, or
@@ -89,6 +94,11 @@ func prepareIntro(intro string) (string, error) {
 	// Across lines too: the blanks after "<!--" may include line breaks.
 	if loc := reservedRe.FindStringIndex(s); loc != nil {
 		return "", fmt.Errorf("%w: line %d: %q comments are reserved for touchmark's marker and controls", ErrIntro, strings.Count(s[:loc[0]], "\n")+1, "<!-- touchmark:")
+	}
+	for i, line := range strings.Split(s, "\n") {
+		if marker.IsLine(line) {
+			return "", fmt.Errorf("%w: line %d: %q reference definitions are reserved for touchmark's marker", ErrIntro, i+1, "[touchmark]:")
+		}
 	}
 	if n, ok := unclosedComment(s); ok {
 		return "", fmt.Errorf("%w: the HTML comment of line %d is never closed", ErrIntro, n)

@@ -104,11 +104,11 @@ In a hub pull request, `providers` and `ca_file` are read from the default branc
 | `security.private_targets_in_public_hub` | one of `skip`, `deliver` | What a public hub does with non-public targets: skip them, or deliver and let their names reach public CI logs. Default: skip. |
 | `providers` | list of objects | Platforms this hub delivers to. Targets refer to them by id. |
 | `providers[].id` | string, required | Name targets.yml uses for this provider, and the &lt;ID&gt; of its TOUCHMARK_&lt;ID&gt;_\* variables. |
-| `providers[].type` | one of `github`, `gitlab`, `gitea`, `forgejo`, required | — |
-| `providers[].url` | string | Web URL of the instance. Default for github: https://github.com; for gitlab: https://gitlab.com. Required for gitea and forgejo. A target targets.yml names by web URL belongs to the provider whose url it lies under. |
+| `providers[].type` | one of `github`, `gitlab`, `gitea`, `forgejo`, `bitbucket`, required | github: github.com, GHE.com or GitHub Enterprise Server; gitlab; gitea; forgejo; bitbucket: Bitbucket Cloud (plan, distribute and doctor; setup does not set up a hub on it yet). |
+| `providers[].url` | string | Web URL of the instance. Default for github: https://github.com; for gitlab: https://gitlab.com; for bitbucket: https://bitbucket.org, the only url it takes without api_url. Required for gitea and forgejo. A target targets.yml names by web URL belongs to the provider whose url it lies under. |
 | `providers[].api_url` | string | API URL, when it cannot be derived from url. |
 | `providers[].ca_file` | string | Hub file with extra CA certificates for this instance. |
-| `providers[].writer` | string, up to 255 characters | The account that writes to targets, as the platform names it: on GitHub the App's bot, &lt;slug&gt;[bot]; on GitLab, Gitea and Forgejo the username of the service account or bot user. |
+| `providers[].writer` | string, up to 255 characters | The account that writes to targets, as the platform names it: on GitHub the App's bot, &lt;slug&gt;[bot]; on GitLab, Gitea and Forgejo the username of the service account or bot user; on Bitbucket the bot account's UUID in braces, {…}. |
 | `providers[].known_authors` | list of strings, each up to 255 characters | Former writer accounts whose pull requests still count as this hub's own. |
 | `providers[].automation_accounts` | list of strings, each up to 255 characters | Accounts whose closing of a pull request is automatic, not a team's decision. |
 | `providers[].sign` | one of `auto`, `always` | auto: sign where it costs nothing and where target rules require it; always: sign every commit. Default: auto. |
@@ -127,7 +127,7 @@ In a hub pull request, `providers` and `ca_file` are read from the default branc
 | `packs.<pack>.formerly` | list of strings, each up to 64 characters | Former names of this pack. Their history counts as this pack's own. |
 | `writer` | string, up to 255 characters | Single-provider shorthand: the writer account, as the platform names it (on GitHub the App's bot, &lt;slug&gt;[bot]). Without platform, the provider's type and URL come from the CI environment, or locally from the hub's origin remote. Not allowed with providers. |
 | `sign` | one of `auto`, `always` | Single-provider shorthand: commit signing. Not allowed with providers. |
-| `platform` | one of `github`, `gitlab`, `gitea`, `forgejo` | Single-provider shorthand: the provider type, which is also its id. Not allowed with providers. |
+| `platform` | one of `github`, `gitlab`, `gitea`, `forgejo`, `bitbucket` | Single-provider shorthand: the provider type, which is also its id. Not allowed with providers. |
 | `base_url` | string | Single-provider shorthand: the provider URL, for self-managed instances. Needs platform; not allowed with providers. |
 
 <!-- end generated -->

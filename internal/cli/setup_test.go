@@ -45,7 +45,8 @@ func TestSetupRefusals(t *testing.T) {
 		want string
 	}{
 		{"no-platform", nil, []string{"setup"}, "missing the platform"},
-		{"unknown", nil, []string{"setup", "bitbucket", "--hub", h.dir}, `unknown platform "bitbucket"`},
+		{"unknown", nil, []string{"setup", "azure-devops", "--hub", h.dir}, `unknown platform "azure-devops"`},
+		{"bitbucket", nil, []string{"setup", "bitbucket", "--hub", h.dir}, "setup does not set up bitbucket yet"},
 		{"gitea", nil, []string{"setup", "gitea", "--hub", h.dir}, "every branch the secrets"},
 		{"forgejo", nil, []string{"setup", "forgejo"}, "setup does not set up forgejo"},
 		{"flags-first", nil, []string{"setup", "--hub", h.dir, "gitea", "--dry-run"}, "setup does not set up gitea"},

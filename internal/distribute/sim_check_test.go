@@ -147,7 +147,9 @@ func (c *simChecker) observe() {
 // where the platform does not tell closers. Declines the test cannot judge
 // exactly are left out: those without the full list of changes, and those
 // whose marker kept an ack from before a reopening (memory counts them from
-// that ack).
+// that ack). Where closed pull requests are immutable, the optin the marker
+// held while open stands for the ack: a decline closed under another
+// opt-in state is lapsed already, and left out.
 func (c *simChecker) closed(tg *simTarget, pr platform.PR, hash string) {
 	w := c.w
 	if !w.isOwn(pr) || c.revoked[tg.name][pr.Number] {
@@ -161,6 +163,8 @@ func (c *simChecker) closed(tg *simTarget, pr platform.PR, hash string) {
 	case pr.ClosedBy != nil && pr.ClosedBy.ID == w.writer.ID:
 		return
 	case pr.ClosedBy != nil && pr.ClosedBy.Kind == platform.KindBot && w.p.Caps().CloserKnown:
+		return
+	case w.p.Caps().ClosedImmutable && d.OptIn != "" && d.OptIn != hash:
 		return
 	}
 	if c.declines[tg.name] == nil {

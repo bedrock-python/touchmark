@@ -99,7 +99,7 @@ func TestDoctorSchema(t *testing.T) {
 	bad := map[string]func(*Doctor){
 		"status":   func(d *Doctor) { d.HubChecks[0].Status = "red" },
 		"check":    func(d *Doctor) { d.HubChecks[0].Name = "Write Isolation" },
-		"provider": func(d *Doctor) { d.Providers[0].Type = "bitbucket" },
+		"provider": func(d *Doctor) { d.Providers[0].Type = "azure-devops" },
 		"summary":  func(d *Doctor) { delete(d.Summary, StatusUnknown) },
 		"schema":   func(d *Doctor) { d.Schema = "doctor/v2" },
 	}

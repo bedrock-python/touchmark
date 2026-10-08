@@ -58,7 +58,8 @@ current changes, or closes it as `no-diff`.
 
 When touchmark first sees a decline, it records it in the marker, adds a tick box to the
 description and leaves one comment saying what it remembered, when a new pull request
-would come, and how to undo it. Two writes, once.
+would come, and how to undo it. Two writes, once. (Not on Bitbucket Cloud, where a
+declined pull request cannot be edited: see [below](#on-bitbucket-cloud).)
 
 To undo a decline:
 
@@ -72,6 +73,42 @@ To refuse a file for good instead, add it to `ignore`, or set `enabled: false` i
 file (deleting it works too, unless the hub subscribed the repository) to stop
 receiving anything.
 
+## On Bitbucket Cloud
+
+A declined pull request on Bitbucket can never be edited or reopened, by anyone. touchmark
+writes nothing to it, and remembers the decline from what the marker held while the pull
+request was open:
+
+- **The opt-in state is recorded up front.** Every pull request touchmark opens records
+  in its marker the state of the opt-in file it is proposed under, which the
+  acknowledgment records elsewhere. When the file changes while the pull request is
+  open, the next run records the new state, with one edit of the description even when
+  the proposed changes stay the same, and even when the target is blocked
+  (`branch-in-use`, `rules:*`, …): when the run writes nothing else to the pull
+  request, that edit changes only the marker. A push a branch restriction refuses at
+  run time is followed by that edit too.
+- **A decline** holds while the opt-in file is parsed the same as that recorded state,
+  and lapses when the team edits `packs` or `ignore`, as an acknowledged decline does
+  elsewhere. A declined path becoming `local` or `ignored` lifts it too.
+- **No comment, no tick box.** touchmark leaves no comment on the declined pull request
+  (with nothing to record that it did, it would post one every run), and descriptions
+  carry no tick boxes there: Bitbucket shows the HTML comments they rest on as text. The
+  report says `declined`, and the description's footnote names the way back.
+- **Bringing declined content back** is a `forget_declines` entry, or a change of `packs`
+  or `ignore`. touchmark cannot mark the pull request revoked, so the entry acts on every
+  run while it is present: keep it until the pull request it brings is merged or closed.
+  Removed earlier, the decline is in force again; an open pull request stays (an open pull
+  request is stronger than memory), and its description then names the decline under
+  *Previously declined*.
+- **A marker without the opt-in state** (one touchmark did not write in full) holds its
+  decline whatever the opt-in file says, since there is no state to compare with; the
+  report warns about it on every run and names the `forget_declines` entry that lifts
+  it.
+- **Who closed it** counts as everywhere: Bitbucket names who declined a pull request.
+  touchmark's own closes write the close into the description in the same edit that
+  declines it; bots' closes wait for the cooldown, and the third in a row counts as a
+  decline.
+
 ## Limits
 
 - Only the last 50 closed pull requests on the sync branches count.
@@ -83,3 +120,10 @@ receiving anything.
   own: that decline is lost and the content is proposed again.
 - Closed pull requests of the multi-gitter era, without a marker, are never declines:
   their content is unknown.
+- On Bitbucket Cloud the opt-in state of a decline is the one recorded by the last run
+  before the decline, whatever that run decided for the target. When the team changes
+  `packs` or `ignore` and declines the pull request before touchmark runs again, the
+  decline counts from the earlier state and has lapsed already: the content is proposed
+  once more, under the new choice. A blocked target does not widen that window: its run
+  records the state as well. Only a run that writes nothing to the target at all (a
+  failed or deferred target, `blocked:mass-close`) leaves it open until the next run.

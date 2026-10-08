@@ -15,6 +15,8 @@ func seedLines(t testing.TB) []string {
 	for _, v := range goldenVectors() {
 		line := mustEncode(t, v.m)
 		lines = append(lines, line, line[:len(line)/2], strings.Replace(line, "v1", "v2", 1), line+"\r")
+		rd := refDef(line)
+		lines = append(lines, rd, escapeAll(rd), rd[:len(rd)/2], rd+"\r", strings.TrimSuffix(rd, refDefClose)+commentEnd)
 	}
 	lines = append(lines,
 		lineWithData(gz(t, bytes.Repeat([]byte{' '}, 8<<20))),
@@ -22,6 +24,9 @@ func seedLines(t testing.TB) []string {
 		lineWithJSON(t, "{}"),
 		"<!-- touchmark:v1 -->",
 		"<!-- touchmark:v1 hub= fp= stream= key= data= -->",
+		`[touchmark]: # "touchmark:v1 hub= fp= stream= key= data="`,
+		`\[touchmark\]: \# "touchmark:v1\"`,
+		`[touchmark]: # "touchmark:v1 hub= fp= stream= key= data= -->`,
 	)
 	return lines
 }
@@ -38,6 +43,9 @@ func FuzzParse(f *testing.F) {
 		m, err := Parse(line)
 		if err != nil {
 			return
+		}
+		if !strings.HasPrefix(line, commentPrefix) && !strings.HasSuffix(unescape(line), refDefClose) {
+			t.Fatalf("accepted a reference definition without its closing quote: %.80q", line)
 		}
 		if m.FP16 != FP16(m.Data.FP) || m.Hub != m.Data.Hub || m.Stream != m.Data.Stream {
 			t.Fatalf("header does not match the data: %s", describeMarker(m))
@@ -89,6 +97,22 @@ func FuzzEncode(f *testing.F) {
 		if len(line) > MaxLine {
 			t.Fatalf("line of %d bytes", len(line))
 		}
+		rd, err := EncodeFrame(m, FrameRefDef)
+		switch {
+		case err != nil && !errors.Is(err, errTooLarge):
+			t.Fatalf("EncodeFrame(FrameRefDef) of an encodable marker: %v", err)
+		case err != nil:
+		case len(rd) > MaxLine:
+			t.Fatalf("reference definition of %d bytes", len(rd))
+		default:
+			back, err := Parse(rd)
+			if err != nil {
+				t.Fatalf("Parse(EncodeFrame(m, FrameRefDef)): %v", err)
+			}
+			if !reflect.DeepEqual(back, written(m)) && !reflect.DeepEqual(back, dropped(m)) {
+				t.Fatalf("reference definition round trip differs\n got %s", describeMarker(back))
+			}
+		}
 		got, err := Parse(line)
 		if err != nil {
 			t.Fatalf("Parse(Encode(m)): %v\nline %.300q", err, line)
@@ -137,7 +161,7 @@ func FuzzFind(f *testing.F) {
 			t.Fatal("Strip is not idempotent")
 		}
 		for line := range strings.SplitSeq(stripped, "\n") {
-			if strings.HasPrefix(line, commentPrefix) {
+			if IsLine(line) {
 				t.Fatalf("Strip left a marker line: %.80q", line)
 			}
 		}
@@ -154,6 +178,10 @@ func FuzzFind(f *testing.F) {
 		}
 		if Strip(appended) != stripped {
 			t.Fatalf("Strip(body + marker) = %q, want %q", Strip(appended), stripped)
+		}
+		appended = body + "\r\n" + escapeAll(refDef(last)) + " \r\n"
+		if got, status := Find(appended, fps); status != Found || !reflect.DeepEqual(got, want) {
+			t.Fatalf("appended reference definition: status %v", status)
 		}
 	})
 }

@@ -83,11 +83,12 @@ func (p *Platform) gitHeader(id string) func(context.Context) (string, error) {
 }
 
 // appTokens reports whether the flavor is GitHub-like: identities are Apps
-// whose tokens carry permissions (every flavor but GitLab, Gitea and
-// Forgejo). Called with mu held.
+// whose tokens carry permissions (every flavor but GitLab, Gitea, Forgejo
+// and Bitbucket, whose identities are accounts with tokens of their own).
+// Called with mu held.
 func (p *Platform) appTokens() bool {
 	switch Flavor(p.caps.Flavor) {
-	case GitLab, Gitea, Forgejo:
+	case GitLab, Gitea, Forgejo, Bitbucket:
 		return false
 	}
 	return true

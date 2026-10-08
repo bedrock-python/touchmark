@@ -220,3 +220,23 @@ func TestFileErrors(t *testing.T) {
 		t.Errorf("empty: %q", msg)
 	}
 }
+
+// TestBodyControls: descriptions carry tick boxes unless the platform's
+// marker is a reference definition (HTML shows as text there), whatever
+// else it says.
+func TestBodyControls(t *testing.T) {
+	for _, c := range []struct {
+		caps Caps
+		want bool
+	}{
+		{Caps{Marker: MarkerInBody}, true},
+		{Caps{Marker: MarkerInBody, ClosedImmutable: true, NoLabels: true}, true},
+		{Caps{Marker: MarkerInProperties}, true},
+		{Caps{Marker: MarkerInRefDef}, false},
+		{Caps{Marker: MarkerInRefDef, ClosedImmutable: true}, false},
+	} {
+		if got := c.caps.BodyControls(); got != c.want {
+			t.Errorf("%+v: BodyControls = %v, want %v", c.caps, got, c.want)
+		}
+	}
+}

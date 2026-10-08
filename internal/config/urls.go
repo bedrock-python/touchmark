@@ -149,9 +149,10 @@ func (t *Targets) HasURLs() bool {
 // entry names its provider with provider:, which then must be one of them.
 // An implicit provider (the CI's own platform, for a hub.yml without
 // providers) is the hub's only one: its targets are written as bare paths.
-// On GitHub, Gitea and Forgejo, which have no nested namespaces, a
-// repository URL must name owner/name and an organisation URL one
-// namespace; on GitLab a URL with a /-/ segment points inside a project and
+// On GitHub, Gitea, Forgejo and Bitbucket, which have no nested
+// namespaces, a repository URL must name owner/name (workspace/repository on
+// Bitbucket, as in https://bitbucket.org/acme/billing) and an organisation
+// URL one namespace; on GitLab a URL with a /-/ segment points inside a project and
 // is refused.
 //
 // The result is a copy: targets is left as it is, and returned as it is
@@ -305,14 +306,14 @@ func (r urlResolver) list(indexes []int) string {
 }
 
 // checkURLShape checks the path segments a URL of kind k names on a
-// platform of type typ: GitHub, Gitea and Forgejo have no nested
+// platform of type typ: GitHub, Gitea, Forgejo and Bitbucket have no nested
 // namespaces, so an exclude URL of more than owner/name, without a "**"
 // that could span nothing, points inside a repository (/tree/main) and
 // would exclude nothing; a GitLab URL with a /-/ segment points inside a
 // project (a file, a merge request), not at it.
 func checkURLShape(typ string, segs []string, k urlKind) error {
 	switch typ {
-	case "github", "gitea", "forgejo":
+	case "github", "gitea", "forgejo", "bitbucket":
 		switch {
 		case k == urlRepo && len(segs) != 2:
 			return fmt.Errorf("a %s repository URL names owner/name, like https://example.com/acme/billing; this one has %d path segments after the provider's url", typ, len(segs))

@@ -33,9 +33,11 @@ const opShort = 7
 //     spent), when touchmark's commit is on top anyway, or when the
 //     decision does not rebuild it (the detail names the outcome).
 //   - forget_declines: applies when the decision revokes the pull request's
-//     decline (StepRevoke); none when it is no decline in force (already
-//     revoked, open, no pull request of touchmark's) or the target writes
-//     nothing in this run.
+//     decline (StepRevoke), or, on a platform whose closed pull requests are
+//     immutable, when memory leaves the close out because of the entry
+//     (decide.Memory.Forgotten: the entry acts while it is present); none
+//     when it is no decline in force (already revoked, open, no pull
+//     request of touchmark's) or the target writes nothing in this run.
 //   - allow_mass_close: expired past its date; else applies when the run
 //     closes more pull requests than the guard allows without the entry and
 //     no more than its max; none when the closes fit anyway or exceed even
@@ -247,6 +249,10 @@ func (r *run) opForget(op *report.Operation, t *target) {
 	case slices.Contains(w.Memory.ToRevoke, n):
 		op.Detail = fmt.Sprintf("would revoke the decline of %s, but the target writes nothing in this run: %s",
 			r.prName(t, n), outcomeText(report.Outcome(w.Decision.Outcome), w.Decision.Reason))
+	case slices.Contains(w.Memory.Forgotten, n):
+		op.Effect, op.Detail = report.EffectApplies, fmt.Sprintf("lifts the decline of %s while the entry is present: "+
+			"a declined pull request cannot be edited on this platform, so touchmark cannot record it there; "+
+			"keep it until the pull request it brings is merged or closed", r.prName(t, n))
 	case i < 0:
 		op.Detail = fmt.Sprintf("%s is no pull request of touchmark's on the target's sync branches: it does nothing; remove it", r.prName(t, n))
 	case w.Own[i].PR.State == platform.Open:

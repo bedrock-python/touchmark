@@ -33,6 +33,8 @@ func TestNoReplyEmail(t *testing.T) {
 		{"gitlab", "gitlab.example.com", "12", "tm-writer", "12-tm-writer@users.noreply.gitlab.example.com"},
 		{"gitea", "git.example.org", "7", "tm-bot", "tm-bot@noreply.git.example.org"},
 		{"forgejo", "codeberg.org", "", "tm-bot", "tm-bot@noreply.codeberg.org"},
+		{"bitbucket", "bitbucket.org", "{583f7ec5-ed93-49a9-b449-cfc4556cd7f8}", "{583f7ec5-ed93-49a9-b449-cfc4556cd7f8}", "583f7ec5-ed93-49a9-b449-cfc4556cd7f8@touchmark.invalid"},
+		{"bitbucket", "bitbucket.org", "", "{583f7ec5-ed93-49a9-b449-cfc4556cd7f8}", "583f7ec5-ed93-49a9-b449-cfc4556cd7f8@touchmark.invalid"},
 	} {
 		if got := noReplyEmail(tc.typ, tc.host, tc.id, tc.login); got != tc.want {
 			t.Errorf("noReplyEmail(%q, %q, %q, %q) = %q, want %q", tc.typ, tc.host, tc.id, tc.login, got, tc.want)
@@ -235,5 +237,35 @@ func TestPushRuleGiteaUnsignedRefusal(t *testing.T) {
 	}
 	if got := pushRule(res.Message); got != "pre-receive-hook" {
 		t.Errorf("pushRule(%q) = %q, want pre-receive-hook", res.Message, got)
+	}
+}
+
+// TestPushRuleBitbucketBranchRestriction: Bitbucket Cloud refuses a push
+// that a branch restriction forbids with "Permission denied to update
+// branch …" and "pre-receive hook declined": the rule is
+// the protected branch, not the hook, whatever the branch is called.
+func TestPushRuleBitbucketBranchRestriction(t *testing.T) {
+	const oid = "3f786850e387550fdab836ed7e6dc881de23001b"
+	for _, branch := range []string{"touchmark/acme-eng", "release/delete-me"} {
+		res := gitx.ParsePush("To https://bitbucket.org/acme/api.git\n!\t"+oid+":refs/heads/"+branch+"\t[remote rejected] (pre-receive hook declined)\nDone\n",
+			"remote: Permission denied to update branch "+branch+".\n"+
+				"To https://bitbucket.org/acme/api.git\n ! [remote rejected] "+oid+" -> "+branch+" (pre-receive hook declined)\n"+
+				"error: failed to push some refs to 'https://bitbucket.org/acme/api.git'\n")
+		if res.Status != gitx.PushPolicy || res.Transient() {
+			t.Errorf("ParsePush = %+v, want a policy refusal", res)
+		}
+		if got := pushRule(res.Message); got != "protected-branch" {
+			t.Errorf("pushRule(%q) = %q, want protected-branch", res.Message, got)
+		}
+	}
+	for msg, want := range map[string]string{
+		"remote: Permission denied to update branch main.":      "protected-branch",
+		"remote: PERMISSION DENIED TO UPDATE BRANCH main.":      "protected-branch",
+		"[remote rejected] (pre-receive hook declined)":         "pre-receive-hook",
+		"remote: Permission denied to delete branch touchmark.": "deletion",
+	} {
+		if got := pushRule(msg); got != want {
+			t.Errorf("pushRule(%q) = %q, want %q", msg, got, want)
+		}
 	}
 }

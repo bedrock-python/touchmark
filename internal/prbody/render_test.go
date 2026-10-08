@@ -25,7 +25,7 @@ func base(t testing.TB, flavor string) Input {
 		Packs:         []string{"agents", "claude", "base"},
 		OptInFile:     optInName,
 		Caps:          capsOf(flavor),
-		Marker:        testMarker(t),
+		Marker:        markerFor(t, flavor),
 	}
 }
 
@@ -154,7 +154,7 @@ func checkBody(t *testing.T, in Input, body string) {
 	if in.Marker == "" {
 		full = body + "\n\n" + longestMarker
 		for _, line := range strings.Split(body, "\n") {
-			if strings.HasPrefix(line, "<!-- touchmark:") {
+			if marker.IsLine(line) {
 				t.Error("a body rendered without a marker has a marker line")
 			}
 		}
@@ -194,6 +194,19 @@ func checkBody(t *testing.T, in Input, body string) {
 		}
 	}
 	checkSafe(t, gen, 1)
+	if !in.Caps.BodyControls() {
+		// The platform escapes HTML: touchmark writes none there. The
+		// marker line is the caller's, in the frame it chose.
+		human := gen
+		if in.Marker != "" {
+			human = strings.TrimSuffix(gen, "\n\n"+in.Marker)
+		}
+		for i, line := range strings.Split(human, "\n") {
+			if strings.Contains(outsideCode(line), "<") {
+				t.Errorf("HTML where the platform shows it as text, line %d of the generated part: %q", i+1, line)
+			}
+		}
+	}
 	sensitive := in.GiteaWorkflows
 	var paths []string
 	for _, c := range in.Changes {
@@ -610,6 +623,10 @@ func TestRenderErrors(t *testing.T) {
 		{"marker lines", func(in *Input) { in.Marker += "\n" }, nil, "not one line"},
 		{"not a marker", func(in *Input) { in.Marker = "<!-- other -->" }, nil, "not a marker"},
 		{"marker ends early", func(in *Input) { in.Marker = "<!-- touchmark:v1 --> x -->" }, nil, "not a marker"},
+		{"reference definition ends early", func(in *Input) { in.Marker = `[touchmark]: # "touchmark:v1" x "` }, nil, "not a marker"},
+		{"reference definition unclosed", func(in *Input) { in.Marker = `[touchmark]: # "touchmark:v1 x` }, nil, "not a marker"},
+		{"reference definition escaped", func(in *Input) { in.Marker = `[touchmark]: # "touchmark:v1 hub\=x"` }, nil, "not a marker"},
+		{"intro reference definition", func(in *Input) { in.Intro = "Hello\n\n[touchmark]: # \"touchmark:v1 x\"" }, ErrIntro, "line 3"},
 		{"unknown action", func(in *Input) { in.Changes = []Change{{Path: "a", Action: "rename"}} }, nil, "unknown action"},
 		{"unknown pending action", func(in *Input) {
 			in.Paused = true

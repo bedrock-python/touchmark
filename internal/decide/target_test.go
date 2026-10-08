@@ -768,7 +768,7 @@ func TestStepKindString(t *testing.T) {
 	want := map[StepKind]string{
 		StepPush: "push", StepRecreateBranch: "recreate-branch", StepDeleteBranch: "delete-branch", StepCreatePR: "create-pr",
 		StepEditPR: "edit-pr", StepClosePR: "close-pr", StepComment: "comment", StepAck: "ack", StepRevoke: "revoke",
-		StepConsumeRecreate: "consume-recreate", 0: "unknown", 99: "unknown",
+		StepConsumeRecreate: "consume-recreate", StepRefreshMarker: "refresh-marker", 0: "unknown", 99: "unknown",
 	}
 	for k, w := range want {
 		if got := k.String(); got != w {

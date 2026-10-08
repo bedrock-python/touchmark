@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/bedrock-python/touchmark/internal/marker"
+	"github.com/bedrock-python/touchmark/internal/platform"
 )
 
 // TestControlLine: the exported lines are Render's, and Ticked reads them.
@@ -158,6 +159,52 @@ func TestUntick(t *testing.T) {
 		}
 		if Ticked(got, ControlRecreate) {
 			t.Errorf("Untick(%q) is still ticked", tc.in)
+		}
+	}
+}
+
+// TestNoBodyControls: where descriptions cannot carry tick boxes
+// (Caps.BodyControls false: the marker is a reference definition), Render
+// writes no control whatever ShowRecreate and ShowRepropose ask, names the
+// recreate entry of operations.yml in the paused block and the
+// forget_declines entry in the footnote. Where only closed pull requests
+// are immutable, the controls stay and the footnote names the entry too;
+// elsewhere it does not.
+func TestNoBodyControls(t *testing.T) {
+	const recreateHint = "add a `recreate` entry with this branch's head to `.touchmark/operations.yml`"
+	const forgetHint = "add a `forget_declines` entry with the number of this pull request to `.touchmark/operations.yml`"
+	for _, c := range []struct {
+		name                       string
+		marker                     platform.MarkerStore
+		immutable                  bool
+		controls, recreate, forget bool
+	}{
+		{"reference definition, immutable", platform.MarkerInRefDef, true, false, true, true},
+		{"reference definition", platform.MarkerInRefDef, false, false, true, true},
+		{"comment, immutable", platform.MarkerInBody, true, true, false, true},
+		{"comment", platform.MarkerInBody, false, true, false, false},
+	} {
+		in := scenarioInput(t, "paused", "github")
+		in.Caps.Marker, in.Caps.ClosedImmutable = c.marker, c.immutable
+		in.ShowRepropose = true
+		in.Marker = ""
+		body, err := Render(in)
+		if err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		for _, control := range []string{ControlRecreate, ControlRepropose} {
+			if got := strings.Contains(body, ControlLine(control)); got != c.controls {
+				t.Errorf("%s: control %s shown %v, want %v", c.name, control, got, c.controls)
+			}
+		}
+		if strings.Contains(body, "<!--") == !c.controls {
+			t.Errorf("%s: an HTML comment %v, want %v:\n%s", c.name, !c.controls, c.controls, body)
+		}
+		if got := strings.Contains(body, recreateHint); got != c.recreate {
+			t.Errorf("%s: recreate hint %v, want %v", c.name, got, c.recreate)
+		}
+		if got := strings.Contains(body, forgetHint); got != c.forget {
+			t.Errorf("%s: forget hint %v, want %v", c.name, got, c.forget)
 		}
 	}
 }

@@ -12,7 +12,7 @@ const scanLimit = 1 << 20
 type Status uint8
 
 const (
-	// None: no "<!-- touchmark:" comment at all.
+	// None: no marker line of any version at all (IsLine).
 	None Status = iota
 	// Found: a valid marker for one of the fingerprints.
 	Found
@@ -43,7 +43,9 @@ func (s Status) String() string {
 // 1 MiB are scanned only in their last 1 MiB (from the first full line in
 // it). Markers of unknown versions count as Foreign.
 //
-// A marker line starts with "<!-- touchmark:" at the start of a line; it is
+// A marker line starts with "<!-- touchmark:" at the start of a line, or is
+// a reference definition `[touchmark]: # "touchmark:…"` there, read as the
+// comment it frames (IsLine; Bitbucket's backslash escapes undone); it is
 // compared without trailing spaces, tabs and carriage returns (platforms
 // store bodies with CRLF). Scanning from the end, the first v1 marker line
 // whose fp attribute is FP16 of one of fingerprints decides (the last marker
@@ -71,8 +73,7 @@ func find(body string, oursFP16, ours func(string) bool) (Marker, Status) {
 	status := None
 	for end := len(body); ; {
 		start := strings.LastIndexByte(body[:end], '\n') + 1
-		line := strings.TrimRight(body[start:end], " \t\r")
-		if strings.HasPrefix(line, commentPrefix) {
+		if line, ok := asComment(strings.TrimRight(body[start:end], " \t\r")); ok {
 			status = Foreign
 			if strings.HasPrefix(line, v1Prefix) && oursFP16(fpAttr(line)) {
 				m, err := Parse(line)
@@ -120,16 +121,16 @@ func fpAttr(line string) string {
 	return v
 }
 
-// Strip returns body without any touchmark marker lines (any version), with
-// trailing whitespace removed, for hashing the human part of a body. A
-// marker line is one that starts with "<!-- touchmark:", as for Find; other
-// lines keep their bytes, carriage returns included.
+// Strip returns body without any touchmark marker lines (any version, either
+// frame), with trailing whitespace removed, for hashing the human part of a
+// body. A marker line is one IsLine accepts, as for Find; other lines keep
+// their bytes, carriage returns included.
 func Strip(body string) string {
 	var b strings.Builder
 	b.Grow(len(body))
 	first := true
 	for line := range strings.SplitSeq(body, "\n") {
-		if strings.HasPrefix(line, commentPrefix) {
+		if IsLine(line) {
 			continue
 		}
 		if !first {

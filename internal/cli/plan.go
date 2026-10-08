@@ -33,10 +33,10 @@ import (
 type planDriver func(config.ResolvedProvider, auth.Credential, *httpx.Client) (platform.Reader, error)
 
 // The drivers of plan by provider type, and a snapshot source that replaces
-// plan's own. This build has the Gitea and Forgejo, GitLab and GitHub
-// drivers (drivers.go). plan's own source is distribute's: a private git
-// repository per target (sharedDeps), so that plan and distribute --dry-run
-// decide alike. Tests install the fake platform here; a planSnapshots that
+// plan's own. This build has the Gitea and Forgejo, GitLab, GitHub and
+// Bitbucket Cloud drivers (drivers.go). plan's own source is distribute's:
+// a private git repository per target (sharedDeps), so that plan and
+// distribute --dry-run decide alike. Tests install the fake platform here; a planSnapshots that
 // is only a snapshot.Source (the fake in memory mode) keeps the in-memory
 // plan (distribute.Plan). Tests that install them must not run in
 // parallel.
@@ -50,9 +50,9 @@ var (
 var gitVersion = func(ctx context.Context) ([3]int, error) { return gitx.New("").Version(ctx) }
 
 // basicUsers are the users a token goes with in HTTP Basic headers (GitHub,
-// GitLab and Gitea git over HTTPS, GitLab's job token): the base64 forms of
-// "user:token" are masked too.
-var basicUsers = []string{"x-access-token", "oauth2", hubch.GitLabUser}
+// GitLab, Gitea and Bitbucket git over HTTPS, GitLab's job token): the
+// base64 forms of "user:token" are masked too.
+var basicUsers = []string{"x-access-token", "oauth2", hubch.GitLabUser, "x-bitbucket-api-token-auth"}
 
 // Suffixes of the credential variables after a provider's prefix.
 var (

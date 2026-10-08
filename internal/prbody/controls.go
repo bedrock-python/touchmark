@@ -28,7 +28,7 @@ func ControlLine(control string) string {
 // a closed PR's body). A body that already has a line of control, ticked or
 // not, and an unknown control leave body as it is.
 //
-// Marker lines are the lines that start with "<!-- touchmark:" (as for
+// Marker lines are the lines marker.IsLine accepts, in either frame (as for
 // marker.Strip); they keep their order, after a blank line. The human part
 // loses its trailing whitespace, as marker.Strip leaves it.
 func AddControl(body, control string) string {
@@ -63,7 +63,7 @@ func hasControl(body, control string) bool {
 func splitMarkers(body string) (human, markers string) {
 	var lines []string
 	for line := range strings.SplitSeq(body, "\n") {
-		if strings.HasPrefix(line, "<!-- touchmark:") {
+		if marker.IsLine(line) {
 			lines = append(lines, strings.TrimRight(line, " \t\r"))
 		}
 	}

@@ -87,7 +87,7 @@ and the branch head before and after.
 | `assume_opt_in` | boolean | plan --assume-opt-in: for this report only, every target without an opt-in file, or whose opt-in file is not a regular file or is too large, counts as opted in; one whose opt-in file says enabled: false stays opted out. |
 | `providers` | list of objects, required | The hub's providers, in hub.yml order. |
 | `providers[].id` | string, required | — |
-| `providers[].type` | one of `github`, `gitlab`, `gitea`, `forgejo`, required | — |
+| `providers[].type` | one of `github`, `gitlab`, `gitea`, `forgejo`, `bitbucket`, required | — |
 | `providers[].host` | string, not empty, required | The provider's host, with a port when it has one. |
 | `providers[].reader` | string | Login of the read account. |
 | `providers[].writer` | string | Login of the write account. |
@@ -199,7 +199,7 @@ hub, for each provider's write identity, and for each target. See
 | `hub_checks[].detail` | string | What the check found; absent for a target the report does not name. |
 | `providers` | list of objects, required | The hub's providers, in hub.yml order. |
 | `providers[].id` | string, required | — |
-| `providers[].type` | one of `github`, `gitlab`, `gitea`, `forgejo`, required | — |
+| `providers[].type` | one of `github`, `gitlab`, `gitea`, `forgejo`, `bitbucket`, required | — |
 | `providers[].host` | string, not empty, required | The provider's host, with a port when it has one. |
 | `providers[].writer` | string | Login of the writer hub.yml names. |
 | `providers[].self` | string | Login the write credential acts as. |

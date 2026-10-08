@@ -337,3 +337,42 @@ func TestRefRefusesURL(t *testing.T) {
 		t.Errorf("Selectors of a URL: %v", err)
 	}
 }
+
+// TestResolveURLsBitbucket: a Bitbucket Cloud provider takes the web URLs of
+// bitbucket.org, workspace/repository and workspace only.
+func TestResolveURLsBitbucket(t *testing.T) {
+	provs := resolvedProviders(t, `version: 1
+id: acme-eng
+providers:
+  - id: bb
+    type: bitbucket
+  - id: gh
+    type: github
+`)
+	for _, tc := range []struct {
+		entry Entry
+		want  string // the resolved value, or a substring of the error after "!"
+	}{
+		{Entry{Repo: "https://bitbucket.org/acme/billing"}, "bb:acme/billing"},
+		{Entry{Repo: "https://bitbucket.org/acme/billing.git"}, "bb:acme/billing"},
+		{Entry{Org: "https://bitbucket.org/acme/"}, "bb:acme"},
+		{Entry{Repo: "https://bitbucket.org/acme/billing/src/main/README.md"}, "!a bitbucket repository URL names owner/name"},
+		{Entry{Org: "https://bitbucket.org/acme/billing"}, "!a bitbucket organisation URL names one owner"},
+		{Entry{Repo: "https://api.bitbucket.org/acme/billing"}, "!is not under the url of any provider"},
+	} {
+		got, err := ResolveURLs(&Targets{Targets: []Entry{tc.entry}}, provs)
+		if want, ok := strings.CutPrefix(tc.want, "!"); ok {
+			if err == nil || !strings.Contains(err.Error(), want) {
+				t.Errorf("%+v: error %v, want one with %q", tc.entry, err, want)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("%+v: %v", tc.entry, err)
+			continue
+		}
+		if v := selectorValue(&got.Targets[0]); v != tc.want {
+			t.Errorf("%+v: %q, want %q", tc.entry, v, tc.want)
+		}
+	}
+}

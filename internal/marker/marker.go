@@ -3,6 +3,11 @@
 //
 //	<!-- touchmark:v1 hub=<id> fp=<16 hex> stream=<stream> key=sha256:<64 hex> data=<base64(gzip(json))> -->
 //
+// or, where a platform escapes HTML in descriptions (Bitbucket Cloud), the
+// same payload in a Markdown link reference definition (FrameRefDef):
+//
+//	[touchmark]: # "touchmark:v1 hub=<id> fp=<16 hex> stream=<stream> key=sha256:<64 hex> data=<base64(gzip(json))>"
+//
 // The marker is the only memory touchmark has: what the PR carried, who
 // the hub is, and what the engine wrote last. Everything in a PR body is
 // untrusted input, so parsing is strict and bounded.
@@ -28,7 +33,10 @@ import (
 const (
 	// Version is the marker format version ("touchmark:v1").
 	Version = 1
-	// MaxLine is the largest marker comment accepted or written.
+	// MaxLine is the largest marker line written, in either frame, and the
+	// largest accepted in the comment frame. A reference definition is
+	// accepted up to twice as long before its backslash escapes are undone
+	// (an escape per byte at most), and up to MaxLine after.
 	MaxLine = 16 << 10
 	// MaxData is the largest decompressed JSON accepted.
 	MaxData = 64 << 10
@@ -68,14 +76,19 @@ type Data struct {
 	// header carries only FP16(FP).
 	FP string `json:"fp"`
 	// HubRepo is omitted when the hub is private and the target public.
-	HubRepo       string   `json:"hub_repo,omitempty"`
-	DecidedAt     string   `json:"decided_at"`
-	ContentCommit string   `json:"content_commit"`
-	Base          string   `json:"base"`
-	OptIn         string   `json:"optin"`
-	Engine        string   `json:"engine"`
-	Packs         []string `json:"packs"`
-	Changes       []Change `json:"changes"`
+	HubRepo       string `json:"hub_repo,omitempty"`
+	DecidedAt     string `json:"decided_at"`
+	ContentCommit string `json:"content_commit"`
+	Base          string `json:"base"`
+	// OptIn is the hash of the opt-in file (config.OptIn.Hash): the one the
+	// content was proposed under, written with the content, and the one an
+	// ack records. Where closed pull requests are immutable
+	// (platform.Caps.ClosedImmutable) touchmark keeps it current while the
+	// pull request is open, and memory reads it as the ack of a decline.
+	OptIn   string   `json:"optin"`
+	Engine  string   `json:"engine"`
+	Packs   []string `json:"packs"`
+	Changes []Change `json:"changes"`
 	// ChangesComplete is false when Changes was dropped to fit the limits;
 	// memory then matches only by the exact key.
 	ChangesComplete bool     `json:"changes_complete"`
@@ -139,18 +152,23 @@ func FP16(fingerprint string) string {
 	return hex.EncodeToString(sum[:8])
 }
 
-// Encode returns the marker comment line (no trailing newline).
+// Encode returns the marker line in the comment frame (no trailing
+// newline): EncodeFrame(m, FrameComment).
+func Encode(m Marker) (string, error) { return EncodeFrame(m, FrameComment) }
+
+// EncodeFrame returns the marker line in frame f (no trailing newline).
 //
 // It fills Hub, FP16 and Stream from Data, validates every field with the
 // rules of Parse (and every string as valid UTF-8, which JSON needs to
 // round-trip), and enforces the limits: when there are more than MaxChanges
 // changes, the JSON exceeds MaxJSON or the line exceeds MaxLine, it drops
 // Changes and sets ChangesComplete to false; if the JSON still exceeds
-// MaxJSON or the line MaxLine it fails. Output is deterministic: JSON with
-// empty arrays for nil slices, gzip at the best compression level without a
-// timestamp or name, standard padded base64. Parse accepts every line
-// Encode returns and yields the marker it encoded.
-func Encode(m Marker) (string, error) {
+// MaxJSON or the line MaxLine it fails; the line is measured in frame f.
+// Output is deterministic: JSON with empty arrays for nil slices, gzip at
+// the best compression level without a timestamp or name, standard padded
+// base64. Parse accepts every line EncodeFrame returns and yields the
+// marker it encoded.
+func EncodeFrame(m Marker, f Frame) (string, error) {
 	m.Hub, m.Stream, m.FP16 = m.Data.Hub, m.Data.Stream, FP16(m.Data.FP)
 	if err := checkHeader(m); err != nil {
 		return "", fmt.Errorf("encode marker: %w", err)
@@ -166,11 +184,13 @@ func Encode(m Marker) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("encode marker: %w", err)
 	}
+	line = frame(line, f)
 	if (size > MaxJSON || len(line) > MaxLine) && len(d.Changes) > 0 {
 		d.Changes, d.ChangesComplete = nil, false
 		if line, size, err = encodeLine(m, d); err != nil {
 			return "", fmt.Errorf("encode marker: %w", err)
 		}
+		line = frame(line, f)
 	}
 	switch {
 	case size > MaxJSON:
@@ -231,9 +251,11 @@ func wire(d Data) Data {
 	return d
 }
 
-// Parse parses one marker comment strictly: exact prefix and attribute
-// order separated by single spaces, base64 that decodes (standard alphabet,
-// padded, canonical), one gzip member without a name, comment, extra field
+// Parse parses one marker line strictly, in either frame: a reference
+// definition is read as the comment it frames (see IsLine), its backslash
+// escapes undone, and the comment is parsed. Strictly means: exact prefix
+// and attribute order separated by single spaces, base64 that decodes
+// (standard alphabet, padded, canonical), one gzip member without a name, comment, extra field
 // or time and with nothing after it, that decompresses to at most MaxData
 // bytes (read through a limited reader), UTF-8 JSON with exactly the keys of
 // Data (compared case-sensitively, none repeated, no unknown fields, none
@@ -257,6 +279,14 @@ func Parse(line string) (Marker, error) {
 }
 
 func parse(line string) (Marker, error) {
+	if !strings.HasPrefix(line, commentPrefix) {
+		if len(line) > 2*MaxLine {
+			return Marker{}, fmt.Errorf("the line is %d bytes, more than %d", len(line), 2*MaxLine)
+		}
+		if c, ok := asComment(line); ok {
+			line = c
+		}
+	}
 	if len(line) > MaxLine {
 		return Marker{}, fmt.Errorf("the line is %d bytes, more than %d", len(line), MaxLine)
 	}

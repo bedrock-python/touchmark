@@ -253,14 +253,37 @@ func draftPrefix(c platform.Caps) string {
 	return c.DraftPrefix
 }
 
+// prLabels returns the labels p's pull requests get: pr.labels of hub.yml,
+// none on a platform without labels (Caps.NoLabels), so that the core never
+// asks for them there, nor records them in the marker as set.
+func (p *provider) prLabels(hub *config.Hub) []string {
+	if p.caps.NoLabels {
+		return nil
+	}
+	return hub.PR.Labels
+}
+
+// createsLabels reports whether a first pull request of p may create a
+// label: hub.yml sets labels and the platform has them.
+func (p *provider) createsLabels(hub *config.Hub) bool { return len(p.prLabels(hub)) > 0 }
+
+// markerFrame is the frame of the marker line on p (Caps.Marker).
+func (p *provider) markerFrame() marker.Frame {
+	if p.caps.Marker == platform.MarkerInRefDef {
+		return marker.FrameRefDef
+	}
+	return marker.FrameComment
+}
+
 // reportDecision writes w's decision into the target's report line: the
 // outcome, reason and pull request, and for a branch touchmark leaves alone
 // (blocked:edited, blocked:branch-taken) why (decide.Branch.Detail). It
 // renders the description when the decision writes one, and applies field
 // ownership (decide.PlanPREdit) to every StepEditPR: an edit that changes
-// nothing and rewrites no content is skipped (Work.idle), and an unchanged
-// target whose edit writes is reported as updated:title when only the title
-// changes, else updated:body.
+// nothing, rewrites no content and finds the marker's optin current
+// (Work.staleOptIn) is skipped (Work.idle), and an unchanged target whose
+// edit writes is reported as updated:title when only the title changes,
+// else updated:body.
 func (r *run) reportDecision(w *Work, prs prSet, reads branchReads) error {
 	res := &w.t.res
 	d := w.Decision
@@ -290,16 +313,17 @@ func (r *run) reportDecision(w *Work, prs prSet, reads branchReads) error {
 		if !ok {
 			return fmt.Errorf("the decision edits #%d, which is not an open pull request of touchmark", s.PR)
 		}
-		desired := decide.DesiredPR{Title: r.hub.PR.Title, Body: human, Labels: r.hub.PR.Labels, Base: s.Base,
+		desired := decide.DesiredPR{Title: r.hub.PR.Title, Body: human, Labels: w.t.prov.prLabels(r.hub), Base: s.Base,
 			DraftPrefix: draftPrefix(w.t.prov.caps)}
 		edit, _, writes := decide.PlanPREdit(o.PR, o.Marker, desired)
-		if !writes && !s.Content {
+		stale := w.staleOptIn(o.Marker)
+		if !writes && !s.Content && !stale {
 			w.idle[i] = true
 			continue
 		}
 		if changed != "body" {
 			changed = "body"
-			if titleOnly(edit, o.Marker, human) && !s.Content {
+			if titleOnly(edit, o.Marker, human) && !s.Content && !stale {
 				changed = "title"
 			}
 		}

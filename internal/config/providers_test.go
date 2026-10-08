@@ -37,6 +37,9 @@ func TestResolveProviders(t *testing.T) {
 		{ID: "tea", Type: "gitea", URL: "https://gitea.example.com"},
 		{ID: "cb", Type: "forgejo", URL: "https://codeberg.org"},
 		{ID: "local", Type: "gitea", URL: "http://localhost:3000"},
+		{ID: "bb", Type: "bitbucket"},
+		{ID: "bb-url", Type: "bitbucket", URL: "https://Bitbucket.org/"},
+		{ID: "bb-test", Type: "bitbucket", URL: "http://localhost:8080", APIURL: "http://localhost:8080/2.0"},
 	}}
 	want := map[string]resolvedURLs{
 		"gh":       {"https://github.com", "github.com", "https://api.github.com", "https://api.github.com/graphql", "TOUCHMARK_GH_"},
@@ -50,6 +53,9 @@ func TestResolveProviders(t *testing.T) {
 		"tea":      {"https://gitea.example.com", "gitea.example.com", "https://gitea.example.com/api/v1", "", "TOUCHMARK_TEA_"},
 		"cb":       {"https://codeberg.org", "codeberg.org", "https://codeberg.org/api/v1", "", "TOUCHMARK_CB_"},
 		"local":    {"http://localhost:3000", "localhost:3000", "http://localhost:3000/api/v1", "", "TOUCHMARK_LOCAL_"},
+		"bb":       {"https://bitbucket.org", "bitbucket.org", "https://api.bitbucket.org/2.0", "", "TOUCHMARK_BB_"},
+		"bb-url":   {"https://Bitbucket.org", "bitbucket.org", "https://api.bitbucket.org/2.0", "", "TOUCHMARK_BB_URL_"},
+		"bb-test":  {"http://localhost:8080", "localhost:8080", "http://localhost:8080/2.0", "", "TOUCHMARK_BB_TEST_"},
 	}
 	// The CI environment does not matter for declared providers, except
 	// GITHUB_API_URL on the hub's own host (below).
@@ -292,8 +298,18 @@ func TestResolveProvidersErrors(t *testing.T) {
 		},
 		{
 			name: "bad type",
-			hub:  &Hub{Providers: []Provider{{ID: "bb", Type: "bitbucket"}}},
-			want: `hub.yml: providers[0]: type: "bitbucket" must be one of github, gitlab, gitea, forgejo`,
+			hub:  &Hub{Providers: []Provider{{ID: "ado", Type: "azure-devops"}}},
+			want: `hub.yml: providers[0]: type: "azure-devops" must be one of github, gitlab, gitea, forgejo, bitbucket`,
+		},
+		{
+			name: "bitbucket elsewhere without api_url",
+			hub:  &Hub{Providers: []Provider{{ID: "bb", Type: "bitbucket", URL: "https://bitbucket.example.com"}}},
+			want: "hub.yml: providers[0]: url: a provider of type bitbucket is Bitbucket Cloud, at https://bitbucket.org (leave url out); Bitbucket Data Center is not supported yet",
+		},
+		{
+			name: "bitbucket under a path",
+			hub:  &Hub{Providers: []Provider{{ID: "bb", Type: "bitbucket", URL: "https://bitbucket.org/acme"}}},
+			want: "hub.yml: providers[0]: url: a provider of type bitbucket is Bitbucket Cloud",
 		},
 		{
 			name: "gitea without url",

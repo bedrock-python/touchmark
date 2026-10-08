@@ -168,16 +168,15 @@ func (r *run) gateSnapshotOnly(list []*target) {
 			continue
 		}
 		if opened >= r.hub.Limits.MaxNewPRsPerRun {
-			w := estimate(t.prov.cfg.Type, report.OutcomeOpened, len(r.hub.PR.Labels) > 0 && t.noOwnPRs)
+			w := estimate(t.prov.cfg.Type, report.OutcomeOpened, t.prov.createsLabels(r.hub) && t.noOwnPRs)
 			t.later = pathWrites{git: w, api: w}
 			t.res.Outcome, t.res.Reason = report.OutcomeDeferred, "rollout-limit"
 			continue
 		}
 		opened++
 	}
-	createsLabel := len(r.hub.PR.Labels) > 0
 	for _, t := range list {
-		t.res.Writes = estimate(t.prov.cfg.Type, t.res.Outcome, createsLabel && t.noOwnPRs)
+		t.res.Writes = estimate(t.prov.cfg.Type, t.res.Outcome, t.prov.createsLabels(r.hub) && t.noOwnPRs)
 		r.rep.Cost[t.prov.cfg.ID] += t.res.Writes
 	}
 }

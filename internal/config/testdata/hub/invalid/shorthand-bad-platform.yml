@@ -1,4 +1,4 @@
-# error: platform: "bitbucket" must be one of
+# error: platform: "azure-devops" must be one of
 version: 1
 id: acme-eng
-platform: bitbucket
+platform: azure-devops

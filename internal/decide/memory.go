@@ -76,6 +76,29 @@ type MemoryConfig struct {
 	Automation map[string]bool
 	// CloserKnown is Caps.CloserKnown.
 	CloserKnown bool
+	// ClosedImmutable is Caps.ClosedImmutable: a closed pull request can
+	// never be edited (Bitbucket Cloud's declined pull requests), so
+	// memory asks for no write to one. Declines are then read as follows
+	// (see BuildMemory):
+	//   - a decline whose marker holds optin, the hash of the opt-in file
+	//     touchmark wrote into the marker while the pull request was open
+	//     (on every create and content edit, and on any edit that finds
+	//     it stale), counts as acked with that optin: in force while the
+	//     opt-in file hashes the same, lapsed once it changes, as after an
+	//     ack written elsewhere;
+	//   - a decline whose marker holds no optin (a marker touchmark did
+	//     not write in full) is in force whatever the opt-in file says,
+	//     and is listed in Memory.Unanchored so that the report says how to
+	//     lift it: no state of the file was recorded to compare with, and a
+	//     decline that lapsed silently would propose the content again;
+	//   - a pull request a forget_declines entry names is no memory while
+	//     the entry is present (Memory.Forgotten): its revocation cannot be
+	//     written into the pull request, so the entry does not act once;
+	//   - ticked repropose controls are ignored: such a platform shows no
+	//     tick box (Caps.BodyControls), and no ack adds one.
+	//
+	// ToAck and ToRevoke are always empty then.
+	ClosedImmutable bool
 	// Window is how many closed own PRs are considered, newest first (50;
 	// a value that is not positive means 50).
 	Window int
@@ -129,8 +152,12 @@ type Decline struct {
 	Key      string
 	Changes  []marker.Change
 	Complete bool // marker.Data.ChangesComplete
+	// Acked is set when the opt-in state the decline holds under is known:
+	// an ack was written into its marker, or, on a platform whose closed
+	// pull requests are immutable (MemoryConfig.ClosedImmutable), the
+	// marker recorded optin while the pull request was open.
 	Acked    bool
-	OptIn    string // marker.Data.OptIn at ack time ("" before ack)
+	OptIn    string // marker.Data.OptIn of an acked decline ("" otherwise)
 	ClosedAt time.Time
 }
 
@@ -157,7 +184,7 @@ type MemoryInput struct {
 	// Forget lists PR numbers operations.yml forget_declines names.
 	Forget []int64
 	// Repropose lists declined PRs whose "Propose this content again"
-	// checkbox is ticked.
+	// checkbox is ticked (ignored with Config.ClosedImmutable).
 	Repropose map[int64]bool
 	// Now is the run's clock. What memory holds does not depend on it:
 	// Cooldown takes the time it compares with.
@@ -193,8 +220,18 @@ type Memory struct {
 	// repropose ticked). Auto-closes named there are revoked too, which
 	// ends their cooldown. A PR in ToRevoke is already out of every other
 	// list, so a run that writes the revocation decides as the next run
-	// will.
+	// will. Always empty with Config.ClosedImmutable.
 	ToRevoke []int64
+	// Forgotten are, with Config.ClosedImmutable, the closes a
+	// forget_declines entry names: no memory while the entry is present,
+	// and out of every other list (an auto-close among them ends its
+	// cooldown). Nothing is written to them.
+	Forgotten []int64
+	// Unanchored are, with Config.ClosedImmutable, the declines in force
+	// whose marker records no opt-in state (see MemoryConfig): they hold
+	// until a forget_declines entry names them or a path of theirs becomes
+	// local or ignored, and the report says so.
+	Unanchored []int64
 	// Auto are auto-closes among the window, newest first. Revoked ones
 	// (and those in ToRevoke) are left out: a revoked PR is not memory.
 	Auto []AutoClose
@@ -211,11 +248,16 @@ type Memory struct {
 //   - named by Forget, or its repropose checkbox ticked: ToRevoke, and no
 //     memory from this run on (revoking a lapsed decline makes the revocation
 //     permanent, even if the opt-in file later returns to the acked state);
+//     with Config.ClosedImmutable, named by Forget: Forgotten, and no memory
+//     while the entry is present (a ticked checkbox counts for nothing
+//     there);
 //   - CloseAuto: an entry of Auto; it is a decline as well when its marker
 //     is acked or it is the third or later of a run (see Memory.Declines);
 //   - declines are then in force (Declines, and ToAck while unacked) or
 //     Lapsed: acked with an optin other than OptIn, or a path of their
-//     Changes LocalOrIgnored.
+//     Changes LocalOrIgnored. With Config.ClosedImmutable a decline whose
+//     marker holds optin counts as acked with it, and one in force without
+//     it is Unanchored instead of ToAck.
 //
 // A run of an auto-close is itself and the consecutive older entries of
 // Auto with the same key: an auto-close with another key ends it, while a
@@ -233,6 +275,7 @@ func BuildMemory(in MemoryInput) Memory {
 	for _, n := range in.Forget {
 		forget[n] = true
 	}
+	immutable := in.Config.ClosedImmutable
 	var m Memory
 	// kept are the closes that carry memory, in window order, with whether
 	// the class was CloseAuto.
@@ -255,7 +298,10 @@ func BuildMemory(in MemoryInput) Memory {
 		switch {
 		case class == CloseSelf, o.Marker.Data.Revoked:
 			continue
-		case forget[n] || in.Repropose[n]:
+		case immutable && forget[n]:
+			m.Forgotten = append(m.Forgotten, n)
+			continue
+		case !immutable && (forget[n] || in.Repropose[n]):
 			m.ToRevoke = append(m.ToRevoke, n)
 			continue
 		}
@@ -282,10 +328,13 @@ func BuildMemory(in MemoryInput) Memory {
 			Key:      c.o.Marker.Key,
 			Changes:  slices.Clone(data.Changes),
 			Complete: data.ChangesComplete,
-			Acked:    data.Ack,
+			// On a platform whose closed pull requests are immutable, the
+			// optin the open pull request's marker held stands for the ack
+			// no one can write.
+			Acked:    data.Ack || (immutable && data.OptIn != ""),
 			ClosedAt: c.o.PR.ClosedAt,
 		}
-		if data.Ack {
+		if d.Acked {
 			d.OptIn = data.OptIn
 		}
 		if memLapsed(d, in) {
@@ -293,7 +342,11 @@ func BuildMemory(in MemoryInput) Memory {
 			continue
 		}
 		m.Declines = append(m.Declines, d)
-		if !d.Acked {
+		switch {
+		case d.Acked:
+		case immutable:
+			m.Unanchored = append(m.Unanchored, n)
+		default:
 			m.ToAck = append(m.ToAck, n)
 		}
 	}

@@ -47,7 +47,8 @@ no lock file, no header, no marker in their files. It never checks a target out 
 and never runs a script, hook, filter or LFS from the hub or a target. It delivers
 nothing to a repository without the opt-in file, unless `targets.yml` subscribes it
 (`opt_in: assumed`). There is no pull mode (targets do not
-fetch from the hub), no remote pack sources, and no Bitbucket or Azure DevOps driver.
+fetch from the hub), no remote pack sources, no Azure DevOps driver, and no hub on
+Bitbucket Pipelines: Bitbucket Cloud is a provider a hub elsewhere delivers to.
 
 ## Mental model
 
@@ -283,7 +284,7 @@ covers everything under it). At most 64 KiB.
 
 `.touchmark/operations.yml` (in the hub; `touchmark schema operations`):
 `recreate[]` (`target`, `head`: acts while the branch head is that commit),
-`forget_declines[]` (`target`, `pr`: acts once), `allow_mass_close` (`max`, `until`),
+`forget_declines[]` (`target`, `pr`: acts once; on Bitbucket Cloud while present), `allow_mass_close` (`max`, `until`),
 `adopt_unmarked` (`until`). Dates are `YYYY-MM-DD`, UTC, inclusive.
 
 Environment, one set per provider; `<ID>` is the provider id upper-cased with `-` as
@@ -458,7 +459,7 @@ Each target ends with one outcome, and a reason for most:
 | `opened`, `updated`, `unchanged`, `closed` | `updated`: `content`, `rebase`, `recreate`, `body`, `title`, `base-renamed`; `closed`: `no-diff`, `opted-out`, `target-dropped`, `duplicate` | nothing |
 | `declined` | the declined pull request | nothing; see [memory](concepts/memory.md) to propose again |
 | `skipped` | `not-opted-in`, `opted-out` (the opt-in file says `enabled: false`), `archived`, `disabled`, `empty`, `mirror`, `pending-deletion`, `prs-disabled`, `sha256`, `unsafe-opt-in`, `private-in-public-hub`, `superseded` | add the opt-in file (or `opt_in: assumed` in the hub), or nothing |
-| `blocked` | `edited` (someone pushed to the sync branch), `branch-taken`, `branch-in-use`, `opt-in-invalid`, `marker-invalid`, `rules:<rule>`, `permission:<what>`, `cannot-sign`, `archived`, `mass-close` | tick *Rebuild this branch* or add a `recreate` entry; fix the opt-in file; grant the permission; add a signing key; `allow_mass_close` |
+| `blocked` | `edited` (someone pushed to the sync branch), `branch-taken`, `branch-in-use`, `opt-in-invalid`, `marker-invalid`, `rules:<rule>`, `permission:<what>`, `cannot-sign`, `archived`, `mass-close` | tick *Rebuild this branch* (not on Bitbucket Cloud) or add a `recreate` entry; fix the opt-in file; grant the permission; add a signing key; `allow_mass_close` |
 | `deferred` | `rate-limit`, `deadline`, `rollout-limit`, `provider-down`, `interrupted`, `cooldown` | nothing: the next run continues |
 | `failed` | `transient`, `auth`, `access`, `git`, `integrity`, `race`, `secret-exposure`, `internal` | read the report's reason; `auth` and `access` are the credential |
 

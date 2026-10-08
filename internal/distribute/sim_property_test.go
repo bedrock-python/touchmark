@@ -80,6 +80,30 @@ func TestPropertyDistribute(t *testing.T) {
 	}
 }
 
+// TestPropertyDistributeBitbucket runs the scenarios of the property test
+// on Bitbucket Cloud's flavor of the fake: no labels, no tick boxes, and
+// declined pull requests no one can edit or reopen (the events that need
+// them do not apply there), under the same checks. By default 30 scenarios
+// run; TOUCHMARK_PROPERTY_BITBUCKET_SCENARIOS sets how many, the rounds and
+// the first seed are the property test's, so
+// `go test -run 'TestPropertyDistributeBitbucket/seed=17$'` replays one.
+// They draw their events as the property test's scenarios of the same seed
+// do, the flavor aside.
+func TestPropertyDistributeBitbucket(t *testing.T) {
+	needDeliveryGit(t)
+	simHeavy(t)
+	n := simEnvInt(t, "TOUCHMARK_PROPERTY_BITBUCKET_SCENARIOS", 30)
+	rounds := max(1, simEnvInt(t, "TOUCHMARK_PROPERTY_ROUNDS", 2))
+	first := simEnvInt(t, "TOUCHMARK_PROPERTY_SEED", 1)
+	for i := range n {
+		seed := uint64(first + i)
+		t.Run(fmt.Sprintf("seed=%d", seed), func(t *testing.T) {
+			t.Parallel()
+			runSimScenarioOf(t, seed, rounds, nil, fake.Bitbucket)
+		})
+	}
+}
+
 // simEnvInt reads a positive number from the environment, def when unset.
 func simEnvInt(t *testing.T, name string, def int) int {
 	t.Helper()
@@ -134,9 +158,19 @@ func (s *simScenario) cover(rep *report.Delivery) {
 // same in every scenario, so its plan and dry run are left out, and one
 // scenario in four runs distribute again after it.
 func runSimScenario(t *testing.T, seed uint64, maxRounds int, cov *simCoverage) {
+	runSimScenarioOf(t, seed, maxRounds, cov, "")
+}
+
+// runSimScenarioOf is runSimScenario on the flavor only when only is not
+// "": the flavor is drawn all the same, so the scenario draws what it would
+// draw otherwise.
+func runSimScenarioOf(t *testing.T, seed uint64, maxRounds int, cov *simCoverage, only fake.Flavor) {
 	rng := rand.New(rand.NewPCG(seed, 0x9e3779b97f4a7c15))
 	flavors := []fake.Flavor{fake.GitHub, fake.GitLab, fake.Gitea, fake.Forgejo}
 	flavor := flavors[rng.IntN(len(flavors))]
+	if only != "" {
+		flavor = only
+	}
 	names := []string{"api"}
 	if rng.IntN(5) == 0 {
 		names = append(names, "web")
@@ -604,6 +638,9 @@ func (s *simScenario) closeOwn(tg *simTarget, by platform.Account) string {
 }
 
 func (s *simScenario) reopen(tg *simTarget) string {
+	if s.p.Caps().ClosedImmutable {
+		return "" // no one reopens a declined pull request on Bitbucket
+	}
 	var closed []platform.PR
 	for _, pr := range s.ownPRs(tg) {
 		if pr.State != platform.Closed || s.p.Branch(tg.repo.ID, pr.Head) == "" {
@@ -839,6 +876,9 @@ func (s *simScenario) deleteSync(tg *simTarget) string {
 }
 
 func (s *simScenario) tickRecreate(tg *simTarget) string {
+	if !s.p.Caps().BodyControls() {
+		return "" // the description has no tick box
+	}
 	for _, pr := range s.openOwn(tg) {
 		if s.tick(tg, pr.Number, prbody.ControlRecreate) {
 			return fmt.Sprintf("a person ticks rebuild in #%d", pr.Number)
@@ -848,6 +888,9 @@ func (s *simScenario) tickRecreate(tg *simTarget) string {
 }
 
 func (s *simScenario) tickRepropose(tg *simTarget) string {
+	if !s.p.Caps().BodyControls() {
+		return "" // the description has no tick box
+	}
 	for _, pr := range s.ownPRs(tg) {
 		if pr.State == platform.Closed && s.tick(tg, pr.Number, prbody.ControlRepropose) {
 			s.c.revoke(tg, pr.Number)

@@ -1,5 +1,5 @@
 // Package platform defines what touchmark needs from a code hosting platform
-// (GitHub, GitLab, Gitea, Forgejo; later Bitbucket and Azure DevOps): the
+// (GitHub, GitLab, Gitea, Forgejo, Bitbucket Cloud; later Azure DevOps): the
 // Reader and Writer interfaces drivers implement, their capabilities, and one
 // error model.
 //
@@ -257,6 +257,13 @@ type MarkerStore uint8
 const (
 	MarkerInBody       MarkerStore = iota // last line of the description
 	MarkerInProperties                    // PR properties (Azure DevOps, later)
+	// MarkerInRefDef is the last line of the description too, with the
+	// payload of MarkerInBody wrapped in a Markdown link reference
+	// definition, `[touchmark]: # "touchmark:v1 …"`, which renderers do not
+	// show: Bitbucket Cloud escapes HTML in descriptions, so an HTML comment
+	// would show as text (marker.FrameRefDef; the core reads both frames on
+	// every platform).
+	MarkerInRefDef
 )
 
 // Limits are a provider's default pacing (internal/throttle applies them,
@@ -273,7 +280,8 @@ type Limits struct {
 
 // Caps describes a platform instance, found once per run by Reader.Probe.
 type Caps struct {
-	// Flavor is "github", "ghe.com", "ghes", "gitlab", "gitea" or "forgejo".
+	// Flavor is "github", "ghe.com", "ghes", "gitlab", "gitea", "forgejo"
+	// or "bitbucket" (Bitbucket Cloud).
 	Flavor  string
 	Version string
 	// MaxBody is the body budget in bytes, marker included.
@@ -288,15 +296,39 @@ type Caps struct {
 	// are refused or dropped silently (Gitea and Forgejo answer 422 to
 	// names when a pull request is created, and drop unknown ids).
 	LabelsByID bool
+	// NoLabels is set when the platform has no pull request labels
+	// (Bitbucket Cloud): the core asks for none (NewPR.Labels,
+	// PREdit.AddLabels and EnsureLabels stay empty, the marker records
+	// none set) and reports none, and the driver ignores any it is given.
+	NoLabels bool
 	// CloserKnown is set when PR.ClosedBy is reliable.
 	CloserKnown bool
-	Marker      MarkerStore
-	Commit      struct{ API, SignedByPlatform, CAS bool }
+	// ClosedImmutable is set when a pull request closed without merging can
+	// never be edited again, by anyone (Bitbucket Cloud's declined pull
+	// requests): the core never plans a write to the body of a closed pull
+	// request there. Memory then reads a decline from what the marker held
+	// while the pull request was open (its optin), and a forget_declines
+	// entry acts while it is present instead of once (see
+	// decide.MemoryConfig.ClosedImmutable).
+	ClosedImmutable bool
+	Marker          MarkerStore
+	Commit          struct{ API, SignedByPlatform, CAS bool }
 	// RuntimeOnly lists checks the writer cannot read upfront, e.g.
 	// "push_rules" on GitLab.
 	RuntimeOnly []string
 	Limits      Limits
 }
+
+// BodyControls reports whether pull request descriptions on the platform
+// can carry touchmark's tick boxes ("Rebuild this branch", "Propose this
+// content again"). Each is a task list item tagged with an HTML comment,
+// which renderers hide; a platform that escapes HTML in descriptions would
+// show the tag as text, and it is the same platform whose marker is a
+// Markdown reference definition (MarkerInRefDef). There the description
+// offers no tick box, says to ask for a rebuild or a new proposal through
+// .touchmark/operations.yml instead, and the core reads no tick box from
+// it.
+func (c Caps) BodyControls() bool { return c.Marker != MarkerInRefDef }
 
 // Reader is one provider from hub.yml under one identity. Implementations
 // are safe for concurrent use: the core inspects targets in parallel.

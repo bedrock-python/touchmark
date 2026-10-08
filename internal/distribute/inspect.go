@@ -603,6 +603,7 @@ func (r *run) inspectFull(ctx context.Context, t *target, optIn *config.OptIn, s
 		r.blockProtected(w, protected)
 	}
 	r.checkSigning(w)
+	w.refreshOptIn()
 	w.NeedPerms = needPerms(w.Decision.Steps)
 	r.fillBody(w, sel, reads)
 	if err := r.reportDecision(w, prs, reads); err != nil {
@@ -658,7 +659,7 @@ func (r *run) decideTarget(w *Work, prs prSet, reads branchReads, ops decide.Tar
 		CooldownUntil:        until,
 		CooldownDeclined:     declined,
 		Ops:                  ops,
-		RecreateTicked:       hasKept && prbody.Ticked(kept.PR.Body, prbody.ControlRecreate),
+		RecreateTicked:       hasKept && p.caps.BodyControls() && prbody.Ticked(kept.PR.Body, prbody.ControlRecreate),
 		PlatformWorkflowPerm: p.caps.WorkflowPerm,
 		CanWorkflows:         can,
 		WorkflowsDiffer:      reads.differ,

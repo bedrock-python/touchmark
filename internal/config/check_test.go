@@ -161,6 +161,35 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
+			name: "topics on bitbucket",
+			hub: &Hub{ID: "acme-eng", Providers: []Provider{
+				{ID: "bb", Type: "bitbucket"}, {ID: "gh", Type: "github"},
+			}},
+			targets: &Targets{
+				Defaults: Defaults{Provider: "bb"},
+				Targets: []Entry{
+					{Org: "acme", Topics: []string{"python"}},
+					{Org: "gh:acme", Topics: []string{"python"}},
+					{Org: "acme", Provider: "gh", Topics: []string{"python"}},
+					{Org: "bb:acme", Match: []string{"acme/svc-*"}},
+					{Group: "acme", Provider: "bb", Topics: []string{"go"}},
+				},
+			},
+			errors: []string{
+				"targets.yml: targets[0].topics: provider bb is Bitbucket, whose repositories have no topics; select them with match: (paths like acme/svc-*) or list them with repo:",
+				"targets.yml: targets[4].topics: provider bb is Bitbucket",
+			},
+		},
+		{
+			name: "bitbucket paths are workspace/repository",
+			hub:  &Hub{ID: "acme-eng", Providers: []Provider{{ID: "bb", Type: "bitbucket"}}},
+			targets: &Targets{
+				Targets: []Entry{{Org: "acme"}},
+				Exclude: []string{"acme/legacy/old"},
+			},
+			warnings: []string{"targets.yml: exclude[0]: acme/legacy/old has 3 path segments, and a bitbucket repository path is owner/name, so it excludes nothing"},
+		},
+		{
 			name: "listed and excluded",
 			hub:  selectHub(),
 			targets: &Targets{

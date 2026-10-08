@@ -1,6 +1,7 @@
 package distribute
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"net"
 	"path"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/bedrock-python/touchmark/internal/config"
@@ -415,11 +417,21 @@ func (r *run) commitPerson(p *provider) gitx.Person {
 // email private: GitHub "<id>+<login>@users.noreply.<host>", GitLab
 // "<id>-<login>@users.noreply.<host>", Gitea and Forgejo
 // "<login>@noreply.<host>". host loses its port.
+//
+// Bitbucket Cloud has no such address: it links a commit to the account one
+// of whose confirmed addresses is the author's, and the driver gives the
+// account's primary confirmed address when GET /2.0/user/emails shows one.
+// Without it, the author is "<uuid>@touchmark.invalid", the account's UUID
+// without braces under a domain that can never exist (RFC 6761, .invalid):
+// the commit then names the bot by its UUID, links to no account, and
+// can never be taken for someone else's.
 func noReplyEmail(typ, host, id, login string) string {
 	if h, _, err := net.SplitHostPort(host); err == nil {
 		host = h
 	}
 	switch typ {
+	case "bitbucket":
+		return strings.Trim(cmp.Or(id, login), "{}") + "@touchmark.invalid"
 	case "gitlab":
 		if id != "" {
 			return id + "-" + login + "@users.noreply." + host

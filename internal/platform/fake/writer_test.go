@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/bedrock-python/touchmark/internal/platform"
 	"github.com/bedrock-python/touchmark/internal/platform/fake"
@@ -307,4 +308,71 @@ func TestCloseAndRemote(t *testing.T) {
 	wantIs(t, "applied Close fault", tw2.Close(), boom)
 	_, err = tw2.EnsureLabels(ctx, []string{"x"})
 	wantClass(t, "after an applied Close fault", err, platform.ClassAuth)
+}
+
+// TestBitbucketFlavor: the Bitbucket flavor reports the capabilities of
+// Bitbucket's driver, refuses labels, and treats a pull request closed
+// without merging as final: an edit that closes writes the body first,
+// and afterwards no title, body or base changes and no one reopens it.
+func TestBitbucketFlavor(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	c := fake.CapsFor(fake.Bitbucket)
+	if c.Flavor != "bitbucket" || !c.NoLabels || !c.ClosedImmutable || c.Marker != platform.MarkerInRefDef || c.BodyControls() ||
+		c.Draft != platform.DraftNative || !c.CloserKnown || c.WorkflowPerm || c.LabelsByID || c.QuickActions || c.MaxBody != 60000 {
+		t.Errorf("CapsFor(Bitbucket) = %+v", c)
+	}
+	for _, f := range []fake.Flavor{fake.GitHub, fake.GitLab, fake.Gitea, fake.Forgejo} {
+		if c := fake.CapsFor(f); c.ClosedImmutable || c.NoLabels || !c.BodyControls() {
+			t.Errorf("CapsFor(%s) = %+v", f, c)
+		}
+	}
+	e := newEnv(t, fake.WithFlavor(fake.Bitbucket))
+	r := e.repo("acme/api", "README.md", "x")
+	tw := e.target(r)
+	_, err := tw.CreatePR(ctx, platform.NewPR{Head: "touchmark/hub", Base: "main", Title: "sync", Labels: []string{"engineering-assets"}})
+	wantClass(t, "a pull request with labels", err, platform.ClassInvalid)
+	pr, err := tw.CreatePR(ctx, platform.NewPR{Head: "touchmark/hub", Base: "main", Title: "sync", Body: "first", Draft: true})
+	if err != nil || pr.URL != "https://github.com/acme/api/pull-requests/1" || pr.Title != "sync" || !pr.Draft {
+		t.Fatalf("CreatePR = %+v, %v", pr, err)
+	}
+	_, err = tw.EditPR(ctx, pr.Number, platform.PREdit{AddLabels: []string{"x"}})
+	wantClass(t, "a label added", err, platform.ClassInvalid)
+	_, err = tw.EnsureLabels(ctx, []string{"x"})
+	wantClass(t, "EnsureLabels", err, platform.ClassInvalid)
+
+	// The close writes its body first, and the writer is the closer.
+	closed := platform.Closed
+	got, err := tw.EditPR(ctx, pr.Number, platform.PREdit{Body: ptr("closed by touchmark"), State: &closed})
+	if err != nil || got.State != platform.Closed || got.Body != "closed by touchmark" || got.ClosedBy == nil || got.ClosedBy.ID != e.writer.ID {
+		t.Fatalf("close = %+v, %v", got, err)
+	}
+	open := platform.Open
+	for name, edit := range map[string]platform.PREdit{
+		"reopen":        {State: &open},
+		"body":          {Body: ptr("again")},
+		"title":         {Title: ptr("renamed")},
+		"base":          {Base: ptr("develop")},
+		"body and open": {Body: ptr("again"), State: &open},
+	} {
+		_, err := tw.EditPR(ctx, pr.Number, edit)
+		wantRule(t, name, err, platform.ClassUnsupported, http.StatusBadRequest, "")
+	}
+	// What the declined pull request already holds, and closing it again,
+	// change nothing and succeed.
+	for name, edit := range map[string]platform.PREdit{
+		"close again":   {State: &closed},
+		"the same body": {Body: ptr("closed by touchmark"), Title: ptr("sync"), Base: ptr("main")},
+	} {
+		if _, err := tw.EditPR(ctx, pr.Number, edit); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	if after := e.p.PR(r.ID, pr.Number); after.State != platform.Closed || after.Body != "closed by touchmark" || after.Title != "sync" ||
+		after.Base != "main" || len(after.Labels) != 0 {
+		t.Errorf("after the refused edits: %+v", after)
+	}
+	// A person cannot reopen it either.
+	e.p.SetPRState(r.ID, pr.Number, platform.Open, nil, time.Time{})
+	wantSetupErr(t, e.p, "cannot be reopened")
 }

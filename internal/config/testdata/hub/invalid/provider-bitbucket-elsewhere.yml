@@ -1,0 +1,7 @@
+# error: providers[0].url: a provider of type bitbucket is Bitbucket Cloud
+version: 1
+id: acme-eng
+providers:
+  - id: bb
+    type: bitbucket
+    url: https://bitbucket.example.com

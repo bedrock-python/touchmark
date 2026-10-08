@@ -76,14 +76,19 @@ type Data struct {
 	// header carries only FP16(FP).
 	FP string `json:"fp"`
 	// HubRepo is omitted when the hub is private and the target public.
-	HubRepo       string   `json:"hub_repo,omitempty"`
-	DecidedAt     string   `json:"decided_at"`
-	ContentCommit string   `json:"content_commit"`
-	Base          string   `json:"base"`
-	OptIn         string   `json:"optin"`
-	Engine        string   `json:"engine"`
-	Packs         []string `json:"packs"`
-	Changes       []Change `json:"changes"`
+	HubRepo       string `json:"hub_repo,omitempty"`
+	DecidedAt     string `json:"decided_at"`
+	ContentCommit string `json:"content_commit"`
+	Base          string `json:"base"`
+	// OptIn is the hash of the opt-in file (config.OptIn.Hash): the one the
+	// content was proposed under, written with the content, and the one an
+	// ack records. Where closed pull requests are immutable
+	// (platform.Caps.ClosedImmutable) touchmark keeps it current while the
+	// pull request is open, and memory reads it as the ack of a decline.
+	OptIn   string   `json:"optin"`
+	Engine  string   `json:"engine"`
+	Packs   []string `json:"packs"`
+	Changes []Change `json:"changes"`
 	// ChangesComplete is false when Changes was dropped to fit the limits;
 	// memory then matches only by the exact key.
 	ChangesComplete bool     `json:"changes_complete"`

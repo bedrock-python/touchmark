@@ -109,6 +109,7 @@ func memAcked(optIn string) func(*marker.Data) {
 func memRevoked(d *marker.Data)    { d.Revoked = true }
 func memIncomplete(d *marker.Data) { d.Changes, d.ChangesComplete = nil, false }
 func memSelfClosed(d *marker.Data) { d.Closed = &marker.Closed{By: "touchmark", Reason: ReasonNoDiff} }
+func memNoOptIn(d *marker.Data)    { d.OptIn = "" }
 
 // memState returns o in another state: open or merged.
 func memState(o OwnPR, s platform.PRState) OwnPR {
@@ -1033,6 +1034,10 @@ func TestMemoryProperties(t *testing.T) {
 	blobs := []string{memV1, memV2, memX}
 	closers := []*platform.Account{nil, &memPerson, &memStale, &memWriter, &memKnown, &memRunner}
 	r := rand.New(rand.NewPCG(3, 5))
+	// r2 draws what only the platforms with immutable closed pull requests
+	// read (markers without optin), so that r draws the inputs it drew
+	// before they existed.
+	r2 := rand.New(rand.NewPCG(7, 11))
 	for run := range runs {
 		var own []OwnPR
 		pairs := map[int64][]Pair{}
@@ -1061,6 +1066,9 @@ func TestMemoryProperties(t *testing.T) {
 			}
 			if r.IntN(8) == 0 {
 				edits = append(edits, memIncomplete)
+			}
+			if r2.IntN(6) == 0 {
+				edits = append(edits, memNoOptIn)
 			}
 			o := memPR(t, n, d, closers[r.IntN(len(closers))], 100-i, edits...)
 			o.PR.BaseExists = r.IntN(10) > 0
@@ -1095,9 +1103,14 @@ func TestMemoryProperties(t *testing.T) {
 			}
 		}
 		slices.Sort(in.Forget)
-		m := BuildMemory(in)
-		if err := memCheck(in, m, pairs); err != nil {
-			t.Fatalf("run %d: %v\ninput: %+v\nmemory: %s", run, err, in, memNumbers(m))
+		// The same input on a platform whose closed pull requests are
+		// immutable, and on the others.
+		for _, immutable := range []bool{false, true} {
+			in.Config.ClosedImmutable = immutable
+			m := BuildMemory(in)
+			if err := memCheck(in, m, pairs); err != nil {
+				t.Fatalf("run %d, closed immutable %v: %v\ninput: %+v\nmemory: %s", run, immutable, err, in, memNumbers(m))
+			}
 		}
 	}
 }
@@ -1116,7 +1129,7 @@ func memCheck(in MemoryInput, m Memory, pairs map[int64][]Pair) error {
 			closed = append(closed, o)
 		}
 	}
-	type where struct{ decline, lapsed, revoke, auto, ack bool }
+	type where struct{ decline, lapsed, revoke, auto, ack, forgotten, unanchored bool }
 	got := map[int64]*where{}
 	at := func(n int64) *where {
 		if got[n] == nil {
@@ -1139,6 +1152,19 @@ func memCheck(in MemoryInput, m Memory, pairs map[int64][]Pair) error {
 	for _, n := range m.ToAck {
 		at(n).ack = true
 	}
+	for _, n := range m.Forgotten {
+		at(n).forgotten = true
+	}
+	for _, n := range m.Unanchored {
+		at(n).unanchored = true
+	}
+	immutable := in.Config.ClosedImmutable
+	if immutable && len(m.ToAck)+len(m.ToRevoke) > 0 {
+		return fmt.Errorf("closed pull requests are immutable, yet memory asks to write ack %v, revoke %v", m.ToAck, m.ToRevoke)
+	}
+	if !immutable && len(m.Forgotten)+len(m.Unanchored) > 0 {
+		return fmt.Errorf("closed pull requests can be edited, yet memory lists forgotten %v, unanchored %v", m.Forgotten, m.Unanchored)
+	}
 	inWindow := map[int64]bool{}
 	var order []int64
 	for _, o := range closed {
@@ -1153,14 +1179,19 @@ func memCheck(in MemoryInput, m Memory, pairs map[int64][]Pair) error {
 				return fmt.Errorf("#%d holds no memory, yet it is in %+v", n, *w)
 			}
 			continue
-		case slices.Contains(in.Forget, n) || in.Repropose[n]:
+		case immutable && slices.Contains(in.Forget, n):
+			if *w != (where{forgotten: true}) {
+				return fmt.Errorf("#%d is forgotten, yet it is in %+v", n, *w)
+			}
+			continue
+		case !immutable && (slices.Contains(in.Forget, n) || in.Repropose[n]):
 			if *w != (where{revoke: true}) {
 				return fmt.Errorf("#%d is to revoke, yet it is in %+v", n, *w)
 			}
 			continue
 		}
-		if w.revoke {
-			return fmt.Errorf("#%d is in ToRevoke unasked", n)
+		if w.revoke || w.forgotten {
+			return fmt.Errorf("#%d is in ToRevoke or Forgotten unasked", n)
 		}
 		if (class == CloseAuto) != w.auto {
 			return fmt.Errorf("#%d: class %v, in Auto %v", n, class, w.auto)
@@ -1174,10 +1205,22 @@ func memCheck(in MemoryInput, m Memory, pairs map[int64][]Pair) error {
 		if (candidate && w.decline == w.lapsed) || (!candidate && (w.decline || w.lapsed)) {
 			return fmt.Errorf("#%d: a decline %v, in Declines %v, in Lapsed %v", n, candidate, w.decline, w.lapsed)
 		}
-		if w.ack != (w.decline && !data.Ack) {
-			return fmt.Errorf("#%d: in ToAck %v, in force %v, acked %v", n, w.ack, w.decline, data.Ack)
+		// Where no one can write an ack, the optin the marker held while
+		// open stands for one.
+		acked := data.Ack || (immutable && data.OptIn != "")
+		if w.ack != (w.decline && !acked && !immutable) || w.unanchored != (w.decline && !acked && immutable) {
+			return fmt.Errorf("#%d: in ToAck %v, unanchored %v, in force %v, acked %v", n, w.ack, w.unanchored, w.decline, acked)
 		}
-		lapse := data.Ack && in.OptIn != "" && data.OptIn != in.OptIn
+		if i := slices.IndexFunc(m.Declines, func(d Decline) bool { return d.PR == n }); i >= 0 {
+			want := ""
+			if acked {
+				want = data.OptIn
+			}
+			if d := m.Declines[i]; d.Acked != acked || d.OptIn != want {
+				return fmt.Errorf("#%d: decline %+v, want acked %v with %q", n, d, acked, want)
+			}
+		}
+		lapse := acked && in.OptIn != "" && data.OptIn != in.OptIn
 		for _, c := range data.Changes {
 			lapse = lapse || in.LocalOrIgnored(c.Path)
 		}
@@ -1209,7 +1252,7 @@ func memCheck(in MemoryInput, m Memory, pairs map[int64][]Pair) error {
 	for _, a := range m.Auto {
 		auto = append(auto, a.PR)
 	}
-	for _, list := range [][]int64{declines, m.Lapsed, m.ToAck, m.ToRevoke, auto} {
+	for _, list := range [][]int64{declines, m.Lapsed, m.ToAck, m.ToRevoke, auto, m.Forgotten, m.Unanchored} {
 		if !inOrder(list) {
 			return fmt.Errorf("a list is out of window order: %v", list)
 		}
@@ -1243,7 +1286,11 @@ func memNumbers(m Memory) string {
 	for _, a := range m.Auto {
 		auto = append(auto, a.PR)
 	}
-	return fmt.Sprintf("Declines %v Lapsed %v ToAck %v ToRevoke %v Auto %v", declines, m.Lapsed, m.ToAck, m.ToRevoke, auto)
+	s := fmt.Sprintf("Declines %v Lapsed %v ToAck %v ToRevoke %v Auto %v", declines, m.Lapsed, m.ToAck, m.ToRevoke, auto)
+	if len(m.Forgotten)+len(m.Unanchored) > 0 {
+		s += fmt.Sprintf(" Forgotten %v Unanchored %v", m.Forgotten, m.Unanchored)
+	}
+	return s
 }
 
 // memSameNumbers compares the PR numbers of every list of two memories.
@@ -1256,5 +1303,7 @@ func memClone(m Memory) Memory {
 	m.ToAck = slices.Clone(m.ToAck)
 	m.ToRevoke = slices.Clone(m.ToRevoke)
 	m.Auto = slices.Clone(m.Auto)
+	m.Forgotten = slices.Clone(m.Forgotten)
+	m.Unanchored = slices.Clone(m.Unanchored)
 	return m
 }

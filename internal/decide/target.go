@@ -236,7 +236,10 @@ type TargetDecision struct {
 // Memory upkeep, always first: StepRevoke for each Memory.ToRevoke, then
 // StepAck and StepComment for each Memory.ToAck (Reason
 // CommentAutoDeclined for an auto-close in Memory.Auto, OutcomeDeclined
-// otherwise).
+// otherwise). These are the only steps that write to a closed PR; on a
+// platform whose closed PRs are immutable memory lists none of them
+// (MemoryConfig.ClosedImmutable), so no write to a closed PR is planned
+// there.
 //
 //  1. An open PR in MarkerInvalid → blocked:marker-invalid (no other write),
 //     unless operations.yml lets touchmark adopt it (see below): an adopted

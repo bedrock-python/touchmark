@@ -266,6 +266,12 @@ func (t *target) createPR(ctx context.Context, np platform.NewPR) (platform.PR, 
 // writer as the closer), a new base is taken to exist, labels are only
 // added. Draft never changes.
 //
+// With Caps.ClosedImmutable (Bitbucket Cloud) a PR closed without merging
+// is final, as Bitbucket's driver reports it: reopening it, or changing its
+// title, body or base, is ClassUnsupported and changes nothing; Closed
+// alone changes nothing. An open PR's new body is written before it closes,
+// in the same call.
+//
 // In git mode a new base must exist and reopening needs the head branch
 // (HeadSHA follows it again); after a new base or a reopening the flavor
 // reacts as after a push, and GitLab runs the body's quick actions.
@@ -309,6 +315,16 @@ func (t *target) editPR(ctx context.Context, number int64, e platform.PREdit) (p
 		}
 		if e.Base != nil && (*e.Base == "" || *e.Base == pr.Head) {
 			return platform.PR{}, invalid(op, "base %q is empty or the head", *e.Base)
+		}
+		if p.caps.ClosedImmutable && pr.State == platform.Closed {
+			changes := e.Title != nil && p.draftTitle(*e.Title, pr.Draft) != pr.Title ||
+				e.Body != nil && *e.Body != pr.Body || e.Base != nil && *e.Base != pr.Base
+			switch {
+			case e.State != nil && *e.State == platform.Open:
+				return platform.PR{}, unsupported(op, "#%d: a declined pull request cannot be reopened", number)
+			case changes:
+				return platform.PR{}, unsupported(op, "#%d is declined: only open pull requests can be changed", number)
+			}
 		}
 		if err := t.p.checkLabels(op, e.AddLabels); err != nil {
 			return platform.PR{}, err

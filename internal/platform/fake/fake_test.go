@@ -46,7 +46,7 @@ func TestCapsFor(t *testing.T) {
 			t.Errorf("Probe with an unknown account = %+v, %v; want an auth error", got, err)
 		}
 	}
-	if c := fake.CapsFor("bitbucket"); c.Flavor != "bitbucket" || !c.WorkflowPerm || c.Draft != platform.DraftNative {
+	if c := fake.CapsFor("azure-devops"); c.Flavor != "azure-devops" || !c.WorkflowPerm || c.Draft != platform.DraftNative {
 		t.Errorf("CapsFor(unknown) = %+v, want GitHub's under its own name", c)
 	}
 }

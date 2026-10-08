@@ -14,7 +14,9 @@
 // capabilities of its flavor: title-prefix drafts on
 // GitLab, Gitea and Forgejo; bodies and comments that would run GitLab
 // quick actions are refused (git mode runs them and records a violation);
-// closers are not reported on Gitea and Forgejo. Branch rulesets, the
+// closers are not reported on Gitea and Forgejo; on Bitbucket Cloud labels
+// are refused and a pull request closed without merging can never be
+// edited or reopened (Caps.ClosedImmutable). Branch rulesets, the
 // Preflighter of GitHub's driver (WithPreflight) and its API commits
 // (WithAPICommits, platform.Committer) are modeled in rules.go.
 //
@@ -62,6 +64,8 @@ const (
 	GitLab  Flavor = "gitlab"
 	Gitea   Flavor = "gitea"
 	Forgejo Flavor = "forgejo"
+	// Bitbucket is Bitbucket Cloud.
+	Bitbucket Flavor = "bitbucket"
 )
 
 // Tree entry modes.
@@ -76,9 +80,12 @@ const (
 var Epoch = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 
 // CapsFor returns the capabilities the fake reports for f, with the default
-// limits of its platform. Every flavor keeps the marker in the body and has
-// no API commit (WithAPICommits adds one). A flavor other than the four known
-// ones gets GitHub's capabilities under its own name.
+// limits of its platform. Every flavor keeps the marker in the body (as a
+// Markdown reference definition on Bitbucket, MarkerInRefDef) and has no
+// API commit (WithAPICommits adds one). Bitbucket's are those its driver's
+// Probe reports: native drafts, no labels, a known closer, closed pull
+// requests immutable, no permission of its own for CI files. A flavor other
+// than the five known ones gets GitHub's capabilities under its own name.
 func CapsFor(f Flavor) platform.Caps {
 	c := platform.Caps{
 		Flavor:      string(f),
@@ -102,6 +109,13 @@ func CapsFor(f Flavor) platform.Caps {
 		c.LabelsByID = true
 		c.CloserKnown = false
 		c.Limits = platform.Limits{Reads: 4, GitReads: 2, MinInterval: 250 * time.Millisecond}
+	case Bitbucket:
+		c.MaxBody = 60000
+		c.NoLabels = true
+		c.ClosedImmutable = true
+		c.Marker = platform.MarkerInRefDef
+		c.RuntimeOnly = []string{"branch-restrictions"}
+		c.Limits = platform.Limits{Reads: 2, GitReads: 2, ReadsPerMinute: 15, MinInterval: time.Second}
 	default:
 		c.WorkflowPerm = true
 		c.Limits = platform.Limits{Reads: 8, GitReads: 4, WritesPerMinute: 60, WritesPerHour: 450, MinInterval: time.Second}
@@ -696,7 +710,9 @@ func (p *Platform) AddPR(repoID string, pr platform.PR) int64 {
 
 // SetPRState moves a pull request to state as a person or bot would:
 // Closed and Merged record closedBy (nil: the platform does not say) and
-// at (the clock when zero); Open reopens it and clears both.
+// at (the clock when zero); Open reopens it and clears both. With
+// Caps.ClosedImmutable no one can reopen a pull request closed without
+// merging: that is a setup error.
 func (p *Platform) SetPRState(repoID string, number int64, state platform.PRState, closedBy *platform.Account, at time.Time) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -706,6 +722,10 @@ func (p *Platform) SetPRState(repoID string, number int64, state platform.PRStat
 	}
 	switch state {
 	case platform.Open:
+		if p.caps.ClosedImmutable && ps.pr.State == platform.Closed {
+			p.setupf("SetPRState(%s, #%d): a declined pull request cannot be reopened", repoID, number)
+			return
+		}
 		ps.pr.State, ps.pr.ClosedBy, ps.pr.ClosedAt = platform.Open, nil, time.Time{}
 		if tip := p.headTip(ps.pr); tip != "" {
 			ps.pr.HeadSHA = tip
@@ -1152,6 +1172,8 @@ func (p *Platform) prURL(s *repoState, number int64) string {
 		return base + "/-/merge_requests/" + n
 	case Gitea, Forgejo:
 		return base + "/pulls/" + n
+	case Bitbucket:
+		return base + "/pull-requests/" + n
 	}
 	return base + "/pull/" + n
 }
@@ -1239,6 +1261,13 @@ func isHexID(s string) bool {
 func notFound(op, format string, args ...any) error {
 	return &platform.Error{Op: op, Class: platform.ClassNotFound, Status: http.StatusNotFound,
 		Err: fmt.Errorf(format+": %w", append(args, platform.ErrNotFound)...)}
+}
+
+// unsupported is a write the platform refuses whatever the identity may
+// do (a declined pull request on Bitbucket Cloud).
+func unsupported(op, format string, args ...any) error {
+	return &platform.Error{Op: op, Class: platform.ClassUnsupported, Status: http.StatusBadRequest,
+		Err: fmt.Errorf(format, args...)}
 }
 
 func invalid(op, format string, args ...any) error {

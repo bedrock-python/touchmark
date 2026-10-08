@@ -102,7 +102,8 @@ The body, in English:
    `sensitive_paths` from `hub.yml`). Never cut;
 3. a table of the changes, by file and pack: sensitive first, then deletions, updates,
    additions, up to 100 rows;
-4. a folded list of the files the repository made its own, with how to take them back;
+4. a folded list of the files the repository made its own, with how to take them back
+   (a plain section on Bitbucket Cloud, which shows HTML as text);
 5. blocks for the situation: *previously declined in #N*, *touchmark paused*, *the hub
    proposes nothing more*;
 6. the tick boxes;

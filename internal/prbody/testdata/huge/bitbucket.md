@@ -118,10 +118,9 @@ These files can run code in CI or change how tools and agents work in this repos
 
 …and 903 more.
 
-<details>
-<summary>150 files here differ from the hub and stay as they are</summary>
+### Local files
 
-touchmark does not update files changed in this repository. To take the hub's version of one, run `touchmark apply --adopt <path>`. To stop seeing it here, add it to `ignore` in `.engineering-assets.yml`.
+150 files here differ from the hub and stay as they are. touchmark does not update files changed in this repository. To take the hub's version of one, run `touchmark apply --adopt <path>`. To stop seeing it here, add it to `ignore` in `.engineering-assets.yml`.
 
 - `docs/handbook/chapter-00/local-000.md`
 - `docs/handbook/chapter-00/local-012.md`
@@ -225,8 +224,6 @@ touchmark does not update files changed in this repository. To take the hub's ve
 - `docs/handbook/chapter-07/local-115.md`
 
 …and 50 more.
-
-</details>
 
 ---
 

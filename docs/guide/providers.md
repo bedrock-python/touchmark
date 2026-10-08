@@ -177,10 +177,12 @@ their scopes: `doctor` reports both as unknown, so keep a reminder to rotate the
   says `declined`. To have declined content proposed again, edit `packs` or `ignore`, or
   add a `forget_declines` entry, which acts while it is present on Bitbucket (see
   [Memory of declined pull requests](../concepts/memory.md#on-bitbucket-cloud)).
-- **No tick boxes.** *Rebuild this branch* and *Propose this content again* rest on HTML
-  comments, which Bitbucket shows as text: descriptions there carry neither. A paused
-  pull request asks for a `recreate` entry in `.touchmark/operations.yml` instead, and the
-  footnote names `forget_declines`.
+- **No tick boxes, no HTML.** *Rebuild this branch* and *Propose this content again* rest
+  on HTML comments, which Bitbucket shows as text: descriptions there carry neither. A
+  paused pull request asks for a `recreate` entry in `.touchmark/operations.yml` instead,
+  and the footnote names `forget_declines`. The files the repository made its own are a
+  plain section, not a folded one. Keep `pr.intro_file` free of HTML too: Bitbucket shows
+  it as text.
 - **Branch restrictions** are readable with admin rights only, which the writer should
   not have: `doctor` shows `rules` as unknown, and a push a restriction refuses
   ("Permission denied to update branch") is `blocked:rules:protected-branch`.

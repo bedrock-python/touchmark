@@ -194,6 +194,19 @@ func checkBody(t *testing.T, in Input, body string) {
 		}
 	}
 	checkSafe(t, gen, 1)
+	if !in.Caps.BodyControls() {
+		// The platform escapes HTML: touchmark writes none there. The
+		// marker line is the caller's, in the frame it chose.
+		human := gen
+		if in.Marker != "" {
+			human = strings.TrimSuffix(gen, "\n\n"+in.Marker)
+		}
+		for i, line := range strings.Split(human, "\n") {
+			if strings.Contains(outsideCode(line), "<") {
+				t.Errorf("HTML where the platform shows it as text, line %d of the generated part: %q", i+1, line)
+			}
+		}
+	}
 	sensitive := in.GiteaWorkflows
 	var paths []string
 	for _, c := range in.Changes {

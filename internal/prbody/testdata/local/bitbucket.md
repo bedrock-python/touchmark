@@ -9,16 +9,13 @@ touchmark syncs packs `agents`, `claude` and `base` from the hub `acme-eng` at c
 |---|---|---|
 | update | `AGENTS.md` | `agents` |
 
-<details>
-<summary>3 files here differ from the hub and stay as they are</summary>
+### Local files
 
-touchmark does not update files changed in this repository. To take the hub's version of one, run `touchmark apply --adopt <path>`. To stop seeing it here, add it to `ignore` in `.engineering-assets.yml`.
+3 files here differ from the hub and stay as they are. touchmark does not update files changed in this repository. To take the hub's version of one, run `touchmark apply --adopt <path>`. To stop seeing it here, add it to `ignore` in `.engineering-assets.yml`.
 
 - `.github/CODEOWNERS`
 - `CONTRIBUTING.md`
 - `docs/guide.md`
-
-</details>
 
 ---
 

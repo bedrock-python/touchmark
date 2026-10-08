@@ -129,7 +129,8 @@ type Input struct {
 	// D.
 	BranchUnknown bool
 	// Local are paths in state local (a collapsed list with the adopt and
-	// ignore hints).
+	// ignore hints; a plain section where the description cannot carry
+	// HTML).
 	Local []string
 	// Sensitive are extra sensitive patterns from hub.yml.
 	Sensitive []string
@@ -221,6 +222,10 @@ const (
 //     closed pull request can never be edited (Caps.ClosedImmutable), the
 //     footnote names the forget_declines entry that has declined changes
 //     proposed again, since no control in a declined pull request can.
+//     Where descriptions cannot carry tick boxes, the platform escapes HTML,
+//     and the body carries none (the intro aside, which is the hub's): the
+//     local files are a section under a heading instead of a details
+//     element.
 //
 // Errors wrap ErrIntro (the intro breaks CheckIntro), ErrTooLarge or
 // ErrUnsafe; an unknown Change.Action, a HubURL that is not a plain http(s)
@@ -658,7 +663,9 @@ func (r *renderer) changesSection() *cuttable {
 	return newCuttable("### Changes", "\n\n| Change | File | Pack |\n|---|---|---|", "", items, len(r.rows), "change", "changes")
 }
 
-// localSection is the collapsed list of local files.
+// localSection is the list of local files: collapsed in a details element,
+// or, where the description cannot carry HTML (renderer.html), plain
+// Markdown under a heading.
 func (r *renderer) localSection() *cuttable {
 	total := len(r.local)
 	if total == 0 {
@@ -668,16 +675,28 @@ func (r *renderer) localSection() *cuttable {
 	if total == 1 {
 		summary = "1 file here differs from the hub and stays as it is"
 	}
-	prefix := "<details>\n<summary>" + summary + "</summary>\n\n" +
-		"touchmark does not update files changed in this repository. " +
+	hints := "touchmark does not update files changed in this repository. " +
 		"To take the hub's version of one, run `touchmark apply --adopt <path>`. " +
 		"To stop seeing it here, add it to `ignore` in " + r.optIn + "."
+	prefix := "<details>\n<summary>" + summary + "</summary>\n\n" + hints
+	suffix := "\n\n</details>"
+	if !r.html() {
+		prefix, suffix = "### Local files\n\n"+summary+". "+hints, ""
+	}
 	items := make([]string, 0, min(total, maxRows))
 	for _, p := range r.local[:min(total, maxRows)] {
 		items = append(items, "\n- "+Code(p))
 	}
-	return newCuttable(prefix, "\n", "\n\n</details>", items, total, "file", "files")
+	return newCuttable(prefix, "\n", suffix, items, total, "file", "files")
 }
+
+// html reports whether the description may carry touchmark's HTML: the
+// details element of the local files, and the comments that tag the
+// controls. A platform that escapes HTML in descriptions shows it as text;
+// it is the platform whose marker is a reference definition and whose
+// descriptions carry no controls (Caps.BodyControls false: Bitbucket
+// Cloud).
+func (r *renderer) html() bool { return r.in.Caps.BodyControls() }
 
 // previouslyDeclined is the block for declines that overlap D.
 func (r *renderer) previouslyDeclined() string {

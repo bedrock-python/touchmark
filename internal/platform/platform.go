@@ -261,8 +261,8 @@ const (
 	// payload of MarkerInBody wrapped in a Markdown link reference
 	// definition, `[touchmark]: # "touchmark:v1 …"`, which renderers do not
 	// show: Bitbucket Cloud escapes HTML in descriptions, so an HTML comment
-	// would show as text. The codec of this wrapper comes with the
-	// Bitbucket writer.
+	// would show as text (marker.FrameRefDef; the core reads both frames on
+	// every platform).
 	MarkerInRefDef
 )
 
@@ -296,6 +296,11 @@ type Caps struct {
 	// are refused or dropped silently (Gitea and Forgejo answer 422 to
 	// names when a pull request is created, and drop unknown ids).
 	LabelsByID bool
+	// NoLabels is set when the platform has no pull request labels
+	// (Bitbucket Cloud): the core asks for none (NewPR.Labels,
+	// PREdit.AddLabels and EnsureLabels stay empty, the marker records
+	// none set) and reports none, and the driver ignores any it is given.
+	NoLabels bool
 	// CloserKnown is set when PR.ClosedBy is reliable.
 	CloserKnown bool
 	Marker      MarkerStore

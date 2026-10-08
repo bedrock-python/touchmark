@@ -84,7 +84,7 @@ In a hub pull request, `providers` and `ca_file` are read from the default branc
 | `opt_in_file` | string | Path of the opt-in file in targets. Default: .engineering-assets.yml. |
 | `commit` | object | Commit settings. The commit author is always the provider's writer account. |
 | `commit.message` | string | Commit message. Default: "chore: sync engineering assets". Must not start with Draft: or WIP:, which turns a GitLab merge request into a draft. |
-| `commit.author` | object | Deprecated. Removed in v1 and ignored with a warning: commits are always authored by the writer account. |
+| `commit.author` | object | Deprecated. Ignored with a warning: commits are always authored by the writer account. |
 | `commit.author.name` | string | — |
 | `commit.author.email` | string | — |
 | `pr` | object | Pull request settings. After creation, the title, draft state and labels belong to people. |

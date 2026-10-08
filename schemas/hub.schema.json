@@ -54,7 +54,7 @@
           }
         },
         "author": {
-          "description": "Removed in v1 and ignored with a warning: commits are always authored by the writer account.",
+          "description": "Ignored with a warning: commits are always authored by the writer account.",
           "deprecated": true,
           "type": ["object", "null"],
           "additionalProperties": false,

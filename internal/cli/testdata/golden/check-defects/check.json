@@ -1,4 +1,5 @@
 {
+  "schema": "check/v1",
   "command": "check",
   "hub": {
     "dir": "$HUB",

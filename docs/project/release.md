@@ -44,7 +44,7 @@ Every job after `check` checks out the tag's commit by its id and stops if the c
 
 **The vulnerability scan.** The scan that blocks is CI's: the job `release-snapshot` builds the image a release would publish and scans it on every pull request, the release pull request included, and every night, so a new vulnerability in the base image shows up before a release does. The scan in `publish.yml` only reports: by then the tag and the release exist, the same base image is in every earlier release, and holding the image back would leave the Action at the tag broken for good.
 
-**Versions.** `feat:` bumps the minor version, `fix:` the patch version; before 1.0 a breaking change (`feat!:`, a `BREAKING CHANGE:` footer) bumps the minor version too (`bump-minor-pre-major`). A `Release-As: x.y.z` footer on a commit forces a version. The manifest starts at `0.0.0`, so the first release, from the commit `feat: initial release`, is `0.1.0`.
+**Versions.** `feat:` bumps the minor version, `fix:` the patch version; touchmark is at 0.x, where a breaking change (`feat!:`, a `BREAKING CHANGE:` footer) bumps the minor version too (`bump-minor-pre-major`). What counts as breaking is in [Compatibility](../reference/compatibility.md). A `Release-As: x.y.z` footer on a commit forces a version. The manifest starts at `0.0.0`, so the first release, from the commit `feat: initial release`, is `0.1.0`.
 
 **Tags.** A release tag is `vX.Y.Z`, without the component prefix of the org's libraries (`pg-partsmith-v1.7.2`): the Go module proxy and `uses: bedrock-python/touchmark@vX.Y.Z` need bare semver tags (`include-component-in-tag: false`). The release is named `vX.Y.Z` too.
 
@@ -110,7 +110,7 @@ touchmark adds nothing stricter to them on purpose: no required approval (a main
 5. **The first release pull request.** `CHANGELOG.md` has no release yet, so Release Please writes `# Changelog`, the 0.1.0 section, and then the file's own header, demoted to `## Changelog`. Before merging, edit `CHANGELOG.md` in the pull request: the header back on top, the 0.1.0 section below it. Later releases go in above the previous one.
 6. **The package.** The first Publish run creates `ghcr.io/bedrock-python/touchmark`, linked to the repository by the index's `org.opencontainers.image.source`. With public packages allowed in the organisation, it takes the public repository's visibility: v0.1.0's package was public from its first push, and `verify` passed on the first run. Should a package come out private, `verify` fails at the anonymous steps: in the package's settings, check the link to the repository and that the repository's Actions have write access, then **Change visibility → Public**, and re-run the failed jobs. Hubs and the Action pull anonymously.
 
-PyPI is not part of a release yet: see [Adding PyPI later](#adding-pypi-later).
+touchmark is not published to PyPI: a release is the binaries, the image and the Action.
 
 ## Release, step by step
 
@@ -202,12 +202,3 @@ docker buildx imagetools inspect ghcr.io/bedrock-python/touchmark@sha256:<digest
 ```
 
 Add `--bundle-from-oci` to the `gh attestation verify` of the image for the check the Action makes, from the attestation stored in GHCR.
-
-## Adding PyPI later
-
-The org's libraries publish to PyPI; touchmark does not yet. To let Python projects run `uvx touchmark`, add to `publish.yml`, after `assets`:
-
-1. a job that downloads the release's archives, checks them against the signed `checksums.txt` (as the `image` job does), and wraps each binary into a wheel with [go-to-wheel](https://pypi.org/project/go-to-wheel/), pinned by hash: 8 platform tags (manylinux and musllinux for amd64 and arm64, macOS, Windows), each wheel's binary byte for byte the archive's;
-2. a job `pypi` in an environment `pypi` with `id-token: write`, which uploads the wheels with `pypa/gh-action-pypi-publish` (trusted publishing; `skip-existing` so that a re-run completes a failed upload), and, if the wheels should be on the GitHub release too, uploads them there with their own build provenance attestation.
-
-On pypi.org, add a pending trusted publisher: project `touchmark`, owner `bedrock-python`, repository `touchmark`, workflow `publish.yml`, environment `pypi`; and add the badge and the install line to the README.

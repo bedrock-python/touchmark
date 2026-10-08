@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/bedrock-python/touchmark/master/schemas/check.schema.json",
+  "title": "touchmark check report",
+  "description": "The JSON report of touchmark check (check/v1): the hub's configuration files and packs, with every error and warning found.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "command", "hub", "packs", "errors", "warnings"],
+  "properties": {
+    "schema": {
+      "description": "Report format: check/v1.",
+      "const": "check/v1"
+    },
+    "command": { "const": "check" },
+    "hub": {
+      "description": "The hub checked.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dir", "id", "commit"],
+      "properties": {
+        "dir": {
+          "description": "The hub's directory.",
+          "type": "string"
+        },
+        "id": {
+          "description": "hub.yml's id; empty for a hub without hub.yml.",
+          "type": "string"
+        },
+        "commit": {
+          "description": "The hub commit read; empty when touchmark stopped before reading it.",
+          "type": "string",
+          "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})?$"
+        }
+      }
+    },
+    "packs": {
+      "description": "The hub's packs.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "errors": {
+      "description": "What makes check exit 2; empty when the hub passes.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "warnings": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

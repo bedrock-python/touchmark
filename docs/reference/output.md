@@ -9,7 +9,11 @@ Every command that inspects targets prints a report on stdout: text by default, 
 | `report/v1` | `plan`, `distribute` | `touchmark schema report` | `touchmark-report.json`, `touchmark-report.md`; `distribute` also `touchmark-report.jsonl` |
 | `doctor/v1` | `doctor` | `touchmark schema doctor` | `touchmark-doctor.json`, `touchmark-doctor.md` |
 | `setup/v1` | `setup` | `touchmark schema setup` | — |
-| status | `status`, `apply` | — | — |
+| `status/v1` | `status`, `apply` | `touchmark schema status` | — |
+| `check/v1` | `check` | `touchmark schema check` | — |
+
+What may change in these formats between releases, and what may not, is in
+[Compatibility](compatibility.md).
 
 `--report FILE` (`distribute`, `doctor`) also writes the JSON report to a file;
 `--stream FILE` (`distribute`) writes one JSON line per finished target as the run goes,
@@ -279,6 +283,7 @@ pack selection and where each pack came from, one entry per managed path with it
 
 ```json
 {
+  "schema": "status/v1",
   "command": "status",
   "dry_run": false,
   "hub": { "dir": "/src/engineering-assets", "id": "acme-eng", "commit": "ffae0953c140298cf045e600f15710104e9d5d0d" },
@@ -295,5 +300,82 @@ pack selection and where each pack came from, one entry per managed path with it
 }
 ```
 
-This format has no schema yet and may change before 1.0; the `report/v1`, `doctor/v1` and
-`setup/v1` formats change only with their version.
+`apply` adds `results`, one per entry whose action is not `keep`, with its `outcome`
+(`done`, `skipped`, `failed`); `apply --dry-run` has none.
+
+<!-- generated: schema status -->
+
+| Key | Type | Description |
+|---|---|---|
+| `schema` | `status/v1`, required | Report format: status/v1. |
+| `command` | one of `status`, `apply`, required | — |
+| `dry_run` | boolean, required | apply --dry-run: the plan only, nothing written. Always false for status. |
+| `hub` | object, required | The hub the report was made from. |
+| `hub.dir` | string, required | The hub's directory. |
+| `hub.id` | string, required | hub.yml's id; empty for a hub without hub.yml. |
+| `hub.commit` | string, required | The hub commit read; empty when touchmark stopped before reading it. |
+| `target` | object, required | The target working tree. |
+| `target.root` | string, required | The target's working tree. |
+| `target.ref` | string, required | The target in targets.yml, path or provider:path; empty when it could not be determined. |
+| `target.opt_in_file` | string, required | The opt-in file's path in the target. |
+| `target.opted_in` | boolean, required | The target gets packs: opt_in is file, assumed or flag. |
+| `target.opt_in` | one of `file`, `assumed`, `flag`, `opted-out`, `none`, required | Why the target is opted in or not. file: the opt-in file is there; assumed: there is none, and a repo: entry with opt_in: assumed subscribes it; flag: there is none, and --assume-opt-in counts it as opted in; opted-out: the file says enabled: false; none: neither. |
+| `selection` | object, required | The resolved pack list; null when the target has not opted in. |
+| `selection.packs` | list of strings, required | The packs the target gets, requires included. |
+| `selection.complete` | boolean, required | Every pack named was found in the hub. |
+| `selection.unresolved` | list of strings, required | Packs named that the hub does not have. |
+| `selection.sources` | map of name to list of strings, required | Per pack, where it was selected: the opt-in file, targets.yml, defaults or requires &lt;pack&gt;. |
+| `entries` | list of objects, required | The whole plan in plan order, one entry per managed path, current entries included. |
+| `entries[].path` | string, not empty, required | The path in the target. |
+| `entries[].state` | one of `missing`, `current`, `outdated`, `local`, `ignored`, `retired`, `retired-local`, `unsafe`, `orphaned`, required | The file's state in the target. |
+| `entries[].action` | one of `keep`, `create`, `update`, `delete`, `adopt`, `chmod`, required | What apply does with it. |
+| `entries[].pack` | string, required | The pack that ships the path, or shipped it. |
+| `entries[].from` | string, required | The blob id the target has; empty when it has none. |
+| `entries[].to` | string, required | The blob id apply writes; empty for keep and delete. |
+| `entries[].mode` | one of ``, `100644`, `100755`, required | The file mode apply writes; empty when it writes nothing. |
+| `entries[].detail` | string, required | Why, for states and actions that need a reason. |
+| `entries[].after_deletes` | boolean, required | Written after the deletes, because a path it needs is deleted first. |
+| `results` | list of objects | apply without --dry-run only: what it did with each entry whose action is not keep, in execution order. |
+| `results[].path` | string, not empty, required | — |
+| `results[].action` | one of `keep`, `create`, `update`, `delete`, `adopt`, `chmod`, required | — |
+| `results[].state` | one of `missing`, `current`, `outdated`, `local`, `ignored`, `retired`, `retired-local`, `unsafe`, `orphaned`, required | — |
+| `results[].outcome` | one of `done`, `skipped`, `failed`, required | — |
+| `results[].detail` | string, required | The reason for skipped and the error for failed. |
+| `summary` | object, required | Entries per state, the changes (entries whose action is not keep) and, for apply, the outcomes. |
+| `summary.missing` | integer ≥ 0, required | — |
+| `summary.current` | integer ≥ 0, required | — |
+| `summary.outdated` | integer ≥ 0, required | — |
+| `summary.local` | integer ≥ 0, required | — |
+| `summary.ignored` | integer ≥ 0, required | — |
+| `summary.retired` | integer ≥ 0, required | — |
+| `summary.retired_local` | integer ≥ 0, required | — |
+| `summary.unsafe` | integer ≥ 0, required | — |
+| `summary.orphaned` | integer ≥ 0, required | — |
+| `summary.changes` | integer ≥ 0, required | — |
+| `summary.done` | integer ≥ 0, required | — |
+| `summary.skipped` | integer ≥ 0, required | — |
+| `summary.failed` | integer ≥ 0, required | — |
+| `warnings` | list of strings, required | — |
+
+<!-- end generated -->
+
+## check
+
+`--format json` prints the hub, its packs, and every error and warning; `errors` is empty
+when the hub passes.
+
+<!-- generated: schema check -->
+
+| Key | Type | Description |
+|---|---|---|
+| `schema` | `check/v1`, required | Report format: check/v1. |
+| `command` | `check`, required | — |
+| `hub` | object, required | The hub checked. |
+| `hub.dir` | string, required | The hub's directory. |
+| `hub.id` | string, required | hub.yml's id; empty for a hub without hub.yml. |
+| `hub.commit` | string, required | The hub commit read; empty when touchmark stopped before reading it. |
+| `packs` | list of strings, required | The hub's packs. |
+| `errors` | list of strings, required | What makes check exit 2; empty when the hub passes. |
+| `warnings` | list of strings, required | — |
+
+<!-- end generated -->

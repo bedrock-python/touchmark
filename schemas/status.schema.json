@@ -1,0 +1,208 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/bedrock-python/touchmark/master/schemas/status.schema.json",
+  "title": "touchmark status and apply report",
+  "description": "The JSON report of touchmark status and touchmark apply (status/v1): one target's working tree against the hub, one entry per managed path, and for apply what it did with each change.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "command", "dry_run", "hub", "target", "selection", "entries", "summary", "warnings"],
+  "properties": {
+    "schema": {
+      "description": "Report format: status/v1.",
+      "const": "status/v1"
+    },
+    "command": { "enum": ["status", "apply"] },
+    "dry_run": {
+      "description": "apply --dry-run: the plan only, nothing written. Always false for status.",
+      "type": "boolean"
+    },
+    "hub": { "$ref": "#/$defs/hub" },
+    "target": {
+      "description": "The target working tree.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root", "ref", "opt_in_file", "opted_in", "opt_in"],
+      "properties": {
+        "root": {
+          "description": "The target's working tree.",
+          "type": "string"
+        },
+        "ref": {
+          "description": "The target in targets.yml, path or provider:path; empty when it could not be determined.",
+          "type": "string"
+        },
+        "opt_in_file": {
+          "description": "The opt-in file's path in the target.",
+          "type": "string"
+        },
+        "opted_in": {
+          "description": "The target gets packs: opt_in is file, assumed or flag.",
+          "type": "boolean"
+        },
+        "opt_in": {
+          "description": "Why the target is opted in or not. file: the opt-in file is there; assumed: there is none, and a repo: entry with opt_in: assumed subscribes it; flag: there is none, and --assume-opt-in counts it as opted in; opted-out: the file says enabled: false; none: neither.",
+          "enum": ["file", "assumed", "flag", "opted-out", "none"]
+        }
+      }
+    },
+    "selection": {
+      "description": "The resolved pack list; null when the target has not opted in.",
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["packs", "complete", "unresolved", "sources"],
+      "properties": {
+        "packs": {
+          "description": "The packs the target gets, requires included.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "complete": {
+          "description": "Every pack named was found in the hub.",
+          "type": "boolean"
+        },
+        "unresolved": {
+          "description": "Packs named that the hub does not have.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "sources": {
+          "description": "Per pack, where it was selected: the opt-in file, targets.yml, defaults or requires <pack>.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
+    "entries": {
+      "description": "The whole plan in plan order, one entry per managed path, current entries included.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "state", "action", "pack", "from", "to", "mode", "detail", "after_deletes"],
+        "properties": {
+          "path": {
+            "description": "The path in the target.",
+            "type": "string",
+            "minLength": 1
+          },
+          "state": {
+            "description": "The file's state in the target.",
+            "$ref": "#/$defs/state"
+          },
+          "action": {
+            "description": "What apply does with it.",
+            "$ref": "#/$defs/action"
+          },
+          "pack": {
+            "description": "The pack that ships the path, or shipped it.",
+            "type": "string"
+          },
+          "from": {
+            "description": "The blob id the target has; empty when it has none.",
+            "$ref": "#/$defs/blob"
+          },
+          "to": {
+            "description": "The blob id apply writes; empty for keep and delete.",
+            "$ref": "#/$defs/blob"
+          },
+          "mode": {
+            "description": "The file mode apply writes; empty when it writes nothing.",
+            "enum": ["", "100644", "100755"]
+          },
+          "detail": {
+            "description": "Why, for states and actions that need a reason.",
+            "type": "string"
+          },
+          "after_deletes": {
+            "description": "Written after the deletes, because a path it needs is deleted first.",
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "results": {
+      "description": "apply without --dry-run only: what it did with each entry whose action is not keep, in execution order.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "action", "state", "outcome", "detail"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "action": { "$ref": "#/$defs/action" },
+          "state": { "$ref": "#/$defs/state" },
+          "outcome": { "enum": ["done", "skipped", "failed"] },
+          "detail": {
+            "description": "The reason for skipped and the error for failed.",
+            "type": "string"
+          }
+        }
+      }
+    },
+    "summary": {
+      "description": "Entries per state, the changes (entries whose action is not keep) and, for apply, the outcomes.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["missing", "current", "outdated", "local", "ignored", "retired", "retired_local", "unsafe", "orphaned", "changes", "done", "skipped", "failed"],
+      "properties": {
+        "missing": { "$ref": "#/$defs/count" },
+        "current": { "$ref": "#/$defs/count" },
+        "outdated": { "$ref": "#/$defs/count" },
+        "local": { "$ref": "#/$defs/count" },
+        "ignored": { "$ref": "#/$defs/count" },
+        "retired": { "$ref": "#/$defs/count" },
+        "retired_local": { "$ref": "#/$defs/count" },
+        "unsafe": { "$ref": "#/$defs/count" },
+        "orphaned": { "$ref": "#/$defs/count" },
+        "changes": { "$ref": "#/$defs/count" },
+        "done": { "$ref": "#/$defs/count" },
+        "skipped": { "$ref": "#/$defs/count" },
+        "failed": { "$ref": "#/$defs/count" }
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "$defs": {
+    "hub": {
+      "description": "The hub the report was made from.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dir", "id", "commit"],
+      "properties": {
+        "dir": {
+          "description": "The hub's directory.",
+          "type": "string"
+        },
+        "id": {
+          "description": "hub.yml's id; empty for a hub without hub.yml.",
+          "type": "string"
+        },
+        "commit": {
+          "description": "The hub commit read; empty when touchmark stopped before reading it.",
+          "type": "string",
+          "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})?$"
+        }
+      }
+    },
+    "state": {
+      "enum": ["missing", "current", "outdated", "local", "ignored", "retired", "retired-local", "unsafe", "orphaned"]
+    },
+    "action": {
+      "enum": ["keep", "create", "update", "delete", "adopt", "chmod"]
+    },
+    "blob": {
+      "type": "string",
+      "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})?$"
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 0
+    }
+  }
+}

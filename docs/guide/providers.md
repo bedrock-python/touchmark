@@ -2,7 +2,8 @@
 
 One hub can deliver to GitHub, GitLab, Gitea and Forgejo at once, including
 self-managed instances. Each platform is a **provider** in `hub.yml`, with its own reader
-and writer; `targets.yml` names repositories by provider.
+and writer; `targets.yml` names repositories by provider. Bitbucket Cloud can be read
+already, not written to yet: see [Bitbucket Cloud](#bitbucket-cloud-reads-only).
 
 ## One provider: the shorthand
 
@@ -58,7 +59,8 @@ providers:
 - `id` is how `targets.yml` names the provider, and the `<ID>` of its variables:
   upper-cased, with `-` as `_`.
 - `api_url` is needed only when it cannot be derived: `api.github.com`, `<url>/api/v3`
-  for GitHub Enterprise Server, `/api/v4` for GitLab, `/api/v1` for Gitea and Forgejo.
+  for GitHub Enterprise Server, `/api/v4` for GitLab, `/api/v1` for Gitea and Forgejo,
+  `https://api.bitbucket.org/2.0` for Bitbucket Cloud.
 - `known_authors` are former writers whose pull requests stay the hub's own: a replaced
   App, a recreated group access token's bot, the account of a multi-gitter setup.
   touchmark never adds anyone there itself.
@@ -123,6 +125,35 @@ Gitea and Forgejo Actions cannot keep a secret to the default branch. A hub whos
 on GitHub or GitLab can still deliver to them: add them as providers, and keep their
 write token in the GitHub environment or the GitLab protected variable, where the probe
 covers it.
+
+## Bitbucket Cloud (reads only)
+
+A provider of type `bitbucket` is Bitbucket Cloud at `https://bitbucket.org` (leave `url`
+out). This release reads it: `plan` resolves its targets, reads their opt-in files and
+their pull requests, and reports what a delivery would do. Delivering does not work yet:
+`distribute` and `doctor` stop at a `bitbucket` provider, and `setup` has nothing for it.
+Bitbucket Data Center is not supported.
+
+```yaml
+# hub.yml
+providers:
+  - id: bb
+    type: bitbucket
+    writer: "{3f2a8d4e-1b6c-4f0a-9e7d-5c2b1a0f9e8d}"   # the bot account's UUID, in braces
+```
+
+- **Credentials.** `TOUCHMARK_BB_READ_TOKEN` is an API token of a bot account with read
+  access to the repositories (app passwords are gone; repository, project and workspace
+  access tokens are not supported, since they cannot tell who they are).
+- **Accounts are UUIDs.** Bitbucket finds no account by its nickname, so `writer`,
+  `known_authors` and `automation_accounts` name accounts by their UUID in braces, as
+  `GET https://api.bitbucket.org/2.0/user` shows it.
+- **Targets.** `org` is a workspace, `repo` is `workspace/repository`, and web URLs such as
+  `https://bitbucket.org/acme/billing` work. Bitbucket has no topics: `check` refuses
+  `topics` on a Bitbucket entry; select repositories with `match` (`acme/svc-*`) or list
+  them with `repo`.
+- **Pace.** Bitbucket allows an account about 1 000 API requests an hour, so touchmark
+  reads 15 times a minute by default, with two targets at once; `limits` overrides it.
 
 ## Moving
 

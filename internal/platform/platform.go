@@ -1,5 +1,5 @@
 // Package platform defines what touchmark needs from a code hosting platform
-// (GitHub, GitLab, Gitea, Forgejo; later Bitbucket and Azure DevOps): the
+// (GitHub, GitLab, Gitea, Forgejo, Bitbucket Cloud; later Azure DevOps): the
 // Reader and Writer interfaces drivers implement, their capabilities, and one
 // error model.
 //
@@ -257,6 +257,13 @@ type MarkerStore uint8
 const (
 	MarkerInBody       MarkerStore = iota // last line of the description
 	MarkerInProperties                    // PR properties (Azure DevOps, later)
+	// MarkerInRefDef is the last line of the description too, with the
+	// payload of MarkerInBody wrapped in a Markdown link reference
+	// definition, `[touchmark]: # "touchmark:v1 …"`, which renderers do not
+	// show: Bitbucket Cloud escapes HTML in descriptions, so an HTML comment
+	// would show as text. The codec of this wrapper comes with the
+	// Bitbucket writer.
+	MarkerInRefDef
 )
 
 // Limits are a provider's default pacing (internal/throttle applies them,
@@ -273,7 +280,8 @@ type Limits struct {
 
 // Caps describes a platform instance, found once per run by Reader.Probe.
 type Caps struct {
-	// Flavor is "github", "ghe.com", "ghes", "gitlab", "gitea" or "forgejo".
+	// Flavor is "github", "ghe.com", "ghes", "gitlab", "gitea", "forgejo"
+	// or "bitbucket" (Bitbucket Cloud).
 	Flavor  string
 	Version string
 	// MaxBody is the body budget in bytes, marker included.

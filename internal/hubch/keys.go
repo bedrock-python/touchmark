@@ -20,7 +20,8 @@ import (
 
 // KeyStoreInput locates the hub for ReadKeyStore.
 type KeyStoreInput struct {
-	// Platform is "github", "gitlab", "gitea" or "forgejo".
+	// Platform is "github", "gitlab", "gitea" or "forgejo"; "bitbucket" is
+	// refused for now.
 	Platform string
 	// APIURL is the REST base of the hub's platform (…/api/v3, /api/v4,
 	// /api/v1, https://api.github.com).
@@ -148,6 +149,8 @@ func ReadKeyStore(ctx context.Context, in KeyStoreInput) (KeyStore, error) {
 	case "gitea", "forgejo":
 		k.auth = &httpx.Auth{Hosts: []string{api.Host}, Header: k.header("token ")}
 		return k.gitea(ctx)
+	case "bitbucket":
+		return KeyStore{}, errors.New("hub keys: a hub on Bitbucket is not supported yet")
 	}
 	return KeyStore{}, fmt.Errorf("hub keys: unknown platform %q", in.Platform)
 }

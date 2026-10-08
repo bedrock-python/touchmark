@@ -9,12 +9,13 @@ import (
 )
 
 // Opt-in files: read one by one (Reader.ReadFile), or in batches where the
-// provider's reader is a platform.BatchReader (GitHub's GraphQL aliases), so
+// provider's reader is a platform.BatchReader (GraphQL: GitHub's aliases,
+// GitLab's projects(ids:)), so
 // that a plan over thousands of targets reads their opt-in files in a few
 // requests.
 
 // optInChunk is how many targets one BatchReader call reads the opt-in
-// files of: the batch of GitHub's GraphQL query.
+// files of: the batch of GitHub's and GitLab's GraphQL queries.
 const optInChunk = 50
 
 // optInBatch reads the opt-in files of one provider's targets in chunks, in

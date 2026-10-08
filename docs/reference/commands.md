@@ -291,7 +291,7 @@ their commands. Point an editor's YAML language server at a schema for completio
 <!-- generated: help schema -->
 
 ```text
-Usage: touchmark schema hub|targets|opt-in|operations|report|doctor|setup
+Usage: touchmark schema hub|targets|opt-in|operations|report|doctor|setup|status|check
 
 Print the JSON Schema of a configuration file or of a report.
 ```

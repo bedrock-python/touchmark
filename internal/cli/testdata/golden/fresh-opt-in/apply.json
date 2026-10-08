@@ -1,4 +1,5 @@
 {
+  "schema": "status/v1",
   "command": "apply",
   "dry_run": false,
   "hub": {

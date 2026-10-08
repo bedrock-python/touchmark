@@ -29,6 +29,7 @@ func runCheck(ctx context.Context, e *env, o *options) error {
 		return err
 	}
 	c := &checkRun{hub: h, rep: &report.Check{
+		Schema:   report.CheckSchema,
 		Command:  "check",
 		Packs:    []string{},
 		Errors:   []string{},

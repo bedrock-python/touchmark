@@ -209,7 +209,7 @@ func manifestFlags() (*flagSet, *options) {
 
 func schemaFlags() (*flagSet, *options) {
 	f, o := newFlagSet("schema")
-	f.nargs, f.argName = 1, "schema name: hub, targets, opt-in, operations, report, doctor or setup"
+	f.nargs, f.argName = 1, "schema name: hub, targets, opt-in, operations, report, doctor, setup, status or check"
 	return f, o
 }
 

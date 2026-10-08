@@ -169,11 +169,11 @@ The first push creates the `ghcr.io/bedrock-python/touchmark` package private; m
 public in the organisation's package settings once, or every `docker pull`, every GitLab
 and Gitea job and the Action are denied.
 
-- `feat:` bumps the minor version, `fix:` the patch version, `feat!:` / a `BREAKING CHANGE:`
-  footer bumps the major version (before 1.0 a breaking change bumps the minor version —
-  `bump-minor-pre-major` is on).
-- To force a specific version, add a `Release-As: x.y.z` footer to a commit — this is how
-  1.0.0 is cut.
+- `feat:` bumps the minor version, `fix:` the patch version. touchmark is at 0.x, where a
+  breaking change (`feat!:`, a `BREAKING CHANGE:` footer) bumps the minor version too
+  (`bump-minor-pre-major` is on). What counts as breaking is on the
+  [Compatibility](https://bedrock-python.github.io/touchmark/reference/compatibility/) page.
+- To force a specific version, add a `Release-As: x.y.z` footer to a commit.
 - Tags are `vX.Y.Z`, without the component prefix the other bedrock-python repositories
   use: Go modules and the Action resolve bare `v` tags only.
 - release-please writes each release above the first version heading of `CHANGELOG.md`.

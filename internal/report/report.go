@@ -2,7 +2,9 @@
 // apply) and renders it as text or JSON.
 //
 // JSON field names are snake_case and stable: every field is always present,
-// except "results", which only apply prints.
+// except "results", which only apply prints. The JSON Schemas are
+// schemas/status.schema.json (status/v1) and schemas/check.schema.json
+// (check/v1).
 package report
 
 import (
@@ -12,6 +14,12 @@ import (
 
 	"github.com/bedrock-python/touchmark/internal/apply"
 	"github.com/bedrock-python/touchmark/internal/decide"
+)
+
+// SyncSchema and CheckSchema are the values of the reports' schema field.
+const (
+	SyncSchema  = "status/v1"
+	CheckSchema = "check/v1"
 )
 
 // Outcomes of an apply result.
@@ -197,6 +205,7 @@ func Summarize(entries []Entry, results []Result) Summary {
 
 // Sync is the report of status and apply.
 type Sync struct {
+	Schema  string `json:"schema"`  // SyncSchema
 	Command string `json:"command"` // "status" or "apply"
 	DryRun  bool   `json:"dry_run"`
 	Hub     Hub    `json:"hub"`
@@ -214,6 +223,7 @@ type Sync struct {
 
 // Check is the report of check.
 type Check struct {
+	Schema   string   `json:"schema"`  // CheckSchema
 	Command  string   `json:"command"` // "check"
 	Hub      Hub      `json:"hub"`
 	Packs    []string `json:"packs"`

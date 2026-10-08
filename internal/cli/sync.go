@@ -44,6 +44,7 @@ func runSync(ctx context.Context, e *env, o *options, write bool) error {
 		return err
 	}
 	s.rep = &report.Sync{
+		Schema:   report.SyncSchema,
 		Command:  "status",
 		Hub:      s.hub.report(),
 		Target:   s.tgt.report(),

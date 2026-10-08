@@ -14,7 +14,7 @@
 //	touchmark status   [--hub DIR] [--dir DIR] [--repo REF] [--packs a,b] [--worktree] [--format text|json]
 //	touchmark apply    [same as status] [--adopt GLOB]... [--dry-run]
 //	touchmark manifest [--hub DIR] [--format json]
-//	touchmark schema   hub|targets|opt-in|operations|report|doctor|setup
+//	touchmark schema   hub|targets|opt-in|operations|report|doctor|setup|status|check
 //	touchmark version
 //
 // --hub defaults to $TOUCHMARK_HUB; --dir defaults to the current directory.
@@ -102,7 +102,7 @@ func commands() []*command {
 		{name: "manifest", synopsis: "[--hub DIR] [--format json]",
 			summary: "print the ownership manifest built from the hub's history",
 			flags:   manifestFlags, run: runManifest},
-		{name: "schema", synopsis: "hub|targets|opt-in|operations|report|doctor|setup",
+		{name: "schema", synopsis: "hub|targets|opt-in|operations|report|doctor|setup|status|check",
 			summary: "print the JSON Schema of a configuration file or of a report",
 			flags:   schemaFlags, run: runSchema},
 		{name: "version", synopsis: "",

@@ -51,6 +51,7 @@ nav = [
         { "Environment variables" = "reference/environment.md" },
         { "Exit codes" = "reference/exit-codes.md" },
         { "Reports" = "reference/output.md" },
+        { "Compatibility" = "reference/compatibility.md" },
         { "The GitHub Action" = "reference/action.md" },
         { "Glossary" = "reference/glossary.md" },
     ] },

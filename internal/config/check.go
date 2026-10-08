@@ -46,6 +46,7 @@ func check(hub *Hub, targets *Targets, known map[string]bool) ([]Warning, []erro
 	c.providers()
 	c.exclude()
 	c.match()
+	c.topics()
 	c.optIn()
 	return c.warns, c.errs
 }
@@ -247,21 +248,48 @@ func (c *checker) match() {
 }
 
 // flatType returns the type of the provider with id when its platform has no
-// nested namespaces (github, gitea, forgejo): a repository path there is
-// owner/name. It returns "" for any other type, and for a provider hub.yml
-// does not list (the implicit one, whose type the CI tells).
+// nested namespaces (github, gitea, forgejo, bitbucket): a repository path
+// there is owner/name. It returns "" for any other type, and for a provider
+// hub.yml does not list (the implicit one, whose type the CI tells).
 func (c *checker) flatType(id string) string {
-	for _, p := range c.hub.Providers {
-		if p.ID != id {
-			continue
-		}
-		switch p.Type {
-		case "github", "gitea", "forgejo":
-			return p.Type
-		}
-		return ""
+	switch typ := c.providerType(id); typ {
+	case "github", "gitea", "forgejo", "bitbucket":
+		return typ
 	}
 	return ""
+}
+
+// providerType returns the type of the provider with id, "" for a provider
+// hub.yml does not list.
+func (c *checker) providerType(id string) string {
+	for _, p := range c.hub.Providers {
+		if p.ID == id {
+			return p.Type
+		}
+	}
+	return ""
+}
+
+// topics refuses topics on an entry whose provider is Bitbucket Cloud,
+// whose repositories have none: the entry would select nothing, and the
+// driver refuses the selector.
+func (c *checker) topics() {
+	res := resolver{hub: c.hub, targets: c.targets}
+	for i := range c.targets.Targets {
+		e := &c.targets.Targets[i]
+		if len(e.Topics) == 0 || entryKind(e) == "repo" {
+			continue
+		}
+		ns, err := entryRef(e)
+		if err != nil {
+			continue
+		}
+		id := res.provider(firstNonEmpty(e.Provider, ns.Provider))
+		if c.providerType(id) == "bitbucket" {
+			c.errorf(TargetsFile, "targets[%d].topics: provider %s is Bitbucket, whose repositories have no topics; "+
+				"select them with match: (paths like %s/svc-*) or list them with repo:", i, id, ns.Path)
+		}
+	}
 }
 
 // optIn warns about a repo entry whose opt_in: required says nothing: an

@@ -89,7 +89,7 @@
       "required": ["org"],
       "properties": {
         "org": {
-          "description": "Every repository in a GitHub organisation or a GitLab, Gitea or Forgejo namespace (a synonym of group), named by its path or its web URL.",
+          "description": "Every repository in a GitHub organisation, a GitLab, Gitea or Forgejo namespace or a Bitbucket workspace (a synonym of group), named by its path or its web URL.",
           "$ref": "#/$defs/namespace"
         },
         "provider": { "$ref": "#/$defs/providerId" },
@@ -134,7 +134,7 @@
       }
     },
     "topics": {
-      "description": "Only repositories with all of these topics.",
+      "description": "Only repositories with all of these topics. Bitbucket has no topics: check refuses them on its entries; use match.",
       "type": ["array", "null"],
       "items": { "type": "string", "pattern": "[^\t\n\u000b\f\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]" }
     },

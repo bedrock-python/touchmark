@@ -1,0 +1,5 @@
+# error: base_url: a provider of type bitbucket is Bitbucket Cloud
+version: 1
+id: acme-eng
+platform: bitbucket
+base_url: https://bitbucket.example.com

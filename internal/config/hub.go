@@ -26,12 +26,12 @@ const (
 
 // Enumerations of hub.yml.
 var (
-	providerTypes   = []string{"github", "gitlab", "gitea", "forgejo"}
+	providerTypes   = []string{"github", "gitlab", "gitea", "forgejo", "bitbucket"}
 	linkHubModes    = []string{"auto", "always", "never"}
 	isolationModes  = []string{"platform", "external", "none"}
 	privateTargets  = []string{"skip", "deliver"}
 	signModes       = []string{"auto", "always"}
-	defaultURLs     = map[string]string{"github": "https://github.com", "gitlab": "https://gitlab.com"}
+	defaultURLs     = map[string]string{"github": "https://github.com", "gitlab": "https://gitlab.com", "bitbucket": bitbucketURL}
 	shorthandFields = []string{"writer", "sign", "platform", "base_url"}
 )
 
@@ -252,6 +252,9 @@ func checkProvider(pr *Provider, f providerFields, p *problems) {
 		}
 	} else if pr.Type == "gitea" || pr.Type == "forgejo" {
 		p.errorf(f.name("url"), "required for %s", pr.Type)
+	}
+	if pr.Type == "bitbucket" && f.has("url") && checkURL(pr.URL) == nil && !f.has("api_url") && !isBitbucketCloud(pr.URL) {
+		p.errorf(f.name("url"), "%s", bitbucketURLError)
 	}
 	if f.has("api_url") {
 		if err := checkURL(pr.APIURL); err != nil {

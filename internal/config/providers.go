@@ -17,6 +17,26 @@ import (
 // the prefix of the short names a hub with one provider accepts.
 const envPrefixBase = "TOUCHMARK_"
 
+// Bitbucket Cloud: the web URL, which is the default url of a provider of
+// type bitbucket, and its REST base. Bitbucket Data Center has another API
+// and is not a bitbucket provider.
+const (
+	bitbucketURL    = "https://bitbucket.org"
+	bitbucketAPIURL = "https://api.bitbucket.org/2.0"
+)
+
+// bitbucketURLError is the complaint about a bitbucket provider at another
+// url without an api_url.
+const bitbucketURLError = "a provider of type bitbucket is Bitbucket Cloud, at https://bitbucket.org (leave url out); " +
+	"Bitbucket Data Center is not supported yet. Elsewhere (a test server) set api_url too"
+
+// isBitbucketCloud reports whether raw, a checked URL, is Bitbucket Cloud's
+// web URL: https://bitbucket.org, with no path.
+func isBitbucketCloud(raw string) bool {
+	u, err := url.Parse(strings.TrimRight(raw, "/"))
+	return err == nil && strings.EqualFold(u.Scheme, "https") && strings.EqualFold(u.Host, "bitbucket.org") && u.Path == ""
+}
+
 // ResolvedProvider is a provider from hub.yml (or the implicit one) with
 // everything a driver needs besides credentials.
 type ResolvedProvider struct {
@@ -25,7 +45,8 @@ type ResolvedProvider struct {
 	Host string
 	// APIURL is the REST base: https://api.github.com, https://api.<host>
 	// for *.ghe.com, <url>/api/v3 for GitHub Enterprise Server,
-	// <url>/api/v4 for GitLab, <url>/api/v1 for Gitea and Forgejo;
+	// <url>/api/v4 for GitLab, <url>/api/v1 for Gitea and Forgejo,
+	// https://api.bitbucket.org/2.0 for Bitbucket Cloud;
 	// Provider.APIURL when set. On GitHub Actions for the hub's own host,
 	// GITHUB_API_URL wins over the derived URL, not over Provider.APIURL:
 	// an explicit api_url means the same in CI and locally.
@@ -72,7 +93,8 @@ type ResolvedProvider struct {
 //
 // Every provider is checked again, with ParseHub's defaults, so a hub built
 // in code resolves like a parsed one: a valid id, no duplicate ids, a known
-// type, the public URL of github and gitlab when URL is empty, https URLs
+// type, the public URL of github, gitlab and bitbucket when URL is empty,
+// an api_url for a bitbucket provider anywhere but Bitbucket Cloud, https URLs
 // (http only for localhost), sign auto. A nil hub is a legacy hub. Error
 // messages never quote environment values. A nil getenv reads the process
 // environment.
@@ -254,6 +276,9 @@ func resolveProvider(p Provider, env ciEnv) (ResolvedProvider, error) {
 			return ResolvedProvider{}, fmt.Errorf("api_url: %w", err)
 		}
 	}
+	if p.Type == "bitbucket" && p.APIURL == "" && !isBitbucketCloud(p.URL) {
+		return ResolvedProvider{}, fmt.Errorf("url: %s", bitbucketURLError)
+	}
 	setDefault(&p.Sign, defaultSign)
 	u, err := url.Parse(p.URL)
 	if err != nil {
@@ -299,6 +324,9 @@ func derivedAPIURL(typ, webURL, hostname, host string) string {
 		return webURL + "/api/v3"
 	case "gitlab":
 		return webURL + "/api/v4"
+	case "bitbucket":
+		// resolveProvider asks for api_url anywhere else.
+		return bitbucketAPIURL
 	}
 	return webURL + "/api/v1"
 }

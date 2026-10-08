@@ -51,8 +51,9 @@ const (
 // provider types hub.yml gives them.
 var (
 	simHosts = map[fake.Flavor]string{fake.GitHub: "github.com", fake.GitLab: "gitlab.example.com",
-		fake.Gitea: "gitea.example.com", fake.Forgejo: "forgejo.example.com"}
-	simTypes = map[fake.Flavor]string{fake.GitHub: "github", fake.GitLab: "gitlab", fake.Gitea: "gitea", fake.Forgejo: "forgejo"}
+		fake.Gitea: "gitea.example.com", fake.Forgejo: "forgejo.example.com", fake.Bitbucket: "bitbucket.org"}
+	simTypes = map[fake.Flavor]string{fake.GitHub: "github", fake.GitLab: "gitlab", fake.Gitea: "gitea", fake.Forgejo: "forgejo",
+		fake.Bitbucket: "bitbucket"}
 )
 
 // simTokens are the git tokens of the accounts of a world.
@@ -342,7 +343,7 @@ func (w *simWorld) hubYML() string {
 		fmt.Fprintf(&b, "branch_aliases: [%s]\n", strings.Join(w.aliases, ", "))
 	}
 	fmt.Fprintf(&b, "providers:\n  - id: gh\n    type: %s\n", simTypes[w.flavor])
-	if w.flavor != fake.GitHub {
+	if w.flavor != fake.GitHub && w.flavor != fake.Bitbucket {
 		fmt.Fprintf(&b, "    url: https://%s\n", w.host)
 	}
 	b.WriteString("    writer: acme-write[bot]\n")

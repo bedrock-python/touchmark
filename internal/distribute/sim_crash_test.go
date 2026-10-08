@@ -68,6 +68,7 @@ var simCrashCases = []simCrashCase{
 	{name: "open", flavor: fake.GitHub, setup: func(*simWorld) {}},
 	{name: "open-gitlab", flavor: fake.GitLab, setup: func(*simWorld) {}},
 	{name: "open-gitea", flavor: fake.Gitea, setup: func(*simWorld) {}},
+	{name: "open-bitbucket", flavor: fake.Bitbucket, setup: func(*simWorld) {}},
 	{name: "update", flavor: fake.GitHub, setup: func(w *simWorld) {
 		w.run(ModeDistribute, nil)
 		w.ship("AGENTS.md", 2)
@@ -113,6 +114,16 @@ var simCrashCases = []simCrashCase{
 	{name: "close-no-diff", flavor: fake.GitHub, setup: func(w *simWorld) {
 		w.run(ModeDistribute, nil)
 		w.mustDo(w.push(w.target("api"), "main", maps.Clone(w.files[simBase])))
+	}},
+	// On Bitbucket the close is one edit that writes the closed marker and
+	// then declines: cut before or after it, the next run converges.
+	{name: "close-no-diff-bitbucket", flavor: fake.Bitbucket, setup: func(w *simWorld) {
+		w.run(ModeDistribute, nil)
+		w.mustDo(w.push(w.target("api"), "main", maps.Clone(w.files[simBase])))
+	}},
+	{name: "sweep-dropped-bitbucket", flavor: fake.Bitbucket, setup: func(w *simWorld) {
+		w.run(ModeDistribute, nil)
+		w.excluded["api"] = true
 	}},
 	{name: "ack", flavor: fake.GitHub, setup: func(w *simWorld) {
 		w.run(ModeDistribute, nil)

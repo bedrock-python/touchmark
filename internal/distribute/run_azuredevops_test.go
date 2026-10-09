@@ -1,11 +1,13 @@
 package distribute
 
 import (
+	"net/http"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/bedrock-python/touchmark/internal/decide"
 	"github.com/bedrock-python/touchmark/internal/marker"
 	"github.com/bedrock-python/touchmark/internal/platform"
 	"github.com/bedrock-python/touchmark/internal/platform/fake"
@@ -211,4 +213,143 @@ func TestRunAzureDevOpsLongBody(t *testing.T) {
 	if !strings.Contains(pr.Body, "more.") {
 		t.Errorf("the description lists every change in 4 000 bytes?\n%s", pr.Body)
 	}
+}
+
+// TestRunAzureDevOpsMarkerLost: the marker property of a new pull request
+// cannot be stored. The driver abandons the pull request and the core
+// opens another, or, when the abandon failed too and the pull request is
+// active without its marker, the core's reconcile stores the marker
+// through an edit. Either way the target is opened with a marker, and the
+// next run writes nothing: no marker-invalid block.
+func TestRunAzureDevOpsMarkerLost(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name      string
+		leaveOpen bool
+		pr        int64
+	}{
+		{"abandoned", false, 2},
+		{"left active", true, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			g := azWorld(t)
+			api := g.optedIn("acme/api", nil)
+			g.p.FailMarkerNext(exHTTPErr(platform.ClassTransient, http.StatusServiceUnavailable), tc.leaveOpen)
+			g.ok()
+			rep := g.run(g.deps(ModeDistribute), ModeDistribute)
+			want(t, rep, "gh:acme/api", report.OutcomeOpened, "", tc.pr)
+			pr := g.p.PR(api.ID, tc.pr)
+			if pr.State != platform.Open {
+				t.Fatalf("#%d is %s", tc.pr, pr.State)
+			}
+			g.azCheckBody(pr)
+			if !tc.leaveOpen {
+				first := g.p.PR(api.ID, 1)
+				if _, line := marker.Detach(first.Body); first.State != platform.Closed || line != "" ||
+					first.ClosedBy == nil || first.ClosedBy.ID != g.writer.ID {
+					t.Errorf("#1: %s by %v, marker %q: want abandoned by the writer without a marker", first.State, first.ClosedBy, line)
+				}
+			} else if edits := slices.IndexFunc(g.p.Writes(), func(w string) bool { return strings.HasPrefix(w, "EditPR") }); edits < 0 {
+				t.Errorf("no edit stored the marker: %q", g.p.Writes())
+			}
+			g.azStep("the next run", nil, report.OutcomeUnchanged, "", tc.pr, 0)
+		})
+	}
+}
+
+// TestRunAzureDevOpsEditMarkerLost: the marker property of an edit that
+// changes the description fails after the description went through. The
+// marker still describes the previous body, so the core's reconcile sees
+// the edit unapplied and makes it again: the description is not sent twice,
+// the marker is stored, and the next run writes nothing.
+func TestRunAzureDevOpsEditMarkerLost(t *testing.T) {
+	t.Parallel()
+	g := azWorld(t)
+	api := g.optedIn("acme/api", nil)
+	g.azStep("the first run", nil, report.OutcomeOpened, "", 1, 3)
+	g.edit = bbHubChange(g)
+	g.p.FailMarkerNext(exHTTPErr(platform.ClassTransient, http.StatusBadGateway), false)
+	g.ok()
+	rep := g.run(g.deps(ModeDistribute), ModeDistribute)
+	tg := targetOf(t, rep, "gh:acme/api")
+	if tg.Outcome == report.OutcomeFailed || tg.Outcome == report.OutcomeBlocked {
+		t.Fatalf("%s:%s %q", tg.Outcome, tg.Reason, tg.Warnings)
+	}
+	pr := g.p.PR(api.ID, 1)
+	m := g.azCheckBody(pr)
+	if want := decide.BodyHash(pr.Body); m.Data.Body != want {
+		t.Errorf("the marker records body %s, the description hashes %s", m.Data.Body, want)
+	}
+	g.azStep("the next run", nil, report.OutcomeUnchanged, "", 1, 0)
+}
+
+// azLongDescription has a person fill the description of open pull request
+// n of r up to 4 000 bytes but one, ending with a mention: making it inert
+// would push it over Azure DevOps' limit.
+func (g *gitWorld) azLongDescription(r platform.Repo, n int64) string {
+	g.t.Helper()
+	var desc string
+	g.p.UpdatePR(r.ID, n, func(pr *platform.PR) {
+		head := marker.Strip(pr.Body) + "\n\n"
+		tail := "\ncc @bob"
+		desc = head + strings.Repeat("x", 3999-len(head)-len(tail)) + tail
+		pr.Body = desc
+	})
+	g.ok()
+	if len(desc) != 3999 {
+		g.t.Fatalf("fixture: a description of %d bytes", len(desc))
+	}
+	return desc
+}
+
+// TestRunAzureDevOpsLongPeopleText: a person appends "cc @bob" to a
+// description of nearly 4 000 bytes. Touchmark's writes that keep the
+// description (a close, an opt-in refresh) store the marker and leave the
+// description byte for byte: none fails for a description touchmark would
+// have lengthened, and none mentions anyone, since nothing of people's
+// text is sent.
+func TestRunAzureDevOpsLongPeopleText(t *testing.T) {
+	t.Parallel()
+
+	t.Run("close", func(t *testing.T) {
+		t.Parallel()
+		g := azWorld(t)
+		api := g.optedIn("acme/api", nil)
+		g.azStep("the first run", nil, report.OutcomeOpened, "", 1, 3)
+		desc := g.azLongDescription(api, 1)
+		g.push(api, "main", g.person, baseFiles...)
+		g.azStep("no-diff", nil, report.OutcomeClosed, "no-diff", 1, 3)
+		pr := g.p.PR(api.ID, 1)
+		m, _ := marker.Find(pr.Body, []string{hubFP})
+		if pr.State != platform.Closed || m.Data.Closed == nil || m.Data.Closed.By != "touchmark" {
+			t.Errorf("#1: %s, closed %+v", pr.State, m.Data.Closed)
+		}
+		if got, _ := marker.Detach(pr.Body); got != desc {
+			t.Errorf("the description changed:\n%q\nwas\n%q", got, desc)
+		}
+	})
+
+	t.Run("opt-in refresh", func(t *testing.T) {
+		t.Parallel()
+		g := azWorld(t)
+		api := g.optedIn("acme/api", nil)
+		g.azStep("the first run", nil, report.OutcomeOpened, "", 1, 3)
+		foreign := g.p.AddPR(api.ID, platform.PR{Head: branch, Author: g.person, Title: "wip", Body: "My changes."})
+		g.ok()
+		g.azStep("someone else's pull request on the sync branch", nil, report.OutcomeBlocked, "branch-in-use", foreign, 0)
+		desc := g.azLongDescription(api, 1)
+		before := g.p.PR(api.ID, 1)
+		optIn2 := "version: 1\nignore: [notes/**]\n"
+		g.push(api, "main", g.person, optInName, optIn2)
+		g.azStep("the opt-in file changed while blocked", nil, report.OutcomeBlocked, "branch-in-use", foreign, 1)
+		after := g.p.PR(api.ID, 1)
+		m, status := marker.Find(after.Body, []string{hubFP})
+		if status != marker.Found || m.Data.OptIn != optInHash(t, optIn2) {
+			t.Errorf("#1: marker %s, optin %q", status, m.Data.OptIn)
+		}
+		if got, _ := marker.Detach(after.Body); got != desc || after.Title != before.Title {
+			t.Errorf("the description changed:\n%q\nwas\n%q", got, desc)
+		}
+	})
 }

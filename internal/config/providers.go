@@ -69,6 +69,34 @@ func AzureDevOpsOrg(raw string) (org string, ok bool) {
 	return org, true
 }
 
+// AzureCollectionURL returns the organization URL,
+// https://dev.azure.com/<organization>, of an Azure DevOps Services
+// collection URL as Azure Pipelines gives it (System.CollectionUri):
+// https://dev.azure.com/<organization>/, or the older
+// https://<organization>.visualstudio.com/ form of the same organization;
+// "" for anything else (Azure DevOps Server).
+func AzureCollectionURL(raw string) string {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || !strings.EqualFold(u.Scheme, "https") || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+		return ""
+	}
+	if p := u.Port(); p != "" && p != "443" {
+		return ""
+	}
+	host, path := strings.ToLower(u.Hostname()), strings.Trim(u.Path, "/")
+	var org string
+	switch {
+	case host == azureDevOpsHost && !strings.Contains(path, "/"):
+		org = path
+	case strings.HasSuffix(host, ".visualstudio.com") && path == "":
+		org = strings.TrimSuffix(host, ".visualstudio.com")
+	}
+	if !azureOrgRe.MatchString(org) {
+		return ""
+	}
+	return "https://" + azureDevOpsHost + "/" + org
+}
+
 // azureDevOpsURLOK reports whether raw, a checked URL, can be an
 // azure-devops provider's url: one organization segment, and, without an
 // api_url, on https://dev.azure.com.
@@ -204,7 +232,7 @@ func (h *Hub) ResolveProvidersWithOrigin(getenv func(string) string, originHost 
 type ciEnv struct {
 	// kind is the provider type of the CI: "github", "gitlab", "gitea",
 	// "forgejo", "bitbucket" (Bitbucket Pipelines, always on Bitbucket
-	// Cloud), or "" outside CI.
+	// Cloud), "azure-devops" (Azure Pipelines), or "" outside CI.
 	kind string
 	// serverVar names the variable with the platform's URL, and serverURL
 	// is its value, trimmed.
@@ -232,6 +260,20 @@ func readCIEnv(getenv func(string) string) ciEnv {
 		// server URL: the hub is on https://bitbucket.org.
 		env.kind, env.serverURL = "bitbucket", bitbucketURL
 		return env
+	case isTrue("TF_BUILD"):
+		// Azure Pipelines: the hub's organization is System.CollectionUri,
+		// on dev.azure.com or in the older <org>.visualstudio.com form, both
+		// https://dev.azure.com/<org> as a provider. A build of a repository
+		// outside Azure Repos, or on Azure DevOps Server, names none.
+		env.kind, env.serverVar = "azure-devops", "SYSTEM_COLLECTIONURI"
+		if strings.EqualFold(strings.TrimSpace(getenv("BUILD_REPOSITORY_PROVIDER")), "TfsGit") {
+			collection := getenv("SYSTEM_COLLECTIONURI")
+			if strings.TrimSpace(collection) == "" {
+				collection = getenv("SYSTEM_TEAMFOUNDATIONCOLLECTIONURI")
+			}
+			env.serverURL = AzureCollectionURL(collection)
+		}
+		return env
 	default:
 		return env
 	}
@@ -251,6 +293,9 @@ func readCIEnv(getenv func(string) string) ciEnv {
 func implicitProvider(h *Hub, env ciEnv, originHost string) (Provider, error) {
 	var p Provider
 	switch {
+	case env.kind == "azure-devops" && env.serverURL == "":
+		return Provider{}, fmt.Errorf("%s declares no providers, and this Azure Pipelines build is of no Azure Repos repository of Azure DevOps "+
+			"Services (Build.Repository.Provider TfsGit, System.CollectionUri on dev.azure.com): add providers to %s", HubFile, HubFile)
 	case env.kind != "":
 		if env.serverURL == "" {
 			return Provider{}, fmt.Errorf("%s declares no providers and %s is not set; add providers to %s", HubFile, env.serverVar, HubFile)
@@ -262,8 +307,9 @@ func implicitProvider(h *Hub, env ciEnv, originHost string) (Provider, error) {
 	default:
 		var ok bool
 		if p, ok = originProvider(originHost); !ok {
-			return Provider{}, fmt.Errorf("%s declares no providers, no CI environment names one (GitHub Actions, GitLab CI, Gitea or Forgejo Actions, Bitbucket Pipelines), "+
-				"and the hub's origin remote is not on github.com, a *.ghe.com host, gitlab.com or bitbucket.org; add providers to %s, or set platform and base_url there", HubFile, HubFile)
+			return Provider{}, fmt.Errorf("%s declares no providers, no CI environment names one (GitHub Actions, GitLab CI, Gitea or Forgejo Actions, Bitbucket Pipelines, "+
+				"Azure Pipelines), "+
+				"and the hub's origin remote is not on github.com, a *.ghe.com host, gitlab.com, bitbucket.org or dev.azure.com; add providers to %s, or set platform and base_url there", HubFile, HubFile)
 		}
 	}
 	if h != nil {
@@ -274,18 +320,48 @@ func implicitProvider(h *Hub, env ciEnv, originHost string) (Provider, error) {
 
 // OriginTellsProvider reports whether a hub without providers can take its
 // implicit provider outside CI from an origin remote on host: only a public
-// instance (github.com, a *.ghe.com host, gitlab.com, bitbucket.org) tells
-// its type.
+// instance (github.com, a *.ghe.com host, gitlab.com, bitbucket.org,
+// dev.azure.com, whose origin also names the organization) tells its type.
 func OriginTellsProvider(host string) bool {
+	if strings.EqualFold(strings.TrimSpace(host), azureDevOpsHost) {
+		return true
+	}
 	_, ok := originProvider(host)
 	return ok
 }
 
+// AzureOrigin returns the origin of a hub in Azure Repos as
+// ResolveProvidersWithOrigin takes it, "dev.azure.com/<organization>", from
+// the host and path of its origin remote: https://dev.azure.com/<org>/…,
+// git@ssh.dev.azure.com:v3/<org>/…, or https://<org>.visualstudio.com/…;
+// "" for any other remote.
+func AzureOrigin(host, path string) string {
+	host = strings.ToLower(strings.TrimSpace(host))
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	var org string
+	switch {
+	case host == azureDevOpsHost && len(parts) >= 3:
+		org = parts[0]
+	case host == "ssh."+azureDevOpsHost && len(parts) >= 3 && parts[0] == "v3":
+		org = parts[1]
+	case strings.HasSuffix(host, ".visualstudio.com") && host != "ssh.visualstudio.com" && host != "vs-ssh.visualstudio.com":
+		org = strings.TrimSuffix(host, ".visualstudio.com")
+	}
+	if !azureOrgRe.MatchString(org) {
+		return ""
+	}
+	return azureDevOpsHost + "/" + strings.ToLower(org)
+}
+
 // originProvider returns the provider of a public instance at host, the
 // host of a hub's origin remote: only there does the host tell the type
-// (Bitbucket Cloud's bitbucket.org included).
+// (Bitbucket Cloud's bitbucket.org included). For Azure DevOps the origin
+// is "dev.azure.com/<organization>" (AzureOrigin).
 func originProvider(host string) (Provider, bool) {
 	host = strings.ToLower(strings.TrimSpace(host))
+	if org, ok := strings.CutPrefix(host, azureDevOpsHost+"/"); ok && azureOrgRe.MatchString(org) {
+		return Provider{ID: "azure-devops", Type: "azure-devops", URL: "https://" + azureDevOpsHost + "/" + org}, true
+	}
 	switch {
 	case host == "github.com":
 		return Provider{ID: "github", Type: "github", URL: "https://github.com"}, true

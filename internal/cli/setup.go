@@ -102,8 +102,9 @@ func runSetup(ctx context.Context, e *env, o *options, s *setupOptions) (err err
 			"tokens, the hub's access token, the repository and deployment variables), as %s shows; a hub on GitHub or GitLab "+
 			"delivers to Bitbucket Cloud as one of its providers", docsurl.GettingStarted("bitbucket"))
 	case "azure-devops":
-		return configErrorf("setup does not set up azure-devops yet: a hub on Azure Pipelines comes in a later release; " +
-			"a hub on GitHub or GitLab delivers to Azure DevOps as one of its providers")
+		return configErrorf("setup does not set up azure-devops yet: set up a hub on Azure Pipelines by hand (the bot users and their "+
+			"personal access tokens, the pipeline and its build validation policy, the variable group and the environment), as %s shows; "+
+			"a hub on GitHub or GitLab delivers to Azure DevOps as one of its providers", docsurl.GettingStarted("azure-devops"))
 	case "github", "gitlab":
 	default:
 		return usageErrorf("unknown platform %q: setup sets up github or gitlab", platform)

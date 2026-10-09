@@ -226,6 +226,17 @@ func TestResolveProvidersImplicit(t *testing.T) {
 			env:  envOf("BITBUCKET_BUILD_NUMBER", "17", "CI", "true", "BITBUCKET_REPO_UUID", "{3f2a8d4e-1b6c-4f0a-9e7d-5c2b1a0f9e8d}"),
 			want: implicit("bitbucket", "https://bitbucket.org", "bitbucket.org", "https://api.bitbucket.org/2.0", ""),
 		},
+		{
+			// The organization of Azure DevOps Services the build runs in.
+			name: "Azure Pipelines",
+			env:  envOf("TF_BUILD", "True", "BUILD_REPOSITORY_PROVIDER", "TfsGit", "SYSTEM_COLLECTIONURI", "https://dev.azure.com/acme/"),
+			want: implicit("azure-devops", "https://dev.azure.com/acme", "dev.azure.com", "https://dev.azure.com/acme", ""),
+		},
+		{
+			name: "Azure Pipelines, the older organization URL",
+			env:  envOf("TF_BUILD", "True", "BUILD_REPOSITORY_PROVIDER", "TfsGit", "SYSTEM_COLLECTIONURI", "https://Acme.visualstudio.com/"),
+			want: implicit("azure-devops", "https://dev.azure.com/acme", "dev.azure.com", "https://dev.azure.com/acme", ""),
+		},
 	}
 	legacy, _, err := ParseHub(nil)
 	if err != nil {
@@ -241,6 +252,17 @@ func TestResolveProvidersImplicit(t *testing.T) {
 			if !reflect.DeepEqual(got, []ResolvedProvider{tt.want}) {
 				t.Errorf("%s:\n got  %+v\n want %+v", tt.name, got, tt.want)
 			}
+		}
+	}
+
+	// Azure Pipelines building a repository elsewhere, or on Azure DevOps
+	// Server, names no provider.
+	for _, env := range []func(string) string{
+		envOf("TF_BUILD", "True", "BUILD_REPOSITORY_PROVIDER", "GitHub", "SYSTEM_COLLECTIONURI", "https://dev.azure.com/acme/"),
+		envOf("TF_BUILD", "True", "BUILD_REPOSITORY_PROVIDER", "TfsGit", "SYSTEM_COLLECTIONURI", "https://tfs.example.com/DefaultCollection/"),
+	} {
+		if _, err := (&Hub{ID: "acme-eng"}).ResolveProviders(env); err == nil || !strings.Contains(err.Error(), "no Azure Repos repository") {
+			t.Errorf("Azure Pipelines without a hub in Azure Repos: %v", err)
 		}
 	}
 
@@ -280,7 +302,7 @@ func TestResolveProvidersErrors(t *testing.T) {
 			name: "no providers outside CI",
 			hub:  &Hub{ID: "acme-eng"},
 			env:  envOf("CI", "true", "GITHUB_ACTIONS", "1"),
-			want: "hub.yml declares no providers, no CI environment names one (GitHub Actions, GitLab CI, Gitea or Forgejo Actions, Bitbucket Pipelines), and the hub's origin remote is not on github.com",
+			want: "hub.yml declares no providers, no CI environment names one (GitHub Actions, GitLab CI, Gitea or Forgejo Actions, Bitbucket Pipelines, Azure Pipelines), and the hub's origin remote is not on github.com",
 		},
 		{
 			name: "no server URL",
@@ -723,5 +745,30 @@ func TestOptInHash(t *testing.T) {
 	in.Hash()
 	if !reflect.DeepEqual(in, &OptIn{Packs: []string{"b", "a"}, Ignore: []string{"./z", "y"}}) {
 		t.Errorf("Hash changed its receiver: %+v", in)
+	}
+}
+
+// A hub in Azure Repos takes its implicit provider outside CI from its
+// origin remote, whose path names the organization.
+func TestAzureOrigin(t *testing.T) {
+	for _, tc := range []struct{ host, path, want string }{
+		{"dev.azure.com", "Acme/Platform/_git/engineering-assets", "dev.azure.com/acme"},
+		{"ssh.dev.azure.com", "v3/acme/Platform/engineering-assets", "dev.azure.com/acme"},
+		{"acme.visualstudio.com", "Platform/_git/engineering-assets", "dev.azure.com/acme"},
+		{"dev.azure.com", "acme", ""},
+		{"ssh.dev.azure.com", "v2/acme/Platform/x", ""},
+		{"vs-ssh.visualstudio.com", "v3/acme/Platform/x", ""},
+		{"github.com", "acme/engineering-assets", ""},
+	} {
+		if got := AzureOrigin(tc.host, tc.path); got != tc.want {
+			t.Errorf("AzureOrigin(%q, %q) = %q, want %q", tc.host, tc.path, got, tc.want)
+		}
+	}
+	got, err := (&Hub{ID: "acme-eng"}).ResolveProvidersWithOrigin(envOf(), "dev.azure.com/acme")
+	if err != nil || len(got) != 1 || got[0].Type != "azure-devops" || got[0].URL != "https://dev.azure.com/acme" || got[0].APIURL != "https://dev.azure.com/acme" {
+		t.Errorf("from the origin: %+v, %v", got, err)
+	}
+	if !OriginTellsProvider("dev.azure.com") {
+		t.Error("dev.azure.com: an origin there names its organization")
 	}
 }

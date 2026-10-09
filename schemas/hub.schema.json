@@ -29,7 +29,7 @@
       "items": { "$ref": "#/$defs/branch" }
     },
     "previous_fingerprints": {
-      "description": "Former fingerprints of this hub (host/repository-id: a numeric id, or a Bitbucket repository UUID with or without braces), after the hub moved.",
+      "description": "Former fingerprints of this hub (host/repository-id: a numeric id, a Bitbucket repository UUID with or without braces, or an Azure Repos repository id), after the hub moved.",
       "type": ["array", "null"],
       "items": {
         "type": "string",
@@ -136,11 +136,11 @@
       "additionalProperties": false,
       "properties": {
         "write_isolation": {
-          "description": "Where the write key lives. platform: in the hub's CI platform, checked by a probe (on Bitbucket Pipelines only with a reason); external: issued by an external vault over OIDC; none: risk accepted, needs a reason. Default: platform.",
+          "description": "Where the write key lives. platform: in the hub's CI platform, checked by a probe (on Bitbucket Pipelines and Azure Pipelines only with a reason); external: issued by an external vault over OIDC; none: risk accepted, needs a reason. Default: platform.",
           "enum": ["platform", "external", "none"]
         },
         "reason": {
-          "description": "Why the write key cannot be isolated. Required with write_isolation: none, and on Bitbucket Pipelines with platform, where it states the deployment permissions (Premium) that keep the write key on the default branch, which touchmark cannot read.",
+          "description": "Why the write key cannot be isolated. Required with write_isolation: none, and with platform on Bitbucket Pipelines, where it states the deployment permissions (Premium) that keep the write key on the default branch, and on Azure Pipelines, where it states the Branch control check of the variable group that holds it: touchmark cannot read either.",
           "type": "string"
         },
         "private_targets_in_public_hub": {

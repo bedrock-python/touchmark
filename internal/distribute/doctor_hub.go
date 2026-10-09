@@ -20,9 +20,9 @@ import (
 
 // DoctorGuard runs the guards of doctor before any platform call: in CI
 // (a CI hubch recognizes, or CI set), the job builds the hub's default
-// branch for no pull request, and on GitLab and Bitbucket in the
-// environment touchmark-distribute, as distribute's (the writer is used on
-// the default branch only). A local run passes.
+// branch for no pull request, and on GitLab, Bitbucket and Azure
+// Pipelines in the environment touchmark-distribute, as distribute's (the
+// writer is used on the default branch only). A local run passes.
 func DoctorGuard(c hubch.Context, getenv func(string) string) error {
 	if !guardInCI(c, getenv) {
 		return nil
@@ -60,6 +60,10 @@ type IsolationInput struct {
 //   - platform, on Bitbucket Pipelines: fail without security.reason
 //     (BitbucketPlatformRefusal); with it unknown: the API does not show
 //     who may deploy, and the reason states it;
+//   - platform, on Azure Pipelines: fail without security.reason
+//     (AzurePlatformRefusal); with it unknown: the job's token is not
+//     known to read the variable group's checks, and the reason states
+//     them;
 //   - platform, locally: unknown, doctor --hub-token tells.
 func IsolationChecks(in IsolationInput) []report.DoctorCheck {
 	mode := "platform"
@@ -129,6 +133,18 @@ func IsolationChecks(in IsolationInput) []report.DoctorCheck {
 		c.Status, c.Detail = report.StatusUnknown, "Bitbucket's API does not show which branches may deploy to "+distributeEnvironment+
 			" (Premium deployment permissions); the hub states: "+reason+". `touchmark probe` in the hub's pipelines fails when a repository "+
 			"or workspace variable holds a write key, and doctor --hub-token reads the variables"
+	case hubch.AzurePipelines:
+		reason := ""
+		if in.Hub != nil {
+			reason = strings.TrimSpace(in.Hub.Security.Reason)
+		}
+		if reason == "" {
+			c.Status, c.Detail = report.StatusFail, AzurePlatformRefusal
+			break
+		}
+		c.Status, c.Detail = report.StatusUnknown, "a job cannot read the checks of the variable group "+distributeEnvironment+
+			"; the hub states: "+reason+". `touchmark probe` in the hub's pull request builds fails when a pipeline variable holds a "+
+			"write key, and doctor --hub-token reads the variable groups and their checks"
 	default:
 		c.Status, c.Detail = report.StatusUnknown, "a local run cannot see where the hub's CI keeps the write key: doctor --hub-token reads it with a maintainer's token"
 	}
@@ -177,6 +193,16 @@ func IsWriteKeyName(name string, known []string) bool {
 //     does not show which branches may deploy), ok when only admins may
 //     deploy there, a warning under none, and a warning in another
 //     environment; one not secured warns.
+//   - Azure DevOps: a write key in a variable of a pipeline that builds
+//     the hub fails (every run reads it, of any branch, pull request
+//     builds included); one in a variable group is ok when the group has a
+//     Branch control check that admits the default branch alone, fails
+//     without one or with another branch, is unknown when its checks could
+//     not be read, and warns in another group than touchmark-distribute or
+//     under none; a check without Verify branch protection, and a key that
+//     is not secret, warn; a group every pipeline may use warns, and fails
+//     without Verify branch protection. The project's pipeline settings
+//     are graded too (azureSettingsChecks).
 //
 // Under security.write_isolation external no write key is expected in the
 // hub, and one found there is graded the same. A key found nowhere is
@@ -207,6 +233,8 @@ func KeyLocationChecks(ks hubch.KeyStore, known []string, cfg *config.Hub) []rep
 			out = append(out, gitlabKeyChecks(s)...)
 		case "bitbucket":
 			out = append(out, bitbucketKeyChecks(s, envs, mode)...)
+		case "azure-devops":
+			out = append(out, azureKeyChecks(s, ks, mode)...)
 		default:
 			if mode == "none" {
 				add(report.StatusWarn, "Actions secret %s (%s): every branch's jobs read it; the hub accepted the risk (security.write_isolation: none)", s.Name, s.Where)
@@ -226,6 +254,18 @@ func KeyLocationChecks(ks hubch.KeyStore, known []string, cfg *config.Hub) []rep
 		default:
 			add(report.StatusFail, "the hub has no environment %s: keep the write key in its secrets (its deployment variables on Bitbucket), with deployments limited to the default branch", distributeEnvironment)
 		}
+	}
+	if ks.Platform == "azure-devops" && mode == "platform" && !slices.ContainsFunc(ks.VariableGroups, func(g hubch.VariableGroup) bool {
+		return strings.EqualFold(g.Name, distributeEnvironment)
+	}) {
+		if ks.VariableGroupsUnread != "" {
+			add(report.StatusUnknown, "whether the hub's project has the variable group %s is not known: %s", distributeEnvironment, ks.VariableGroupsUnread)
+		} else {
+			add(report.StatusFail, "the hub's project has no variable group %s: keep the write key in it, as a secret, with a Branch control check that admits the default branch only", distributeEnvironment)
+		}
+	}
+	if ks.Platform == "azure-devops" {
+		out = append(out, azureSettingsChecks(ks)...)
 	}
 	if ks.Platform == "gitlab" {
 		out = append(out, gitlabRefChecks(ks)...)
@@ -298,6 +338,156 @@ func bitbucketKeyChecks(s hubch.Secret, envs map[string]hubch.NamedEnvironment, 
 			Detail: where + " is not secured: its value shows in the settings and the API, and the logs do not mask it; make it Secured"})
 	}
 	return out
+}
+
+// azureKeyChecks grade one write-key variable on Azure DevOps.
+func azureKeyChecks(s hubch.Secret, ks hubch.KeyStore, mode string) []report.DoctorCheck {
+	c := report.DoctorCheck{Name: "key-location"}
+	where := fmt.Sprintf("variable %s of %s %s", s.Name, s.Where, s.Group)
+	var extra []report.DoctorCheck
+	switch s.Where {
+	case "pipeline":
+		c.Status, c.Detail = report.StatusFail, fmt.Sprintf("%s: every run of the pipeline reads it, of any branch, pull request builds included "+
+			"(any branch's YAML may map a secret variable); move it into the variable group %s", where, distributeEnvironment)
+	case "variable group":
+		var g hubch.VariableGroup
+		for _, vg := range ks.VariableGroups {
+			if vg.Name == s.Group {
+				g = vg
+				break
+			}
+		}
+		c.Status, c.Detail = azureGroupCheck(where, g, ks.DefaultBranch)
+		switch {
+		case mode == "none":
+			c.Status, c.Detail = report.StatusWarn, where+": the hub accepted the risk that other branches read it (security.write_isolation: none)"
+		case !strings.EqualFold(s.Group, distributeEnvironment) && c.Status == report.StatusOK:
+			c.Status, c.Detail = report.StatusWarn, fmt.Sprintf("%s: distribute's stage links the variable group %s", where, distributeEnvironment)
+		}
+		switch {
+		case g.PermissionsUnread != "":
+			extra = append(extra, report.DoctorCheck{Name: "key-location", Status: report.StatusUnknown,
+				Detail: fmt.Sprintf("which pipelines may use variable group %s could not be read: %s", s.Group, g.PermissionsUnread)})
+		case g.AllPipelines:
+			// Branch control compares the name of the run's branch: the
+			// pipeline of another repository of the project, run on its own
+			// default branch, passes it unless the check also verifies the
+			// branch's protection, and even then a protected default branch
+			// of another repository does.
+			status := report.StatusWarn
+			if !azureVerified(g) {
+				status = report.StatusFail
+			}
+			extra = append(extra, report.DoctorCheck{Name: "key-location", Status: status,
+				Detail: fmt.Sprintf("variable group %s is open to every pipeline of the project: Branch control compares only the run's branch name, "+
+					"so a pipeline of another repository, run on its own default branch, may link the group and read the key; under Pipeline "+
+					"permissions give the hub's pipeline alone the use of it", s.Group)})
+		}
+	default:
+		c.Status, c.Detail = report.StatusUnknown, fmt.Sprintf("variable %s (%s)", s.Name, s.Where)
+	}
+	out := append([]report.DoctorCheck{c}, extra...)
+	if !s.Masked {
+		out = append(out, report.DoctorCheck{Name: "key-location", Status: report.StatusWarn,
+			Detail: where + " is not secret: its value shows in the Library and the API, every step gets it in its environment, and the logs do not mask it; make it secret"})
+	}
+	return out
+}
+
+// azureVerified reports whether a Branch control check of g verifies the
+// branch's protection without letting an unknown status pass.
+func azureVerified(g hubch.VariableGroup) bool {
+	return slices.ContainsFunc(g.BranchChecks, func(bc hubch.BranchCheck) bool { return bc.Protection && !bc.AllowUnknown })
+}
+
+// azureGroupCheck grades the Branch control checks of a variable group that
+// holds a write key. A stage passes only when every check passes, so one
+// check that admits the default branch alone (refs/heads/<branch>) keeps
+// every other branch out: ok when one does and one verifies branch
+// protection without letting an unknown status pass; warn when none
+// verifies it, or when a check names the branch without refs/heads/ (it
+// then admits no run at all); fail when no check admits the default branch
+// alone; unknown when the checks could not be read, or a check lists no
+// branch (its settings are not in the shape touchmark reads).
+func azureGroupCheck(where string, g hubch.VariableGroup, defaultBranch string) (report.CheckStatus, string) {
+	if g.ChecksUnread != "" {
+		return report.StatusUnknown, where + ": its checks could not be read (" + g.ChecksUnread + "); a maintainer's token with Build: Read reads them"
+	}
+	if len(g.BranchChecks) == 0 {
+		return report.StatusFail, where + ": the group has no Branch control check, so a stage of any branch that links it reads the key: " +
+			"add one that admits refs/heads/" + guardRef(defaultBranch) + " only (Pipelines > Library > the group > Approvals and checks)"
+	}
+	want := "refs/heads/" + defaultBranch
+	restricted, bare := false, false
+	var others []string
+	for _, bc := range g.BranchChecks {
+		if len(bc.Allowed) == 0 {
+			return report.StatusUnknown, where + ": a Branch control check of the group lists no branch that touchmark can read; check its " +
+				"Allowed branches by hand"
+		}
+		var extra []string
+		for _, b := range bc.Allowed {
+			switch {
+			case defaultBranch != "" && b == want:
+			case defaultBranch != "" && b == defaultBranch:
+				bare = true
+			default:
+				extra = append(extra, b)
+			}
+		}
+		if len(extra) == 0 {
+			restricted = true
+		}
+		others = append(others, extra...)
+	}
+	switch {
+	case !restricted:
+		slices.Sort(others)
+		return report.StatusFail, where + ": its Branch control checks admit " + strings.Join(slices.Compact(others), ", ") +
+			" besides the default branch " + guardRef(defaultBranch) + ", whose stages then read the key: admit refs/heads/" + guardRef(defaultBranch) + " only"
+	case bare:
+		return report.StatusWarn, where + ": a Branch control check names the branch " + defaultBranch + " without refs/heads/, while the check " +
+			"compares the run's full ref: write refs/heads/" + defaultBranch + ", or distribute's stage never starts"
+	case !azureVerified(g):
+		return report.StatusWarn, where + ": a Branch control check admits the default branch " + defaultBranch + " only, but none verifies " +
+			"branch protection (or it lets an unknown status pass): turn Verify branch protection on, so the key reaches only a default branch that takes no direct push"
+	}
+	return report.StatusOK, where + ": a Branch control check admits the default branch " + defaultBranch + " only, and verifies its protection"
+}
+
+// azureSettingsChecks grade the Azure DevOps project's pipeline settings
+// that bear on the write key (check pipeline-settings): variables settable
+// at queue time fail (whoever may queue a run of the default branch sets
+// BASH_ENV or DOCKER_HOST in the steps that hold the key); a job scope wider
+// than the project, and repositories not limited to those a pipeline
+// checks out, warn.
+func azureSettingsChecks(ks hubch.KeyStore) []report.DoctorCheck {
+	c := report.DoctorCheck{Name: "pipeline-settings"}
+	st := ks.PipelineSettings
+	if st == nil {
+		c.Status, c.Detail = report.StatusUnknown, "the project's pipeline settings could not be read: "+ks.PipelineSettingsUnread
+		return []report.DoctorCheck{c}
+	}
+	var fails, warns []string
+	if !st.SettableVarsLimited {
+		fails = append(fails, "Limit variables that can be set at queue time is off: whoever may queue a run of the default branch sets any "+
+			"variable in the steps that hold the write key (BASH_ENV runs a command, DOCKER_HOST sends the container elsewhere)")
+	}
+	if !st.JobScopeLimited {
+		warns = append(warns, "Limit job authorization scope to current project is off: the job access token reaches every project of the organization")
+	}
+	if !st.ReposProtected {
+		warns = append(warns, "Protect access to repositories in YAML pipelines is off: the job access token reaches every repository of the project")
+	}
+	switch {
+	case len(fails) > 0:
+		c.Status, c.Detail = report.StatusFail, strings.Join(append(fails, warns...), "; ")
+	case len(warns) > 0:
+		c.Status, c.Detail = report.StatusWarn, strings.Join(warns, "; ")
+	default:
+		c.Status, c.Detail = report.StatusOK, "queue-time variables are limited, and the job access token is limited to the project and the repositories a pipeline checks out"
+	}
+	return []report.DoctorCheck{c}
 }
 
 // gitlabKeyChecks grade one write-key variable on GitLab.

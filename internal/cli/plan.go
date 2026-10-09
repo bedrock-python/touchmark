@@ -305,9 +305,10 @@ func planFingerprint(hctx hubch.Context, flag string) (string, []string, error) 
 		warnings = append(warnings, fmt.Sprintf("--hub-fp %s differs from %s, the fingerprint CI reports", flag, ci))
 	}
 	if flag == "" {
-		return "", nil, configErrorf("the hub's fingerprint is unknown: CI provides it (GITHUB_REPOSITORY_ID, CI_PROJECT_ID, BITBUCKET_REPO_UUID); " +
-			"outside CI pass --hub-fp HOST/ID, the hub's host and repository id, e.g. github.com/712345678 " +
-			"(on Bitbucket the repository's UUID, BITBUCKET_REPO_UUID: bitbucket.org/{…})")
+		return "", nil, configErrorf("the hub's fingerprint is unknown: CI provides it (GITHUB_REPOSITORY_ID, CI_PROJECT_ID, BITBUCKET_REPO_UUID, " +
+			"BUILD_REPOSITORY_ID); outside CI pass --hub-fp HOST/ID, the hub's host and repository id, e.g. github.com/712345678 " +
+			"(on Bitbucket the repository's UUID, BITBUCKET_REPO_UUID: bitbucket.org/{…}; on Azure DevOps the repository's id, " +
+			"Build.Repository.ID: dev.azure.com/…)")
 	}
 	return flag, warnings, nil
 }
@@ -387,16 +388,21 @@ func (h *hub) resolveProviders(ctx context.Context, hctx hubch.Context, getenv f
 }
 
 // originHost returns the host of the hub's origin remote, "" when there is
-// none or it is not a URL touchmark understands.
+// none or it is not a URL touchmark understands. For a hub in Azure Repos it
+// is "dev.azure.com/<organization>" (config.AzureOrigin): the host alone
+// does not name the organization.
 func (h *hub) originHost(ctx context.Context) string {
 	out, err := h.git.Run(ctx, nil, "remote", "get-url", "origin")
 	if err != nil {
 		return ""
 	}
-	// The URL may hold credentials: only its host is kept.
-	host, _, ok := parseRemote(strings.TrimSpace(string(out)))
+	// The URL may hold credentials: only its host and path are kept.
+	host, path, ok := parseRemote(strings.TrimSpace(string(out)))
 	if !ok {
 		return ""
+	}
+	if o := config.AzureOrigin(host, path); o != "" {
+		return o
 	}
 	return host
 }
@@ -683,8 +689,9 @@ func (h *hub) caPool(ctx context.Context, name, rev string) (*x509.CertPool, err
 
 // hubPR returns the number of the hub pull request a CI run builds: from
 // GITHUB_REF (refs/pull/<n>/merge) on Actions, CI_MERGE_REQUEST_IID on
-// GitLab, BITBUCKET_PR_ID on Bitbucket Pipelines; 0 when the run builds
-// none.
+// GitLab, BITBUCKET_PR_ID on Bitbucket Pipelines,
+// SYSTEM_PULLREQUEST_PULLREQUESTID on Azure Pipelines; 0 when the run
+// builds none.
 func hubPR(hctx hubch.Context, getenv func(string) string) int64 {
 	var n string
 	switch hctx.CI {
@@ -698,6 +705,8 @@ func hubPR(hctx hubch.Context, getenv func(string) string) int64 {
 		n = strings.TrimSpace(getenv("CI_MERGE_REQUEST_IID"))
 	case hubch.BitbucketPipelines:
 		n = strings.TrimSpace(getenv("BITBUCKET_PR_ID"))
+	case hubch.AzurePipelines:
+		n = strings.TrimSpace(getenv("SYSTEM_PULLREQUEST_PULLREQUESTID"))
 	}
 	v, err := strconv.ParseInt(n, 10, 64)
 	if err != nil || v <= 0 {

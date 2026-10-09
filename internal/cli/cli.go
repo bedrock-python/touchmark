@@ -39,6 +39,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 )
 
 // Version, Commit and Date describe the build. A release sets them with
@@ -118,6 +119,15 @@ func Main(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 }
 
 func (e *env) main(ctx context.Context, args []string) int {
+	if strings.EqualFold(strings.TrimSpace(e.getenv("TF_BUILD")), "true") {
+		// Azure Pipelines: no logging command in anything touchmark prints.
+		out, errOut := newCommandGuard(e.stdout), newCommandGuard(e.stderr)
+		defer func() { _ = errOut.Flush() }()
+		defer func() { _ = out.Flush() }()
+		guarded := *e
+		guarded.stdout, guarded.stderr = out, errOut
+		e = &guarded
+	}
 	if len(args) == 0 {
 		e.usage(e.stderr)
 		return exitUsage

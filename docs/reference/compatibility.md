@@ -41,7 +41,8 @@ changelog before you merge it.
 - **The command line and CI:** command and flag names, flag defaults, exit codes,
   environment variable names, the names of the report files in CI, the GitHub Action's
   inputs, and the image's tags (`X.Y.Z`, `X.Y`, `latest`) and what the hub template's jobs
-  use in it (`sh`, `touchmark` on the `PATH`, user 65532).
+  use in it (`sh`, `touchmark` on the `PATH`, user 65532, and `touchmark` as the entrypoint,
+  which the Azure Pipelines step runs as the agent's user).
 
 ## Not stable
 

@@ -50,12 +50,15 @@ const (
 //     merge_request_event; on GitLab also CI_COMMIT_REF_PROTECTED=true and
 //     CI_ENVIRONMENT_NAME=touchmark-distribute; on Bitbucket Pipelines the
 //     step's deployment touchmark-distribute (BITBUCKET_DEPLOYMENT_ENVIRONMENT);
+//     on Azure Pipelines a deployment job to the environment
+//     touchmark-distribute (ENVIRONMENT_NAME);
 //   - write isolation (security.write_isolation): "platform" on GitHub
 //     Actions needs TOUCHMARK_KEY_EXPOSED=false (true: the key is visible
 //     outside the environment; unset: the probe job is missing); "none"
 //     needs security.reason (config enforces it) and adds a red report
 //     warning; "external" skips the probe. "platform" on Bitbucket
-//     Pipelines needs security.reason too (guardIsolation).
+//     Pipelines and Azure Pipelines needs security.reason too
+//     (guardIsolation).
 //
 // A dry run gets every check: it holds the write credential as distribute
 // does, and builds its drivers from the hub.yml of the ref it runs on (no
@@ -77,8 +80,12 @@ const (
 //     probe. On Bitbucket Pipelines it holds only on Premium, whose
 //     deployment permissions keep other branches (or people) out of the
 //     environment; the API does not show them, so the hub states them in
-//     security.reason, and without that statement "platform" is refused. The red warning for "none" is the caller's to add to the
-//     report: the guards return errors only.
+//     security.reason, and without that statement "platform" is refused. On
+//     Azure Pipelines the variable group that holds the key keeps other
+//     branches out only with a Branch control check, which a job's token
+//     is not known to read: the hub states it in security.reason too. The
+//     red warning for "none" is the caller's to add to the report: the
+//     guards return errors only.
 //
 // Every failed check is reported, joined, never a variable's value.
 func DistributeGuard(ctx context.Context, in GuardInput) error {
@@ -135,9 +142,12 @@ func guardContextOf(cmd string, c hubch.Context) []error {
 	}
 	switch {
 	case c.CI != hubch.GitHubActions && c.CI != hubch.GitLabCI && c.CI != hubch.GiteaActions && c.CI != hubch.ForgejoActions &&
-		c.CI != hubch.BitbucketPipelines:
+		c.CI != hubch.BitbucketPipelines && c.CI != hubch.AzurePipelines:
 		errs = append(errs, fmt.Errorf("%s cannot tell which ref this CI job builds: it runs in CI only on GitHub Actions, GitLab CI, Gitea Actions, "+
-			"Forgejo Actions and Bitbucket Pipelines", cmd))
+			"Forgejo Actions, Bitbucket Pipelines and Azure Pipelines", cmd))
+	case c.CI == hubch.AzurePipelines && c.Fingerprint() == "":
+		errs = append(errs, fmt.Errorf("%s runs on Azure Pipelines only for a hub in Azure Repos of Azure DevOps Services: this build's repository "+
+			"is elsewhere (Build.Repository.Provider), or its organization is not on dev.azure.com", cmd))
 	case !c.RefIsBranch:
 		errs = append(errs, fmt.Errorf("%s runs only on the hub's default branch; this job builds %s, which is not a branch", cmd, guardRef(c.RefName)))
 	case c.DefaultBranch != "" && c.RefName != c.DefaultBranch:
@@ -145,6 +155,9 @@ func guardContextOf(cmd string, c hubch.Context) []error {
 	case c.DefaultBranch == "" && c.CI == hubch.BitbucketPipelines:
 		errs = append(errs, fmt.Errorf("%s cannot tell whether %s is the hub's default branch: Bitbucket Pipelines names none, and the hub "+
 			"channel could not read it; give the hub a repository access token with Repositories: Read in %s", cmd, c.RefName, hubch.BitbucketTokenVar))
+	case c.DefaultBranch == "" && c.CI == hubch.AzurePipelines:
+		errs = append(errs, fmt.Errorf("%s cannot tell whether %s is the hub's default branch: Azure Pipelines names none, and the hub "+
+			"channel could not read it; map the job access token into the step (env: %s: $(System.AccessToken))", cmd, c.RefName, hubch.AzureTokenVar))
 	case c.DefaultBranch == "" && c.Event != "schedule":
 		errs = append(errs, fmt.Errorf("the CI names no default branch of the hub, so %s cannot tell whether %s is it", cmd, c.RefName))
 	}
@@ -159,6 +172,10 @@ func guardContextOf(cmd string, c hubch.Context) []error {
 	if c.CI == hubch.BitbucketPipelines && !strings.EqualFold(c.Environment, distributeEnvironment) {
 		errs = append(errs, fmt.Errorf("%s needs a step with deployment: %s on Bitbucket Pipelines (BITBUCKET_DEPLOYMENT_ENVIRONMENT), "+
 			"whose deployment variables hold the write key", cmd, distributeEnvironment))
+	}
+	if c.CI == hubch.AzurePipelines && !strings.EqualFold(c.Environment, distributeEnvironment) {
+		errs = append(errs, fmt.Errorf("%s needs a deployment job to the environment %s on Azure Pipelines (ENVIRONMENT_NAME), "+
+			"in the stage that links the variable group %s with the write key", cmd, distributeEnvironment, distributeEnvironment))
 	}
 	return errs
 }
@@ -193,6 +210,10 @@ func guardIsolation(in GuardInput, getenv func(string) string) error {
 		if in.Hub == nil || strings.TrimSpace(in.Hub.Security.Reason) == "" {
 			return errors.New(BitbucketPlatformRefusal)
 		}
+	case hubch.AzurePipelines:
+		if in.Hub == nil || strings.TrimSpace(in.Hub.Security.Reason) == "" {
+			return errors.New(AzurePlatformRefusal)
+		}
 	}
 	return nil
 }
@@ -215,6 +236,25 @@ const BitbucketPlatformRefusal = "security.write_isolation: platform on Bitbucke
 	" restricted to the default branch (or to admins), which only Bitbucket Premium offers and its API does not show: restrict it " +
 	"(Repository settings > Deployments) and state that in security.reason; on Free and Standard set write_isolation to none with a reason, " +
 	"or to external; see " + docsurl.WriteIsolation
+
+// AzurePlatformRefusal is why security.write_isolation platform without
+// security.reason is refused on Azure Pipelines.
+//
+// Any branch's azure-pipelines.yml may link the variable group
+// touchmark-distribute and so read the write key, unless the group's
+// Branch control check admits the default branch alone (the stage of any
+// other branch then fails its checks;
+// https://learn.microsoft.com/en-us/azure/devops/pipelines/process/approvals).
+// A job's token is not known to read the checks (their API is a preview,
+// and which role reads it is not documented), so touchmark cannot check
+// them in the run: the hub states them in security.reason, reviewed like
+// the rest of hub.yml, and doctor --hub-token reads them with a
+// maintainer's token. The template's hub.yml does not state them, so a hub
+// on Azure Pipelines is safe by default.
+const AzurePlatformRefusal = "security.write_isolation: platform on Azure Pipelines needs the variable group " + distributeEnvironment +
+	" that holds the write key protected by a Branch control check that admits the default branch only, which touchmark cannot read " +
+	"from the job: add the check (Pipelines > Library > " + distributeEnvironment + " > Approvals and checks), state it in " +
+	"security.reason, and let doctor --hub-token verify it; or set write_isolation to external, or to none with a reason; see " + docsurl.WriteIsolation
 
 // DistributeEnvironment is the environment of the hub's CI that holds the
 // write key and runs distribute.

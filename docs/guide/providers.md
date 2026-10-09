@@ -244,7 +244,16 @@ reminder to renew the tokens before they expire.
 - **The marker lives in a pull request property** (`touchmark.marker`), not in the
   description, which Azure DevOps limits to 4 000 characters: the description is short,
   its lists are cut to fit, and the marker still records every change. Editing the
-  description cannot change or forge the marker; a marker pasted into it is ignored.
+  description in the web UI leaves the marker as it is, and a marker pasted into the
+  description is ignored. The property is not protected, though: anyone who may
+  contribute to pull requests in the project, project Readers included by default, may
+  be able to write it through the API (see the
+  [threat model](../project/threat-model.md)). touchmark writes the property right after
+  it opens a pull request, trying a few times; should it still fail, it abandons the new
+  pull request and opens another, so that none stays without its marker.
+- **People's text in the description** is theirs: a close or a refresh of the marker
+  writes the property alone and sends no description, so a description people filled up
+  to the limit never stops touchmark from closing its pull request.
 - **Labels** are added by name, as `pr.labels` says. **Drafts** are Azure DevOps' own
   draft flag (`pr.draft`).
 - **Closing.** touchmark closes its own pull request by abandoning it, after it stored the
@@ -267,9 +276,16 @@ reminder to renew the tokens before they expire.
 - **Commit author.** touchmark authors the writer's commits with its sign-in address when
   Azure DevOps shows one, else with `<identity id>@touchmark.invalid`.
 - **Pace.** Azure DevOps meters a user's load over five minutes and announces it in its
-  `X-RateLimit-*` headers, which pause the provider before it delays requests; touchmark
+  `X-RateLimit-*` headers, which pause the provider before it delays requests, and in
+  `Retry-After` on requests it delayed, which pauses the provider for that long; touchmark
   reads 120 times a minute with four targets at once and writes at most 30 times a minute
   by default; `limits` overrides it.
+- **The reader needs a token.** Azure DevOps sends anonymous reads of files (the Trees
+  API) and of pull request properties to its sign-in page even in public projects, so a
+  plan without the reader's token fails on Azure DevOps targets.
+- **Cost.** Listing a target's pull requests reads the marker of every open one and of the
+  60 newest abandoned and completed ones (touchmark remembers the 50 newest closed pull
+  requests); older closed pull requests count as without a marker.
 
 What only a live organization can confirm, and the driver assumes from the REST
 reference: the size limit of pull request properties and whether they survive an
@@ -277,8 +293,10 @@ abandon; whether labels in a create request are applied (touchmark adds missing 
 after it); the error of a duplicate pull request (TF401179); whether `closedBy` is set
 on abandoned pull requests; the order of pull request listings and where they cut
 descriptions; the answer to a refused PAT (401, a sign-in redirect or a 203 page); the
-exact texts of push refusals; the `mode` strings of the Trees API; and how disabled and
-renamed repositories answer.
+exact texts of push refusals; the `mode` strings of the Trees API; how disabled and
+renamed repositories answer; who can write pull request properties (whether project
+Readers, through "Contribute to pull requests", can set or change `touchmark.marker`);
+and whether `Retry-After` comes on answers that went through.
 
 ## Moving
 

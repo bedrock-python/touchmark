@@ -1,4 +1,4 @@
-# error: previous_fingerprints[0]: "github.com" must be host/numeric-id
+# error: previous_fingerprints[0]: "github.com" must be host/repository-id
 version: 1
 id: acme-eng
 previous_fingerprints: [github.com]

@@ -25,7 +25,7 @@ memory:
   auto_close_cooldown: 30d          # a bot's close: proposed again after 30d, then 60d; the third counts
 security:
   write_isolation: platform         # platform | external | none
-  # reason: "..."                   # required with none
+  # reason: "..."                   # required with none, and with platform on Bitbucket Pipelines
   private_targets_in_public_hub: skip   # skip | deliver
 providers:
   - id: gh                          # TOUCHMARK_GH_* variables; gh:owner/name in targets.yml
@@ -63,7 +63,9 @@ The schema cannot say everything. `touchmark check` also requires:
   neither a current pack nor claimed by two packs;
 - `commit.message` and `pr.title` are not blank and do not start with `Draft:` or `WIP:`
   (set `pr.draft` instead); `commit.message` holds no git scissors line;
-- `security.reason` is set when `write_isolation` is `none`;
+- `security.reason` is set when `write_isolation` is `none` (and `distribute` and
+  `doctor` on Bitbucket Pipelines need it under `platform` too: see
+  [A hub on Bitbucket Cloud](../getting-started/bitbucket.md));
 - no line of the file looks like a token (`ghp_`, `github_pat_`, `ghs_`, `glpat-`,
   `-----BEGIN`).
 
@@ -80,7 +82,7 @@ In a hub pull request, `providers` and `ca_file` are read from the default branc
 | `id` | string, 3 to 40 characters, required | Short slug naming this hub, used in the sync branch name and in pull request markers. The template's placeholder "change-me" fails `touchmark check`. |
 | `branch` | string | Sync branch in every target. Default: touchmark/&lt;id&gt;. |
 | `branch_aliases` | list of strings | Former sync branch names. Open pull requests on them are still recognised as this hub's own. |
-| `previous_fingerprints` | list of strings | Former fingerprints of this hub (host/numeric-repository-id), after the hub moved. |
+| `previous_fingerprints` | list of strings | Former fingerprints of this hub (host/repository-id: a numeric id, or a Bitbucket repository UUID with or without braces), after the hub moved. |
 | `opt_in_file` | string | Path of the opt-in file in targets. Default: .engineering-assets.yml. |
 | `commit` | object | Commit settings. The commit author is always the provider's writer account. |
 | `commit.message` | string | Commit message. Default: "chore: sync engineering assets". Must not start with Draft: or WIP:, which turns a GitLab merge request into a draft. |
@@ -99,8 +101,8 @@ In a hub pull request, `providers` and `ca_file` are read from the default branc
 | `memory` | object | Memory of pull requests closed without merging. |
 | `memory.auto_close_cooldown` | string | How long content closed by a bot waits before it is proposed again, in days or hours. Default: 30d. |
 | `security` | object | — |
-| `security.write_isolation` | one of `platform`, `external`, `none` | Where the write key lives. platform: in the hub's CI platform, checked by a probe; external: issued by an external vault over OIDC; none: risk accepted, needs a reason. Default: platform. |
-| `security.reason` | string | Why the write key cannot be isolated. Required with write_isolation: none. |
+| `security.write_isolation` | one of `platform`, `external`, `none` | Where the write key lives. platform: in the hub's CI platform, checked by a probe (on Bitbucket Pipelines only with a reason); external: issued by an external vault over OIDC; none: risk accepted, needs a reason. Default: platform. |
+| `security.reason` | string | Why the write key cannot be isolated. Required with write_isolation: none, and on Bitbucket Pipelines with platform, where it states the deployment permissions (Premium) that keep the write key on the default branch, which touchmark cannot read. |
 | `security.private_targets_in_public_hub` | one of `skip`, `deliver` | What a public hub does with non-public targets: skip them, or deliver and let their names reach public CI logs. Default: skip. |
 | `providers` | list of objects | Platforms this hub delivers to. Targets refer to them by id. |
 | `providers[].id` | string, required | Name targets.yml uses for this provider, and the &lt;ID&gt; of its TOUCHMARK_&lt;ID&gt;_\* variables. |

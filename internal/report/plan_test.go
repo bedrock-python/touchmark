@@ -1,6 +1,7 @@
 package report
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -128,6 +129,44 @@ func TestWriteComment(t *testing.T) {
 	s := cut.String()
 	if len(s) > 20000 || !strings.HasSuffix(s, commentCut+marker) || strings.Count(s, "<details>") != strings.Count(s, "</details>") {
 		t.Errorf("cut comment of %d bytes:\n%s", len(s), s[max(0, len(s)-400):])
+	}
+}
+
+// WritePlainComment renders the same report without HTML (Bitbucket shows
+// HTML as text): every section a bold title, and the cut note and closing
+// line as WriteComment has them.
+func TestWritePlainComment(t *testing.T) {
+	d := planned()
+	const marker = "\n[touchmark-plan]: # \"touchmark plan: acme-eng\"\n"
+	var html, plain strings.Builder
+	if err := d.WriteComment(&html, 0, marker); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.WritePlainComment(&plain, 0, marker); err != nil {
+		t.Fatal(err)
+	}
+	s := plain.String()
+	if !strings.Contains(html.String(), "<details>") {
+		t.Fatalf("the sample report has no section to compare:\n%s", html.String())
+	}
+	if strings.Contains(s, "<") || !strings.HasSuffix(s, marker) {
+		t.Errorf("plain comment:\n%s", s)
+	}
+	for _, m := range regexp.MustCompile(`<details><summary>(.*)</summary>`).FindAllStringSubmatch(html.String(), -1) {
+		if !strings.Contains(s, "\n**"+m[1]+"**\n") {
+			t.Errorf("plain comment lacks the section title **%s**:\n%s", m[1], s)
+		}
+	}
+	for i := range 3000 {
+		d.Targets = append(d.Targets, DeliveryTarget{Provider: "bb", Host: "bitbucket.org", RepoID: "9", Path: "acme/many-" + strings.Repeat("x", i%40),
+			Outcome: OutcomeOpened})
+	}
+	var cut strings.Builder
+	if err := d.WritePlainComment(&cut, 20000, marker); err != nil {
+		t.Fatal(err)
+	}
+	if s := cut.String(); len(s) > 20000 || !strings.HasSuffix(s, commentCut+marker) || strings.Contains(s, "<") {
+		t.Errorf("cut plain comment of %d bytes:\n%s", len(s), s[max(0, len(s)-400):])
 	}
 }
 

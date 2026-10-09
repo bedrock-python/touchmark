@@ -72,7 +72,7 @@ and the branch head before and after.
 | `engine` | string, required | touchmark's version. |
 | `hub` | object, required | The hub the run read. |
 | `hub.id` | string, required | hub.yml's id. |
-| `hub.fingerprint` | string, required | The hub's host and immutable repository id, e.g. github.com/712345678. |
+| `hub.fingerprint` | string, required | The hub's host and immutable repository id, e.g. github.com/712345678; on Bitbucket the repository UUID, lowercase without braces. |
 | `hub.commit` | string, required | Full commit id: 40 or 64 lowercase hex digits. |
 | `hub.pr` | integer ≥ 1 | The hub pull request plan ran on. |
 | `outcome` | one of `completed`, `superseded`, required | completed, or superseded when the hub's default branch had moved on and nothing was inspected or written. |
@@ -189,7 +189,7 @@ hub, for each provider's write identity, and for each target. See
 | `engine` | string, required | touchmark's version. |
 | `hub` | object, required | The hub the run read. |
 | `hub.id` | string, required | hub.yml's id. |
-| `hub.fingerprint` | string, required | The hub's host and immutable repository id, e.g. github.com/712345678. |
+| `hub.fingerprint` | string, required | The hub's host and immutable repository id, e.g. github.com/712345678; on Bitbucket the repository UUID, lowercase without braces. |
 | `hub.commit` | string, required | Full commit id: 40 or 64 lowercase hex digits. |
 | `strict` | boolean, required | The run had --strict: a check that warns or is unknown, or an incomplete resolve, exits with code 3. |
 | `hub_token` | boolean, required | doctor --hub-token read, with a maintainer's token, where the hub keeps its secrets. |

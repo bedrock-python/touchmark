@@ -32,13 +32,17 @@ done. A Gitea or Forgejo admin token is refused.
 | `GITHUB_TOKEN` | the hub channel on GitHub Actions (and on Gitea and Forgejo when `GITEA_TOKEN` is unset): the tip of the default branch, the hub's visibility, the environment's branch policy, `plan --comment` |
 | `CI_JOB_TOKEN` | the hub channel on GitLab CI |
 | `GITEA_TOKEN` | the hub channel on Gitea and Forgejo Actions |
+| `TOUCHMARK_PIPELINES_TOKEN` | the hub channel on Bitbucket Pipelines, which gives a step no API token: an access token of the hub repository with *Repositories: Read* (the default branch, its tip, the visibility) and *Pull requests: Write* (`plan --comment`) |
 | `CI` | any value but `""`, `false` and `0` makes a run a CI run: operation flags exit 2, and an unknown hub visibility counts as public |
 
 From the CI, touchmark also reads the platform's own variables: the server and API URLs,
 the repository and its id (the hub's fingerprint), the ref and the event, the step
 summary file, the job's timeout and start (the default `--deadline`), the merge request
-and its base (the scope of `plan`), the project's visibility, and on GitLab
-`CI_COMMIT_REF_PROTECTED`, `CI_ENVIRONMENT_NAME` and `CI_SERVER_TLS_CA_FILE`.
+and its base (the scope of `plan`), the project's visibility, on GitLab
+`CI_COMMIT_REF_PROTECTED`, `CI_ENVIRONMENT_NAME` and `CI_SERVER_TLS_CA_FILE`, and on
+Bitbucket Pipelines `BITBUCKET_REPO_UUID`, `BITBUCKET_REPO_FULL_NAME`, `BITBUCKET_BRANCH`,
+`BITBUCKET_TAG`, `BITBUCKET_PR_ID`, `BITBUCKET_DEPLOYMENT_ENVIRONMENT` and
+`BITBUCKET_REPO_IS_PRIVATE`.
 
 ## In the GitHub Action
 

@@ -104,7 +104,7 @@ last commit (`check`, `plan`, `status`, `apply`).
 
 `plan` needs the read key, the hub's fingerprint, and providers it can name: a
 `providers` list or `platform` (and `base_url`) in `hub.yml`, or an origin on github.com,
-a `*.ghe.com` host or gitlab.com.
+a `*.ghe.com` host, gitlab.com or bitbucket.org.
 
 ```sh
 export TOUCHMARK_READ_TOKEN=…            # or TOUCHMARK_READ_APP_ID and TOUCHMARK_READ_APP_KEY
@@ -113,7 +113,9 @@ touchmark plan --hub . --hub-fp github.com/712345678 --only acme/billing --forma
 ```
 
 The fingerprint is the hub's host and repository id: on GitHub
-`gh api repos/OWNER/HUB --jq .id`, on GitLab the project id on the project's page. A
+`gh api repos/OWNER/HUB --jq .id`, on GitLab the project id on the project's page, on
+Bitbucket the repository's UUID (`bitbucket.org/{…}`, its `uuid` in
+`GET https://api.bitbucket.org/2.0/repositories/WORKSPACE/HUB`). A
 local run cannot read the tip of the hub's default branch, and says so in a warning.
 
 `plan` needs git 2.45 or newer, as `distribute` does: both read every target with it.

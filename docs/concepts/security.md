@@ -34,7 +34,7 @@ reviewed merges reach. `security.write_isolation` in `hub.yml` says how:
 
 | Mode | The write key | touchmark checks |
 |---|---|---|
-| `platform` (default) | in the hub's CI: GitHub's environment `touchmark-distribute` limited to the default branch; GitLab's protected, masked, hidden variable scoped to that environment | a probe in the jobs any branch can start; on GitHub also the environment's branch policy, through the hub channel |
+| `platform` (default) | in the hub's CI: GitHub's environment `touchmark-distribute` limited to the default branch; GitLab's protected, masked, hidden variable scoped to that environment; on Bitbucket Premium a secured variable of the deployment `touchmark-distribute`, which only the default branch may deploy to | a probe in the jobs any branch can start; on GitHub also the environment's branch policy, through the hub channel; on Bitbucket the hub's statement in `security.reason`, since the API does not show the deployment permissions |
 | `external` | released by an external secret store through the CI's OIDC token, bound to the default branch (GitHub `sub` = `repo:ORG/HUB:ref:refs/heads/main` or `…:environment:touchmark-distribute`; GitLab `project_path`, `ref`, `ref_type`, `ref_protected`) | the job's own context |
 | `none` | anywhere; the risk is accepted | nothing; `security.reason` is required, and every report and `doctor` show it as a warning |
 
@@ -52,10 +52,20 @@ their own workflow instead of running yours. So the probe runs where an attacker
 - **Gitea and Forgejo Actions:** every branch sees every secret, so `platform` cannot
   hold and `distribute` refuses it there. Run the hub's CI on GitHub or GitLab, or use
   `external`, or `none` with every branch protected.
+- **Bitbucket Pipelines:** `touchmark probe` runs in every pipeline, in a step without
+  the deployment, and fails if it sees a write key: a repository or workspace variable
+  reaches every branch. A deployment variable reaches any step that names the
+  deployment, in any branch's `bitbucket-pipelines.yml`, unless the environment's
+  deployment permissions (Premium) admit the default branch alone; Bitbucket's API does
+  not show them, so under `platform` `distribute` and `doctor` refuse to run unless
+  `security.reason` states them. Without Premium use `none` with a reason, or
+  `external`. See [A hub on Bitbucket Cloud](../getting-started/bitbucket.md).
 
 **The guards** of `distribute` (and of `doctor` in CI), each exit 2 with nothing written:
 the run is not on the default branch, or is a pull request event; on GitLab the ref is
-not protected or the job is not in the environment `touchmark-distribute`; the probe saw
+not protected or the job is not in the environment `touchmark-distribute`; on Bitbucket
+the step has no `deployment: touchmark-distribute`, the default branch could not be read,
+or `platform` comes without the statement in `security.reason`; the probe saw
 a write key or did not run; an operation flag was given in CI; git is older than 2.45;
 the write key belongs to another account than `hub.yml`'s `writer`. `plan` in CI exits 2
 when it sees any write key. A run on a commit that is no longer the tip of the default

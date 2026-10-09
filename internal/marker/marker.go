@@ -136,8 +136,9 @@ var (
 	// hyphens, so an id never holds "--", which HTML comments forbid.
 	hubRe = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 	// fingerprintRe is the fingerprint syntax of hub.yml
-	// (previous_fingerprints): host, optional port, numeric repository id.
-	fingerprintRe = regexp.MustCompile(`^[A-Za-z0-9.-]+(:[0-9]{1,5})?/[0-9]+$`)
+	// (previous_fingerprints) in canonical form: host, optional port, and a
+	// numeric repository id or a lowercase Bitbucket repository UUID.
+	fingerprintRe = regexp.MustCompile(`^[A-Za-z0-9.-]+(:[0-9]{1,5})?/([0-9]+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$`)
 )
 
 // errTooLarge marks an Encode failure caused by size alone: the marker does
@@ -424,7 +425,7 @@ func checkData(m Marker) error {
 	case d.Hub != m.Hub:
 		return fmt.Errorf("data hub %.40q differs from the header's %.40q", d.Hub, m.Hub)
 	case !fingerprintRe.MatchString(d.FP):
-		return fmt.Errorf("data fp %.40q is not host/numeric-id", d.FP)
+		return fmt.Errorf("data fp %.40q is not host/repository-id", d.FP)
 	case FP16(d.FP) != m.FP16:
 		return fmt.Errorf("data fp %.40q does not hash to the header's fp %s", d.FP, m.FP16)
 	}

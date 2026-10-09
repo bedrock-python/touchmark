@@ -3,7 +3,7 @@
 One hub can deliver to GitHub, GitLab, Gitea and Forgejo at once, including
 self-managed instances. Each platform is a **provider** in `hub.yml`, with its own reader
 and writer; `targets.yml` names repositories by provider. Bitbucket Cloud is a provider
-too, delivered to from a hub on another platform: see [Bitbucket Cloud](#bitbucket-cloud).
+too, and can host the hub: see [Bitbucket Cloud](#bitbucket-cloud).
 
 ## One provider: the shorthand
 
@@ -129,9 +129,10 @@ covers it.
 ## Bitbucket Cloud
 
 A provider of type `bitbucket` is Bitbucket Cloud at `https://bitbucket.org` (leave `url`
-out). `plan`, `distribute` and `doctor` work on it from a hub on GitHub or GitLab, or
-wherever you run touchmark; a hub whose own CI is Bitbucket Pipelines is not supported
-yet, and `setup` has nothing for it. Bitbucket Data Center is not supported.
+out). `plan`, `distribute` and `doctor` work on it from a hub on GitHub or GitLab, from
+a hub on Bitbucket itself, whose CI is Bitbucket Pipelines (see
+[A hub on Bitbucket Cloud](../getting-started/bitbucket.md)), or wherever you run
+touchmark; `setup` has nothing for it yet. Bitbucket Data Center is not supported.
 
 ```yaml
 # hub.yml
@@ -143,7 +144,8 @@ providers:
 
 **Accounts.** Make two bot accounts (Atlassian accounts that only touchmark uses), each
 with an API token; app passwords are gone, and repository, project and workspace access
-tokens are not supported, since they cannot tell who they are. A token's scopes do not
+tokens are not supported as reader or writer, since they cannot tell who they are (a
+hub on Bitbucket uses one for its own repository only, `TOUCHMARK_PIPELINES_TOKEN`). A token's scopes do not
 narrow the repositories it reaches, the account's permissions do: that is why the writer
 is an account of its own.
 

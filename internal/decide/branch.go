@@ -113,8 +113,9 @@ var (
 	// trailerHubIDRe is the hub id syntax (hub.yml id, marker hub).
 	trailerHubIDRe = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 	// trailerFingerprintRe is the fingerprint syntax (hub.yml
-	// previous_fingerprints, marker fp): host, optional port, numeric id.
-	trailerFingerprintRe = regexp.MustCompile(`^[A-Za-z0-9.-]+(:[0-9]{1,5})?/[0-9]+$`)
+	// previous_fingerprints, marker fp) in canonical form: host, optional port,
+	// and a numeric id or a lowercase Bitbucket repository UUID without braces.
+	trailerFingerprintRe = regexp.MustCompile(`^[A-Za-z0-9.-]+(:[0-9]{1,5})?/([0-9]+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$`)
 )
 
 // trailerGitPrefixes are the prefixes git itself writes; one of them lets

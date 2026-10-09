@@ -216,6 +216,12 @@ func TestResolveProvidersImplicit(t *testing.T) {
 			env:  envOf("FORGEJO_ACTIONS", "true", "GITEA_ACTIONS", "true", "GITHUB_ACTIONS", "true", "GITHUB_SERVER_URL", "https://codeberg.org"),
 			want: implicit("forgejo", "https://codeberg.org", "codeberg.org", "https://codeberg.org/api/v1", ""),
 		},
+		{
+			// Pipelines names no server: it runs on Bitbucket Cloud only.
+			name: "Bitbucket Pipelines",
+			env:  envOf("BITBUCKET_BUILD_NUMBER", "17", "CI", "true", "BITBUCKET_REPO_UUID", "{3f2a8d4e-1b6c-4f0a-9e7d-5c2b1a0f9e8d}"),
+			want: implicit("bitbucket", "https://bitbucket.org", "bitbucket.org", "https://api.bitbucket.org/2.0", ""),
+		},
 	}
 	legacy, _, err := ParseHub(nil)
 	if err != nil {
@@ -270,7 +276,7 @@ func TestResolveProvidersErrors(t *testing.T) {
 			name: "no providers outside CI",
 			hub:  &Hub{ID: "acme-eng"},
 			env:  envOf("CI", "true", "GITHUB_ACTIONS", "1"),
-			want: "hub.yml declares no providers, no CI environment names one (GitHub Actions, GitLab CI, Gitea or Forgejo Actions), and the hub's origin remote is not on github.com",
+			want: "hub.yml declares no providers, no CI environment names one (GitHub Actions, GitLab CI, Gitea or Forgejo Actions, Bitbucket Pipelines), and the hub's origin remote is not on github.com",
 		},
 		{
 			name: "no server URL",
@@ -411,6 +417,7 @@ func TestResolveProvidersOrigin(t *testing.T) {
 		{"GitHub.com", implicit("github", "https://github.com", "github.com", "https://api.github.com", "https://api.github.com/graphql")},
 		{"acme.ghe.com", implicit("github", "https://acme.ghe.com", "acme.ghe.com", "https://api.acme.ghe.com", "https://api.acme.ghe.com/graphql")},
 		{"gitlab.com", implicit("gitlab", "https://gitlab.com", "gitlab.com", "https://gitlab.com/api/v4", "https://gitlab.com/api/graphql")},
+		{"bitbucket.org", implicit("bitbucket", "https://bitbucket.org", "bitbucket.org", "https://api.bitbucket.org/2.0", "")},
 	} {
 		got, err := h.ResolveProvidersWithOrigin(envOf(), tc.origin)
 		if err != nil || !reflect.DeepEqual(got, []ResolvedProvider{tc.want}) {
@@ -447,6 +454,10 @@ func TestCanonicalFingerprint(t *testing.T) {
 		"host/0":                       "host/0",
 		"github.com":                   "github.com",
 		"":                             "",
+		// Bitbucket: BITBUCKET_REPO_UUID's braces go, and the case.
+		"bitbucket.org/{3F2A8D4E-1B6C-4F0A-9E7D-5C2B1A0F9E8D}": "bitbucket.org/3f2a8d4e-1b6c-4f0a-9e7d-5c2b1a0f9e8d",
+		"Bitbucket.org/3f2a8d4e-1b6c-4f0a-9e7d-5c2b1a0f9e8d":   "bitbucket.org/3f2a8d4e-1b6c-4f0a-9e7d-5c2b1a0f9e8d",
+		"bitbucket.org/{3f2a8d4e-1b6c-4f0a-9e7d-5c2b1a0f9e8d":  "bitbucket.org/{3f2a8d4e-1b6c-4f0a-9e7d-5c2b1a0f9e8d",
 	} {
 		if got := CanonicalFingerprint(in); got != want {
 			t.Errorf("CanonicalFingerprint(%q) = %q, want %q", in, got, want)
@@ -454,6 +465,10 @@ func TestCanonicalFingerprint(t *testing.T) {
 	}
 	h := mustParseHub(t, []byte("version: 1\nid: acme-eng\nprevious_fingerprints: [GitLab.example.com:443/01234, github.com/1]\n"))
 	if want := []string{"gitlab.example.com/1234", "github.com/1"}; !reflect.DeepEqual(h.PreviousFingerprints, want) {
+		t.Errorf("previous_fingerprints = %q, want %q", h.PreviousFingerprints, want)
+	}
+	h = mustParseHub(t, []byte("version: 1\nid: acme-eng\nprevious_fingerprints: [\"bitbucket.org/{3F2A8D4E-1B6C-4F0A-9E7D-5C2B1A0F9E8D}\"]\n"))
+	if want := []string{"bitbucket.org/3f2a8d4e-1b6c-4f0a-9e7d-5c2b1a0f9e8d"}; !reflect.DeepEqual(h.PreviousFingerprints, want) {
 		t.Errorf("previous_fingerprints = %q, want %q", h.PreviousFingerprints, want)
 	}
 }

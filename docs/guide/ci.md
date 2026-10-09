@@ -1,7 +1,8 @@
 # Run it in CI
 
 The [hub template](https://github.com/bedrock-python/engineering-assets-template) ships
-the CI files for GitHub Actions, GitLab CI, Gitea and Forgejo Actions. Copy them rather
+the CI files for GitHub Actions, GitLab CI, Gitea and Forgejo Actions, and Bitbucket
+Pipelines; each platform reads only its own. Copy them rather
 than writing your own: the jobs, the probe and the environment fit together. This page
 explains what they rely on.
 
@@ -132,6 +133,57 @@ runner's 3-hour limit, and `doctor` weekly in a workflow of its own. Remember th
 and Forgejo Actions give every branch every secret: see
 [A hub on Gitea or Forgejo](../getting-started/gitea-forgejo.md).
 
+## Bitbucket Pipelines
+
+Every step runs in the image, pinned by digest, with the hub's whole history; the
+template's `bitbucket-pipelines.yml`:
+
+```yaml
+image: ghcr.io/bedrock-python/touchmark:X.Y.Z@sha256:<digest>
+clone:
+  depth: full                     # touchmark reads the hub's whole history
+
+pipelines:
+  pull-requests:
+    "**":
+      - step: { name: probe, clone: { enabled: false }, script: [touchmark probe] }
+      - step: { name: check, script: [touchmark check --hub .] }
+      - step:
+          name: plan
+          script:
+            - git fetch --no-tags origin "+refs/heads/$BITBUCKET_PR_DESTINATION_BRANCH:refs/remotes/origin/$BITBUCKET_PR_DESTINATION_BRANCH"
+            - touchmark plan --hub . --strict --comment
+          artifacts: [touchmark-report.md, touchmark-report.json]
+  branches:
+    "{main,master}":
+      - step: { name: probe, clone: { enabled: false }, script: [touchmark probe] }
+      - step:
+          name: distribute
+          deployment: touchmark-distribute
+          max-time: 360
+          script: [touchmark distribute --hub . --deadline 5h30m]
+          artifacts: [touchmark-report.md, touchmark-report.json, touchmark-report.jsonl]
+  custom:
+    distribute: [...]             # probe, then distribute: Run pipeline and a daily schedule
+    doctor: [...]                 # probe, then doctor in the deployment: a weekly schedule
+```
+
+- **The write key** is a secured variable of the deployment `touchmark-distribute`, which
+  only a step with `deployment: touchmark-distribute` gets. touchmark checks
+  `BITBUCKET_DEPLOYMENT_ENVIRONMENT` in `distribute` and `doctor`. Which branches may
+  deploy is a Premium setting the API does not show: see
+  [A hub on Bitbucket Cloud](../getting-started/bitbucket.md#where-the-write-key-can-live).
+- **The hub channel** uses `TOUCHMARK_PIPELINES_TOKEN`, an access token of the hub:
+  Pipelines names no default branch and gives a step no API token, so touchmark reads
+  the default branch, its tip and the hub's visibility through the API, and keeps
+  `plan`'s comment with it.
+- **`probe`** runs without the deployment at the start of every pipeline, so a write key
+  in a repository or workspace variable stops it before anything else.
+- **Schedules** are set up in the website (*Pipelines → Schedules*) for the custom
+  pipelines `distribute` (daily) and `doctor` (weekly), on the default branch.
+- **The hub's fingerprint** is `bitbucket.org/` and `BITBUCKET_REPO_UUID` without its
+  braces, lowercase.
+
 ## Reports, summaries and annotations
 
 In CI, `plan` and `distribute` leave their report as `touchmark-report.json` and
@@ -149,6 +201,10 @@ job's artifacts.
   the job's log and its artifacts (`expose_as` shows it on the merge request).
 - **Gitea 1.27 with runner 2.0:** the step summary. **Forgejo:** the log and the
   artifacts.
+- **Bitbucket Pipelines:** no step summary or annotations: the log and the step's
+  artifacts. `plan --comment` keeps the report in one comment of the hub pull request
+  with `TOUCHMARK_PIPELINES_TOKEN`, without HTML (Bitbucket shows it as text), its marker
+  a Markdown link reference definition.
 
 In a public hub, targets that are not public are only counted in all of these outputs,
 never named.

@@ -48,12 +48,14 @@ const (
 //   - in CI: the run builds the hub's default branch (RefIsBranch and
 //     RefName == DefaultBranch) and the event is not pull_request* or
 //     merge_request_event; on GitLab also CI_COMMIT_REF_PROTECTED=true and
-//     CI_ENVIRONMENT_NAME=touchmark-distribute;
+//     CI_ENVIRONMENT_NAME=touchmark-distribute; on Bitbucket Pipelines the
+//     step's deployment touchmark-distribute (BITBUCKET_DEPLOYMENT_ENVIRONMENT);
 //   - write isolation (security.write_isolation): "platform" on GitHub
 //     Actions needs TOUCHMARK_KEY_EXPOSED=false (true: the key is visible
 //     outside the environment; unset: the probe job is missing); "none"
 //     needs security.reason (config enforces it) and adds a red report
-//     warning; "external" skips the probe.
+//     warning; "external" skips the probe. "platform" on Bitbucket
+//     Pipelines needs security.reason too (guardIsolation).
 //
 // A dry run gets every check: it holds the write credential as distribute
 // does, and builds its drivers from the hub.yml of the ref it runs on (no
@@ -72,7 +74,10 @@ const (
 //     every branch's jobs see: refused there, with the ways out (external,
 //     or none with a reason). On GitLab the probe runs in the hub's merge
 //     request pipelines instead (`touchmark probe`), and a local run has no
-//     probe. The red warning for "none" is the caller's to add to the
+//     probe. On Bitbucket Pipelines it holds only on Premium, whose
+//     deployment permissions keep other branches (or people) out of the
+//     environment; the API does not show them, so the hub states them in
+//     security.reason, and without that statement "platform" is refused. The red warning for "none" is the caller's to add to the
 //     report: the guards return errors only.
 //
 // Every failed check is reported, joined, never a variable's value.
@@ -116,7 +121,8 @@ func guardInCI(c hubch.Context, getenv func(string) string) bool {
 }
 
 // guardContext checks that a CI job of distribute builds the hub's default
-// branch, for no pull request, and on GitLab in the protected environment.
+// branch, for no pull request, and on GitLab and Bitbucket in the
+// environment that holds the write key.
 func guardContext(c hubch.Context) []error { return guardContextOf("distribute", c) }
 
 // guardContextOf is guardContext for command cmd (distribute, doctor): the
@@ -128,12 +134,17 @@ func guardContextOf(cmd string, c hubch.Context) []error {
 		errs = append(errs, fmt.Errorf("%s does not run for the %s event: only a run of the hub's default branch may hold the write key", cmd, ev))
 	}
 	switch {
-	case c.CI != hubch.GitHubActions && c.CI != hubch.GitLabCI && c.CI != hubch.GiteaActions && c.CI != hubch.ForgejoActions:
-		errs = append(errs, fmt.Errorf("%s cannot tell which ref this CI job builds: it runs in CI only on GitHub Actions, GitLab CI, Gitea Actions and Forgejo Actions", cmd))
+	case c.CI != hubch.GitHubActions && c.CI != hubch.GitLabCI && c.CI != hubch.GiteaActions && c.CI != hubch.ForgejoActions &&
+		c.CI != hubch.BitbucketPipelines:
+		errs = append(errs, fmt.Errorf("%s cannot tell which ref this CI job builds: it runs in CI only on GitHub Actions, GitLab CI, Gitea Actions, "+
+			"Forgejo Actions and Bitbucket Pipelines", cmd))
 	case !c.RefIsBranch:
 		errs = append(errs, fmt.Errorf("%s runs only on the hub's default branch; this job builds %s, which is not a branch", cmd, guardRef(c.RefName)))
 	case c.DefaultBranch != "" && c.RefName != c.DefaultBranch:
 		errs = append(errs, fmt.Errorf("%s runs only on the hub's default branch %s, not on %s", cmd, c.DefaultBranch, c.RefName))
+	case c.DefaultBranch == "" && c.CI == hubch.BitbucketPipelines:
+		errs = append(errs, fmt.Errorf("%s cannot tell whether %s is the hub's default branch: Bitbucket Pipelines names none, and the hub "+
+			"channel could not read it; give the hub a repository access token with Repositories: Read in %s", cmd, c.RefName, hubch.BitbucketTokenVar))
 	case c.DefaultBranch == "" && c.Event != "schedule":
 		errs = append(errs, fmt.Errorf("the CI names no default branch of the hub, so %s cannot tell whether %s is it", cmd, c.RefName))
 	}
@@ -144,6 +155,10 @@ func guardContextOf(cmd string, c hubch.Context) []error {
 		if c.Environment != distributeEnvironment {
 			errs = append(errs, fmt.Errorf("%s needs the job's environment %s on GitLab (CI_ENVIRONMENT_NAME), which holds the write key", cmd, distributeEnvironment))
 		}
+	}
+	if c.CI == hubch.BitbucketPipelines && !strings.EqualFold(c.Environment, distributeEnvironment) {
+		errs = append(errs, fmt.Errorf("%s needs a step with deployment: %s on Bitbucket Pipelines (BITBUCKET_DEPLOYMENT_ENVIRONMENT), "+
+			"whose deployment variables hold the write key", cmd, distributeEnvironment))
 	}
 	return errs
 }
@@ -174,9 +189,32 @@ func guardIsolation(in GuardInput, getenv func(string) string) error {
 	case hubch.GiteaActions, hubch.ForgejoActions:
 		return errors.New("security.write_isolation: platform cannot hold on Gitea and Forgejo Actions, whose secrets every branch's jobs see: " +
 			"run distribute on GitHub Actions or GitLab CI, or set write_isolation to external, or to none with a reason")
+	case hubch.BitbucketPipelines:
+		if in.Hub == nil || strings.TrimSpace(in.Hub.Security.Reason) == "" {
+			return errors.New(BitbucketPlatformRefusal)
+		}
 	}
 	return nil
 }
+
+// BitbucketPlatformRefusal is why security.write_isolation platform without
+// security.reason is refused on Bitbucket Pipelines.
+//
+// Any branch's bitbucket-pipelines.yml may name a step with deployment:
+// touchmark-distribute and so read its deployment variables, the write key
+// among them, unless the environment's deployment permissions (Premium:
+// only some branches, or only admins, may deploy; a step of another
+// branch pauses;
+// https://support.atlassian.com/bitbucket-cloud/docs/set-up-and-monitor-deployments/)
+// stop it. Bitbucket's API does not show the deployment branch
+// restriction, so touchmark cannot check it: the hub states it in
+// security.reason, reviewed like the rest of hub.yml. The template's
+// hub.yml does not, so a hub on Bitbucket is safe by default: it must
+// either restrict the environment and say so, or accept the risk (none).
+const BitbucketPlatformRefusal = "security.write_isolation: platform on Bitbucket Pipelines needs the deployment environment " + distributeEnvironment +
+	" restricted to the default branch (or to admins), which only Bitbucket Premium offers and its API does not show: restrict it " +
+	"(Repository settings > Deployments) and state that in security.reason; on Free and Standard set write_isolation to none with a reason, " +
+	"or to external; see " + docsurl.WriteIsolation
 
 // DistributeEnvironment is the environment of the hub's CI that holds the
 // write key and runs distribute.

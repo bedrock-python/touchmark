@@ -182,8 +182,10 @@ const (
 const sweepOffOnly = "off: --only restricts the run to some targets"
 
 // fingerprintRe is the form of a hub fingerprint: host, optional port and
-// the numeric repository id.
-var fingerprintRe = regexp.MustCompile(`^[A-Za-z0-9.-]+(:[0-9]{1,5})?/[0-9]+$`)
+// the repository id: numeric, or a Bitbucket repository UUID (with or
+// without braces, any case; config.CanonicalFingerprint makes it lowercase
+// without braces).
+var fingerprintRe = regexp.MustCompile(`^[A-Za-z0-9.-]+(:[0-9]{1,5})?/([0-9]+|[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}|\{[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\})$`)
 
 // HeadGuard reports whether guard I8 (a run from an old hub commit does
 // nothing) applies to a run in context c: a local run, or a CI run that

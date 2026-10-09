@@ -160,6 +160,10 @@ reported as not read.
 - Pipelines runs the step scripts with the image's shell, not its `touchmark`
   entrypoint, and the image's user (uid 65532) may write the report files into the
   clone. If not, set `run-as-user` on the steps.
+- The `plan` step's `git fetch` writes into the clone's `.git`, and Bitbucket clones as
+  root ([BCLOUD-23217](https://jira.atlassian.com/browse/BCLOUD-23217)): if Pipelines
+  runs the step as the image's user (uid 65532), the fetch may fail with a permission
+  error. Then set `run-as-user: 0` on the `plan` step.
 - `git fetch origin` works in a pull request's step with Pipelines' own credentials.
 - `BITBUCKET_DEPLOYMENT_ENVIRONMENT` holds the environment's name (`touchmark-distribute`).
 - An access token with *Pull requests: Write* may comment on the hub's pull requests,

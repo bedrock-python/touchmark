@@ -231,6 +231,48 @@ type failedChannel struct{ err error }
 
 func (c failedChannel) Head(context.Context) (string, error) { return "", c.err }
 
+// hubRepository fills in what the CI does not say about the hub: Bitbucket
+// Pipelines names no default branch, so on Bitbucket the hub channel reads
+// it, with the hub's access token (TOUCHMARK_PIPELINES_TOKEN; a public hub
+// answers without one), and the visibility when BITBUCKET_REPO_IS_PRIVATE
+// was missing. It reads the hub repository only, before any guard: the
+// guards then compare the run's branch with it. When the channel cannot
+// read it the context stays without a default branch, with a warning:
+// distribute and doctor refuse to run then (distribute.DistributeGuard),
+// and plan reads its providers without credentials. Every other CI is
+// returned as it is.
+func hubRepository(ctx context.Context, hctx hubch.Context, getenv func(string) string) (hubch.Context, []string) {
+	if hctx.CI != hubch.BitbucketPipelines || hctx.DefaultBranch != "" {
+		return hctx, nil
+	}
+	reg := redact.New()
+	token := hubch.Token(hctx, getenv)
+	reg.Add(token, basicUsers...)
+	info, err := func() (hubch.RepoInfo, error) {
+		ch, err := hubch.New(hctx, httpx.New(httpx.Options{Redact: reg}), token)
+		if err != nil {
+			return hubch.RepoInfo{}, err
+		}
+		r, ok := ch.(hubch.RepositoryReader)
+		if !ok {
+			return hubch.RepoInfo{}, errors.New("hub channel: it reads no repository")
+		}
+		return r.Repository(ctx)
+	}()
+	if err != nil {
+		hint := ""
+		if token == "" {
+			hint = "; a private hub needs " + hubch.BitbucketTokenVar + ", an access token of the hub repository with Repositories: Read"
+		}
+		return hctx, []string{reg.Replace(fmt.Sprintf("Bitbucket Pipelines names no default branch of the hub, and the hub channel could not read it: %v%s", err, hint))}
+	}
+	hctx.DefaultBranch = info.DefaultBranch
+	if hctx.Visibility == "" {
+		hctx.Visibility = info.Visibility
+	}
+	return hctx, nil
+}
+
 // channelVisibility fills in the hub's visibility from the channel when the
 // CI's event payload names none (GitHub's and Gitea's schedule event). It
 // returns hctx as it was, with a warning, when the channel cannot tell: the

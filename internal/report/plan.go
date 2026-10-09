@@ -264,10 +264,21 @@ const (
 // line appended after it. closing is Markdown the caller made safe, such as
 // the comment's hidden marker; it counts against the limit.
 func (d *Delivery) WriteComment(w io.Writer, limit int, closing string) error {
+	return d.writeComment(w, limit, closing, false)
+}
+
+// WritePlainComment is WriteComment without HTML, for a platform whose
+// comments show HTML as text (Bitbucket): the collapsible sections become
+// bold titles over their lists. closing must hold no HTML either.
+func (d *Delivery) WritePlainComment(w io.Writer, limit int, closing string) error {
+	return d.writeComment(w, limit, closing, true)
+}
+
+func (d *Delivery) writeComment(w io.Writer, limit int, closing string, plain bool) error {
 	if limit <= 0 {
 		limit = MaxComment
 	}
-	m := &mdWriter{limit: limit - len(closing), note: commentCut}
+	m := &mdWriter{limit: limit - len(closing), note: commentCut, plain: plain}
 	d.markdown(m)
 	_, err := io.WriteString(w, m.finish()+closing)
 	if err != nil {
@@ -338,7 +349,7 @@ func (d *Delivery) mdPaths(m *mdWriter) {
 		return
 	}
 	m.line("")
-	m.open(fmt.Sprintf("<details><summary>%s (%d)</summary>", mdText(d.pathsTitle()), len(d.Paths)))
+	m.details(fmt.Sprintf("%s (%d)", mdText(d.pathsTitle()), len(d.Paths)))
 	m.line("")
 	m.line("| Change | Path | Targets |")
 	m.line("|---|---|---:|")
@@ -355,5 +366,5 @@ func (d *Delivery) mdPaths(m *mdWriter) {
 		m.line(fmt.Sprintf("and %s more; the JSON report lists them all", plural(n, "path")))
 	}
 	m.line("")
-	m.close("</details>")
+	m.endDetails()
 }

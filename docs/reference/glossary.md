@@ -18,8 +18,9 @@ propose the same content to that repository again.
 with the writer, from the hub's default branch.
 
 **fingerprint** — the hub's identity: the host and immutable repository id of the hub,
-like `github.com/712345678`. In the commit trailers and the marker. CI provides it;
-`--hub-fp` outside CI.
+like `github.com/712345678`; on Bitbucket the repository's UUID, lowercase and without
+braces, like `bitbucket.org/3f2a8d4e-1b6c-4f0a-9e7d-5c2b1a0f9e8d`. In the commit
+trailers and the marker. CI provides it; `--hub-fp` outside CI.
 
 **hub** — the repository, created from the template, that holds the packs, `hub.yml`,
 `targets.yml` and `.touchmark/operations.yml`.

@@ -857,8 +857,9 @@ func TestGitLabChannelIsolation(t *testing.T) {
 	t.Setenv("GIT_SSL_NO_VERIFY", "1")
 	t.Setenv("GIT_TRACE", "1")
 
-	// The fixture works: git that inherits the environment reads the decoy.
-	out, err := (&gitx.Git{}).Run(t.Context(), nil, "ls-remote", hubURL, "refs/heads/main")
+	// The fixture works: git that inherits the environment reads the decoy
+	// (plain git: gitx.Git drops these variables too).
+	out, err := exec.CommandContext(t.Context(), "git", "ls-remote", hubURL, "refs/heads/main").Output()
 	if err != nil || !strings.HasPrefix(string(out), other) {
 		t.Fatalf("plain git read %q, %v; want the decoy %s", out, err, other)
 	}

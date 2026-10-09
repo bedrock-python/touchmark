@@ -216,10 +216,12 @@ func runDistribute(ctx context.Context, e *env, o *options, d *distOptions) (err
 		return err
 	}
 	hctx := hubch.Detect(e.getenv, os.ReadFile)
+	hctx, repoWarnings := hubRepository(ctx, hctx, e.getenv)
 	fp, warnings, err := planFingerprint(hctx, string(o.hubFP))
 	if err != nil {
 		return err
 	}
+	warnings = append(warnings, repoWarnings...)
 	gitV, err := gitVersion(ctx)
 	if err != nil {
 		return configError(err)

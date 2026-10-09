@@ -13,7 +13,9 @@ import (
 // Commenter is a Channel that keeps one comment of touchmark in a hub pull
 // request up to date (plan --comment): the REST channel of
 // GitHub, Gitea and Forgejo, with the CI's own token (GitHub's GITHUB_TOKEN
-// with pull-requests: write, the Actions token of Gitea and Forgejo).
+// with pull-requests: write, the Actions token of Gitea and Forgejo), and
+// the channel of Bitbucket with the hub's access token
+// (TOUCHMARK_PIPELINES_TOKEN with Pull requests: Write; bitbucket.go).
 // GitLab's channel is none: CI_JOB_TOKEN cannot write merge request notes.
 type Commenter interface {
 	// UpsertComment finds the comment on pull request pr that the CI's

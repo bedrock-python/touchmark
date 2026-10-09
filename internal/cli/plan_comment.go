@@ -14,14 +14,31 @@ import (
 // holds plan's Markdown report and is edited by every later run, through
 // the hub channel with the CI's own token (GITHUB_TOKEN with
 // pull-requests: write in the plan job; the Actions token of Gitea and
-// Forgejo). GitLab has no comment: CI_JOB_TOKEN cannot write merge request
-// notes.
+// Forgejo; on Bitbucket the hub's access token in TOUCHMARK_PIPELINES_TOKEN
+// with Pull requests: Write). GitLab has no comment: CI_JOB_TOKEN cannot
+// write merge request notes.
 
 // planCommentMarker is the hidden line that tells plan's comment from the
 // others: one per hub, so that two hubs planning in one repository (a
 // template's own tests) keep a comment each.
 func planCommentMarker(hubID string) string {
 	return "<!-- touchmark plan: " + hubID + " -->"
+}
+
+// planCommentMarkerOf is the marker of plan's comment in CI ci. Bitbucket
+// shows an HTML comment as text, so there the marker is a Markdown link
+// reference definition, which Markdown does not show either (as the marker
+// of a sync pull request there, marker.FrameRefDef):
+//
+//	[touchmark-plan]: # "touchmark plan: <hub id>"
+//
+// It needs a blank line before it, which the report's last line gives.
+// Every other CI keeps the HTML comment, byte for byte.
+func planCommentMarkerOf(ci hubch.CI, hubID string) string {
+	if ci == hubch.BitbucketPipelines {
+		return `[touchmark-plan]: # "touchmark plan: ` + hubID + `"`
+	}
+	return planCommentMarker(hubID)
 }
 
 // postPlanComment keeps plan's comment in the hub pull request pr through
@@ -45,13 +62,21 @@ func postPlanComment(ctx context.Context, hctx hubch.Context, ch hubch.Channel, 
 	if !ok {
 		return what + "not posted: no channel to the hub for its CI token"
 	}
-	marker := planCommentMarker(rep.Hub.ID)
+	marker := planCommentMarkerOf(hctx.CI, rep.Hub.ID)
+	write := rep.WriteComment
+	if hctx.CI == hubch.BitbucketPipelines {
+		// Bitbucket shows HTML as text: no <details> sections.
+		write = rep.WritePlainComment
+	}
 	var b strings.Builder
-	if err := rep.WriteComment(&b, report.MaxComment, "\n"+marker+"\n"); err != nil {
+	if err := write(&b, report.MaxComment, "\n"+marker+"\n"); err != nil {
 		return what + err.Error()
 	}
 	body := reg.Replace(b.String())
 	if _, err := c.UpsertComment(ctx, pr, marker, body); err != nil {
+		if hctx.CI == hubch.BitbucketPipelines {
+			return what + fmt.Sprintf("not posted: %v (the hub's access token in %s needs Pull requests: Write)", err, hubch.BitbucketTokenVar)
+		}
 		return what + fmt.Sprintf("not posted: %v", err)
 	}
 	return ""

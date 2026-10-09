@@ -283,6 +283,11 @@ jobs:
             exit 1
           fi
 
+      # Skips while the published template has no bitbucket-pipelines.yml.
+      - name: go test -run TestTemplatePipelines
+        if: steps.template.outputs.public == 'true'
+        run: TOUCHMARK_E2E_TEMPLATE="$PWD/.ci/template" go test -count=1 -v -run '^TestTemplatePipelines$' ./internal/e2e/bitbucket/
+
   release-snapshot:
     # The release without publishing anything (docs/project/release.md):
     # the scripts of the release and of the Action by their tests;

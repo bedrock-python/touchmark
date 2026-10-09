@@ -407,7 +407,9 @@ func TestAzureDevOpsFlavor(t *testing.T) {
 
 	// A marker pasted into the description does not count: the stored one
 	// does, and a person's edit keeps it.
-	e.p.UpdatePR(r.ID, pr.Number, func(p *platform.PR) { p.Body = "We rewrote it.\n\n" + strings.Replace(line, "stream=sync", "stream=x", 1) })
+	e.p.UpdatePR(r.ID, pr.Number, func(p *platform.PR) {
+		p.Body = "We rewrote it.\n\n" + strings.Replace(line, "stream=sync", "stream=x", 1)
+	})
 	e.ok()
 	if got := e.p.PR(r.ID, pr.Number); got.Body != "We rewrote it.\n\n"+line {
 		t.Errorf("after a person's edit: %q", got.Body)

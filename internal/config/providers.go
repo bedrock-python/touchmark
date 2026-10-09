@@ -469,6 +469,10 @@ func derivedAPIURL(typ, webURL, hostname, host string) string {
 		// The REST API of an organization is under its web URL,
 		// https://dev.azure.com/<organization>/_apis.
 		return webURL
+	case "bitbucket-datacenter":
+		// The REST API of Bitbucket Data Center is under its base URL,
+		// context path included: <url>/rest/api/latest.
+		return webURL + "/rest/api/latest"
 	}
 	return webURL + "/api/v1"
 }

@@ -27,7 +27,7 @@ const (
 
 // Enumerations of hub.yml.
 var (
-	providerTypes    = []string{"github", "gitlab", "gitea", "forgejo", "bitbucket", "azure-devops"}
+	providerTypes    = []string{"github", "gitlab", "gitea", "forgejo", "bitbucket", "azure-devops", "bitbucket-datacenter"}
 	linkHubModes     = []string{"auto", "always", "never"}
 	isolationModes   = []string{"platform", "external", "none"}
 	privateTargets   = []string{"skip", "deliver"}
@@ -254,7 +254,7 @@ func checkProvider(pr *Provider, f providerFields, p *problems) {
 		if err := checkURL(pr.URL); err != nil {
 			p.errorf(f.name("url"), "%v", err)
 		}
-	} else if pr.Type == "gitea" || pr.Type == "forgejo" {
+	} else if pr.Type == "gitea" || pr.Type == "forgejo" || pr.Type == "bitbucket-datacenter" {
 		p.errorf(f.name("url"), "required for %s", pr.Type)
 	} else if pr.Type == "azure-devops" {
 		p.errorf(f.name("url"), "required for azure-devops: https://dev.azure.com/<organization>")

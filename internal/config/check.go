@@ -193,8 +193,11 @@ func (c *checker) exclude() {
 		segs := strings.Split(pat.Path, "/")
 		if typ := c.flatType(res.provider(pat.Provider)); typ != "" && len(segs) > 2 && !slices.Contains(segs, "**") {
 			shape := "a " + typ + " repository path is owner/name"
-			if typ == "azure-devops" {
+			switch typ {
+			case "azure-devops":
 				shape = "an Azure DevOps repository path is project/repository"
+			case "bitbucket-datacenter":
+				shape = "a Bitbucket Data Center repository path is PROJECT/repository"
 			}
 			c.warnf(TargetsFile, "exclude[%d]: %s has %d path segments, and %s, so it excludes nothing", i, ex, len(segs), shape)
 		}
@@ -266,13 +269,15 @@ func (c *checker) match() {
 }
 
 // flatType returns the type of the provider with id when its platform has no
-// nested namespaces (github, gitea, forgejo, bitbucket, azure-devops): a
-// repository path there is owner/name (project/repository on Azure DevOps).
+// nested namespaces (github, gitea, forgejo, bitbucket, azure-devops,
+// bitbucket-datacenter): a repository path there is owner/name
+// (project/repository on Azure DevOps, the project's key and the
+// repository's slug on Bitbucket Data Center).
 // It returns "" for any other type, and for a provider hub.yml does not
 // list (the implicit one, whose type the CI tells).
 func (c *checker) flatType(id string) string {
 	switch typ := c.providerType(id); typ {
-	case "github", "gitea", "forgejo", "bitbucket", "azure-devops":
+	case "github", "gitea", "forgejo", "bitbucket", "azure-devops", "bitbucket-datacenter":
 		return typ
 	}
 	return ""

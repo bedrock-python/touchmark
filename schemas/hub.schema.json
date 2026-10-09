@@ -210,7 +210,7 @@
     {
       "if": {
         "required": ["platform"],
-        "properties": { "platform": { "enum": ["gitea", "forgejo"] } }
+        "properties": { "platform": { "enum": ["gitea", "forgejo", "bitbucket-datacenter"] } }
       },
       "then": { "required": ["base_url"] }
     },
@@ -260,8 +260,8 @@
       "pattern": "^[a-z][a-z0-9-]{0,31}$"
     },
     "providerType": {
-      "description": "github: github.com, GHE.com or GitHub Enterprise Server; gitlab; gitea; forgejo; bitbucket: Bitbucket Cloud; azure-devops: one organization of Azure DevOps Services (bitbucket and azure-devops: plan, distribute and doctor; setup does not set up a hub on them yet).",
-      "enum": ["github", "gitlab", "gitea", "forgejo", "bitbucket", "azure-devops"]
+      "description": "github: github.com, GHE.com or GitHub Enterprise Server; gitlab; gitea; forgejo; bitbucket: Bitbucket Cloud; azure-devops: one organization of Azure DevOps Services; bitbucket-datacenter: a Bitbucket Data Center instance (bitbucket, azure-devops and bitbucket-datacenter: plan, distribute and doctor; setup does not set up a hub on them yet).",
+      "enum": ["github", "gitlab", "gitea", "forgejo", "bitbucket", "azure-devops", "bitbucket-datacenter"]
     },
     "sign": {
       "description": "auto: sign where it costs nothing and where target rules require it; always: sign every commit. Default: auto.",
@@ -301,7 +301,7 @@
         },
         "type": { "$ref": "#/$defs/providerType" },
         "url": {
-          "description": "Web URL of the instance. Default for github: https://github.com; for gitlab: https://gitlab.com; for bitbucket: https://bitbucket.org, the only url it takes without api_url. Required for gitea and forgejo, and for azure-devops: https://dev.azure.com/<organization>, one provider per organization. A target targets.yml names by web URL belongs to the provider whose url it lies under.",
+          "description": "Web URL of the instance. Default for github: https://github.com; for gitlab: https://gitlab.com; for bitbucket: https://bitbucket.org, the only url it takes without api_url. Required for gitea and forgejo, for bitbucket-datacenter (the base URL, with its context path, like https://bitbucket.example.com/bitbucket), and for azure-devops: https://dev.azure.com/<organization>, one provider per organization. A target targets.yml names by web URL belongs to the provider whose url it lies under.",
           "$ref": "#/$defs/url"
         },
         "api_url": {
@@ -313,7 +313,7 @@
           "$ref": "#/$defs/relativePath"
         },
         "writer": {
-          "description": "The account that writes to targets, as the platform names it: on GitHub the App's bot, <slug>[bot]; on GitLab, Gitea and Forgejo the username of the service account or bot user; on Bitbucket the bot account's UUID in braces, {…}; on Azure DevOps the user's id, a GUID.",
+          "description": "The account that writes to targets, as the platform names it: on GitHub the App's bot, <slug>[bot]; on GitLab, Gitea and Forgejo the username of the service account or bot user; on Bitbucket the bot account's UUID in braces, {…}; on Azure DevOps the user's id, a GUID; on Bitbucket Data Center the user's slug.",
           "$ref": "#/$defs/account"
         },
         "known_authors": {
@@ -349,7 +349,7 @@
       "allOf": [
         {
           "if": {
-            "properties": { "type": { "enum": ["gitea", "forgejo", "azure-devops"] } }
+            "properties": { "type": { "enum": ["gitea", "forgejo", "azure-devops", "bitbucket-datacenter"] } }
           },
           "then": { "required": ["url"] }
         },

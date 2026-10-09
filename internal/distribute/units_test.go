@@ -37,6 +37,7 @@ func TestNoReplyEmail(t *testing.T) {
 		{"bitbucket", "bitbucket.org", "{583f7ec5-ed93-49a9-b449-cfc4556cd7f8}", "{583f7ec5-ed93-49a9-b449-cfc4556cd7f8}", "583f7ec5-ed93-49a9-b449-cfc4556cd7f8@touchmark.invalid"},
 		{"bitbucket", "bitbucket.org", "", "{583f7ec5-ed93-49a9-b449-cfc4556cd7f8}", "583f7ec5-ed93-49a9-b449-cfc4556cd7f8@touchmark.invalid"},
 		{"azure-devops", "dev.azure.com", "56b0f042-b05e-86d9-b0f7-c5ddb1e76385", "56b0f042-b05e-86d9-b0f7-c5ddb1e76385", "56b0f042-b05e-86d9-b0f7-c5ddb1e76385@touchmark.invalid"},
+		{"bitbucket-datacenter", "git.example.com", "14", "project_1_bot", "14@touchmark.invalid"},
 	} {
 		if got := noReplyEmail(tc.typ, tc.host, tc.id, tc.login); got != tc.want {
 			t.Errorf("noReplyEmail(%q, %q, %q, %q) = %q, want %q", tc.typ, tc.host, tc.id, tc.login, got, tc.want)
@@ -265,6 +266,32 @@ func TestPushRuleBitbucketBranchRestriction(t *testing.T) {
 		"remote: PERMISSION DENIED TO UPDATE BRANCH main.":      "protected-branch",
 		"[remote rejected] (pre-receive hook declined)":         "pre-receive-hook",
 		"remote: Permission denied to delete branch touchmark.": "deletion",
+	} {
+		if got := pushRule(msg); got != want {
+			t.Errorf("pushRule(%q) = %q, want %q", msg, got, want)
+		}
+	}
+}
+
+// TestPushRuleBitbucketDataCenter: Bitbucket Data Center refuses a push
+// that a branch permission forbids with "pre-receive hook declined" and the
+// permission's own message (Atlassian's tracker, BSERV-7759): a branch
+// whose changes need a pull request is rules:pull-request-only; another
+// permission, whose message only points at the branch permissions,
+// rules:branch-permissions; a hook of its own, rules:pre-receive-hook.
+func TestPushRuleBitbucketDataCenter(t *testing.T) {
+	const oid = "3f786850e387550fdab836ed7e6dc881de23001b"
+	res := gitx.ParsePush("To https://git.example.com/bitbucket/scm/acme/api.git\n!\t"+oid+":refs/heads/main\t[remote rejected] (pre-receive hook declined)\nDone\n",
+		"remote: Branch refs/heads/main can only be modified through pull requests.\n"+
+			"remote: Check your branch permissions configuration with the project administrator.\n"+
+			"To https://git.example.com/bitbucket/scm/acme/api.git\n ! [remote rejected] "+oid+" -> main (pre-receive hook declined)\n"+
+			"error: failed to push some refs to 'https://git.example.com/bitbucket/scm/acme/api.git'\n")
+	if outcome, reason := pushOutcome(res); outcome != report.OutcomeBlocked || reason != "rules:pull-request-only" {
+		t.Errorf("pull-request-only: %s:%s (%q)", outcome, reason, res.Message)
+	}
+	for msg, want := range map[string]string{
+		"remote: You can't push to refs/heads/touchmark/acme-eng.\nremote: Check your branch permissions configuration with the project administrator.": "branch-permissions",
+		"remote: Rejected by the Jira commit checker.\n[remote rejected] (pre-receive hook declined)":                                                   "pre-receive-hook",
 	} {
 		if got := pushRule(msg); got != want {
 			t.Errorf("pushRule(%q) = %q, want %q", msg, got, want)

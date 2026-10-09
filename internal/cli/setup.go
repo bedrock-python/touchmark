@@ -105,6 +105,9 @@ func runSetup(ctx context.Context, e *env, o *options, s *setupOptions) (err err
 		return configErrorf("setup does not set up azure-devops yet: set up a hub on Azure Pipelines by hand (the bot users and their "+
 			"personal access tokens, the pipeline and its build validation policy, the variable group and the environment), as %s shows; "+
 			"a hub on GitHub or GitLab delivers to Azure DevOps as one of its providers", docsurl.GettingStarted("azure-devops"))
+	case "bitbucket-datacenter":
+		return configErrorf("setup does not set up bitbucket-datacenter: Bitbucket Data Center has no CI of its own to run a hub; " +
+			"a hub on GitHub or GitLab delivers to Bitbucket Data Center as one of its providers")
 	case "github", "gitlab":
 	default:
 		return usageErrorf("unknown platform %q: setup sets up github or gitlab", platform)

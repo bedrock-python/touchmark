@@ -3,6 +3,7 @@ package cli
 import (
 	"github.com/bedrock-python/touchmark/internal/platform/azuredevops"
 	"github.com/bedrock-python/touchmark/internal/platform/bitbucket"
+	"github.com/bedrock-python/touchmark/internal/platform/bitbucketdc"
 	"github.com/bedrock-python/touchmark/internal/platform/gitea"
 	"github.com/bedrock-python/touchmark/internal/platform/github"
 	"github.com/bedrock-python/touchmark/internal/platform/gitlab"
@@ -26,4 +27,6 @@ func init() {
 	distributeDrivers["bitbucket"] = bitbucket.NewWriter
 	planDrivers["azure-devops"] = azuredevops.NewReader
 	distributeDrivers["azure-devops"] = azuredevops.NewWriter
+	planDrivers["bitbucket-datacenter"] = bitbucketdc.NewReader
+	distributeDrivers["bitbucket-datacenter"] = bitbucketdc.NewWriter
 }

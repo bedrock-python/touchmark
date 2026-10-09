@@ -443,3 +443,72 @@ providers:
 		}
 	}
 }
+
+// TestResolveURLsBitbucketDataCenter: a Bitbucket Data Center provider is
+// one instance, often under a context path; its repository URLs are
+// /projects/<KEY>/repos/<slug> (with /browse… after them in a browser) or
+// clone URLs, /scm/<key>/<slug>.git, and a project's URL is the namespace
+// of an org entry.
+func TestResolveURLsBitbucketDataCenter(t *testing.T) {
+	provs := resolvedProviders(t, `version: 1
+id: acme-eng
+providers:
+  - id: bbdc
+    type: bitbucket-datacenter
+    url: https://git.example.com/bitbucket
+`)
+	for _, tc := range []struct {
+		entry Entry
+		want  string // the resolved value, or a substring of the error after "!"
+	}{
+		{Entry{Repo: "https://git.example.com/bitbucket/projects/ACME/repos/api"}, "bbdc:ACME/api"},
+		{Entry{Repo: "https://git.example.com/bitbucket/projects/ACME/repos/api/browse"}, "bbdc:ACME/api"},
+		{Entry{Repo: "https://git.example.com/bitbucket/projects/ACME/repos/api/browse/src/main.go"}, "bbdc:ACME/api"},
+		{Entry{Repo: "https://git.example.com/bitbucket/scm/acme/api.git"}, "bbdc:acme/api"},
+		{Entry{Org: "https://git.example.com/bitbucket/projects/ACME"}, "bbdc:ACME"},
+		{Entry{Org: "https://git.example.com/bitbucket/projects/ACME/"}, "bbdc:ACME"},
+		{Entry{Org: "https://git.example.com/bitbucket/ACME"}, "!a Bitbucket Data Center org entry names a project, <url>/projects/<KEY>"},
+		{Entry{Repo: "https://git.example.com/bitbucket/ACME/api"}, "!a Bitbucket Data Center repository URL is <url>/projects/<KEY>/repos/<repository>"},
+		{Entry{Repo: "https://git.example.com/bitbucket/projects/ACME/repos/api/pull-requests/3"}, "!a Bitbucket Data Center repository URL is"},
+		{Entry{Repo: "https://git.example.com/bitbucket/users/jane/repos/notes"}, "!a Bitbucket Data Center repository URL is"},
+		{Entry{Repo: "https://git.example.com/projects/ACME/repos/api"}, "!is not under the url of any provider"},
+	} {
+		got, err := ResolveURLs(&Targets{Targets: []Entry{tc.entry}}, provs)
+		if want, ok := strings.CutPrefix(tc.want, "!"); ok {
+			if err == nil || !strings.Contains(err.Error(), want) {
+				t.Errorf("%+v: error %v, want one with %q", tc.entry, err, want)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("%+v: %v", tc.entry, err)
+			continue
+		}
+		if v := selectorValue(&got.Targets[0]); v != tc.want {
+			t.Errorf("%+v: %q, want %q", tc.entry, v, tc.want)
+		}
+	}
+	for _, tc := range []struct{ ex, want string }{
+		{"https://git.example.com/bitbucket/projects/LEGACY/repos/old", "bbdc:LEGACY/old"},
+		{"https://git.example.com/bitbucket/projects/LEGACY/repos/old-*", "bbdc:LEGACY/old-*"},
+		{"https://git.example.com/bitbucket/projects/LEGACY/repos/*", "bbdc:LEGACY/*"},
+		{"https://git.example.com/bitbucket/scm/legacy/old.git", "bbdc:legacy/old"},
+		{"https://git.example.com/bitbucket/projects/LEGACY/repos/old/browse", "!points inside a repository and would exclude nothing"},
+		{"https://git.example.com/bitbucket/projects/LEGACY", "!a Bitbucket Data Center repository URL is"},
+	} {
+		got, err := ResolveURLs(&Targets{Exclude: []string{tc.ex}}, provs)
+		if want, ok := strings.CutPrefix(tc.want, "!"); ok {
+			if err == nil || !strings.Contains(err.Error(), want) {
+				t.Errorf("exclude %s: error %v, want one with %q", tc.ex, err, want)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("exclude %s: %v", tc.ex, err)
+			continue
+		}
+		if got.Exclude[0] != tc.want {
+			t.Errorf("exclude %s: %q, want %q", tc.ex, got.Exclude[0], tc.want)
+		}
+	}
+}

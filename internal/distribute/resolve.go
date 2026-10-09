@@ -199,6 +199,10 @@ func (r *run) connect(ctx context.Context, p *provider) bool {
 	if !r.lookupAutomation(ctx, p) {
 		return false
 	}
+	if r.mode == ModePlan && caps.ReaderCloses && self.ID != "" && !p.automation[self.ID] {
+		r.warnf("provider %s: the read credential's account %s can decline pull requests on %s; list it in automation_accounts, "+
+			"so that a pull request declined with the read key is not taken for the team's decision", p.cfg.ID, self.Login, caps.Flavor)
+	}
 	switch {
 	case len(p.ids) == 0:
 		r.warnf("provider %s: touchmark cannot recognize its own pull requests, so an open pull request on a sync branch counts as someone else's", p.cfg.ID)

@@ -37,7 +37,7 @@ cleanup to stay safe:
 | Entry | Acts | Then |
 |---|---|---|
 | `recreate` | while the sync branch's head is exactly `head` | a new push to the branch makes it inert |
-| `forget_declines` | once: touchmark marks pull request `pr` revoked; on Bitbucket Cloud and Azure DevOps, while the entry is present (see below) | inert |
+| `forget_declines` | once: touchmark marks pull request `pr` revoked; on Bitbucket Cloud, Bitbucket Data Center and Azure DevOps, while the entry is present (see below) | inert |
 | `allow_mass_close` | up to `max` closes in a run, until the end of `until` (UTC) | inert after the date |
 | `adopt_unmarked` | until the end of `until` (UTC) | inert after the date |
 

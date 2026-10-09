@@ -52,10 +52,11 @@ Three ways in, one version number:
 - **Targets as you name them** — a repository, an organisation or a group by path or by
   web URL, narrowed by topics and path globs (`acme/svc-*`), minus `exclude` globs
   (`corp:platform/legacy/**`)
-- **Six platforms, one hub** — GitHub (github.com, GHE.com, Enterprise Server), GitLab
-  (gitlab.com and self-managed), Gitea, Forgejo, Bitbucket Cloud and Azure DevOps Services
-  (the last two built from their documentation, not yet run on a live account); one hub can
-  deliver to several at once, and its own CI can be any of them
+- **Seven platforms, one hub** — GitHub (github.com, GHE.com, Enterprise Server), GitLab
+  (gitlab.com and self-managed), Gitea, Forgejo, Bitbucket Cloud, Azure DevOps Services
+  and Bitbucket Data Center (the last three built from their documentation, not yet run on
+  a live account); one hub can deliver to several at once, and its own CI can be any of
+  them but Bitbucket Data Center, which has none
 - **Declines remembered** — content in a pull request closed without merging is not
   proposed again; reopen it, or tick a box in its description, to change your mind
 - **A plan before delivery** — `plan` in a hub pull request reports what every target would

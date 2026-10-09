@@ -279,8 +279,8 @@ func (t *target) createPR(ctx context.Context, np platform.NewPR) (platform.PR, 
 // writer as the closer), a new base is taken to exist, labels are only
 // added. Draft never changes.
 //
-// With Caps.ClosedImmutable (Bitbucket Cloud) a PR closed without merging
-// is final, as Bitbucket's driver reports it: reopening it, or changing its
+// With Caps.ClosedImmutable (Bitbucket) a PR closed without merging is
+// final, as Bitbucket's drivers report it: reopening it, or changing its
 // title, body or base, is ClassUnsupported and changes nothing; Closed
 // alone changes nothing. An open PR's new body is written before it closes,
 // in the same call.

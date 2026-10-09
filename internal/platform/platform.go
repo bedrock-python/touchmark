@@ -1,5 +1,6 @@
 // Package platform defines what touchmark needs from a code hosting platform
-// (GitHub, GitLab, Gitea, Forgejo, Bitbucket Cloud, Azure DevOps): the
+// (GitHub, GitLab, Gitea, Forgejo, Bitbucket Cloud, Azure DevOps, Bitbucket
+// Data Center): the
 // Reader and Writer interfaces drivers implement, their capabilities, and one
 // error model.
 //
@@ -300,8 +301,8 @@ type Limits struct {
 // Caps describes a platform instance, found once per run by Reader.Probe.
 type Caps struct {
 	// Flavor is "github", "ghe.com", "ghes", "gitlab", "gitea", "forgejo",
-	// "bitbucket" (Bitbucket Cloud) or "azure-devops" (Azure DevOps
-	// Services).
+	// "bitbucket" (Bitbucket Cloud), "azure-devops" (Azure DevOps
+	// Services) or "bitbucket-datacenter".
 	Flavor  string
 	Version string
 	// MaxBody is the body budget in bytes, marker included, but where the
@@ -333,8 +334,15 @@ type Caps struct {
 	// entry acts while it is present instead of once (see
 	// decide.MemoryConfig.ClosedImmutable).
 	ClosedImmutable bool
-	Marker          MarkerStore
-	Commit          struct{ API, SignedByPlatform, CAS bool }
+	// ReaderCloses is set when an identity that may only read a repository
+	// can still close its pull requests (Bitbucket Data Center, where
+	// declining needs read access): a plan then warns unless the read
+	// credential's account is among automation_accounts, so that a pull
+	// request declined with the read key, which every branch of the hub
+	// can use, is not taken for the team's decision.
+	ReaderCloses bool
+	Marker       MarkerStore
+	Commit       struct{ API, SignedByPlatform, CAS bool }
 	// RuntimeOnly lists checks the writer cannot read upfront, e.g.
 	// "push_rules" on GitLab.
 	RuntimeOnly []string

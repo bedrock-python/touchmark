@@ -42,6 +42,8 @@ func TestResolveProviders(t *testing.T) {
 		{ID: "bb-test", Type: "bitbucket", URL: "http://localhost:8080", APIURL: "http://localhost:8080/2.0"},
 		{ID: "ado", Type: "azure-devops", URL: "https://dev.azure.com/acme/"},
 		{ID: "ado-test", Type: "azure-devops", URL: "http://localhost:8081/acme", APIURL: "http://localhost:8081/acme"},
+		{ID: "bbdc", Type: "bitbucket-datacenter", URL: "https://git.example.com/bitbucket/"},
+		{ID: "bbdc-root", Type: "bitbucket-datacenter", URL: "https://bitbucket.example.com:7990"},
 	}}
 	want := map[string]resolvedURLs{
 		"gh":       {"https://github.com", "github.com", "https://api.github.com", "https://api.github.com/graphql", "TOUCHMARK_GH_"},
@@ -60,6 +62,10 @@ func TestResolveProviders(t *testing.T) {
 		"bb-test":  {"http://localhost:8080", "localhost:8080", "http://localhost:8080/2.0", "", "TOUCHMARK_BB_TEST_"},
 		"ado":      {"https://dev.azure.com/acme", "dev.azure.com", "https://dev.azure.com/acme", "", "TOUCHMARK_ADO_"},
 		"ado-test": {"http://localhost:8081/acme", "localhost:8081", "http://localhost:8081/acme", "", "TOUCHMARK_ADO_TEST_"},
+		// The REST API of Bitbucket Data Center is under its base URL, context
+		// path included.
+		"bbdc":      {"https://git.example.com/bitbucket", "git.example.com", "https://git.example.com/bitbucket/rest/api/latest", "", "TOUCHMARK_BBDC_"},
+		"bbdc-root": {"https://bitbucket.example.com:7990", "bitbucket.example.com:7990", "https://bitbucket.example.com:7990/rest/api/latest", "", "TOUCHMARK_BBDC_ROOT_"},
 	}
 	// The CI environment does not matter for declared providers, except
 	// GITHUB_API_URL on the hub's own host (below).
@@ -332,6 +338,11 @@ func TestResolveProvidersErrors(t *testing.T) {
 			name: "bad type",
 			hub:  &Hub{Providers: []Provider{{ID: "srht", Type: "sourcehut"}}},
 			want: `hub.yml: providers[0]: type: "sourcehut" must be one of github, gitlab, gitea, forgejo, bitbucket, azure-devops`,
+		},
+		{
+			name: "bitbucket-datacenter without url",
+			hub:  &Hub{Providers: []Provider{{ID: "bbdc", Type: "bitbucket-datacenter"}}},
+			want: "hub.yml: providers[0]: url: required for bitbucket-datacenter",
 		},
 		{
 			name: "azure-devops without url",

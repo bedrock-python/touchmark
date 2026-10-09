@@ -28,7 +28,7 @@ func TestKeptBody(t *testing.T) {
 	if unticked == read {
 		t.Fatal("fixture: Untick changed nothing")
 	}
-	for _, f := range []fake.Flavor{fake.GitHub, fake.GitLab, fake.Gitea, fake.Forgejo, fake.Bitbucket, fake.AzureDevOps} {
+	for _, f := range []fake.Flavor{fake.GitHub, fake.GitLab, fake.Gitea, fake.Forgejo, fake.Bitbucket, fake.AzureDevOps, fake.BitbucketDataCenter} {
 		x := &targetExec{t: &target{prov: &provider{caps: fake.CapsFor(f)}}}
 		for _, body := range []string{read, unticked} {
 			got, kept := x.keptBody(read, body, newLine)

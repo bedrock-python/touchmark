@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 	"unicode/utf16"
 
 	"github.com/bedrock-python/touchmark/internal/marker"
@@ -238,11 +239,18 @@ func checkDescription(op, desc string) error {
 // whatever base, is returned with ErrExists before anything is written;
 // when the POST is refused as a duplicate (409, or 400 with
 // GitPullRequestExistsException or TF401179) and such a pull request is
-// active then, it is returned with ErrExists too. A failure after the POST
-// (the property, a label) fails the call with the pull request open: the
-// core reconciles by listing the head's pull requests, and an own pull
-// request whose property was never written has no marker (the next run
-// blocks it as marker-invalid until an adopt entry takes it over).
+// active then, it is returned with ErrExists too.
+//
+// The property is written with replace, which is idempotent: a transient
+// failure or a rate limit is tried again, up to len(markerDelays) more
+// times (storeNewMarker). Should it still fail, the pull request just made
+// is abandoned and the call fails with the property's error: an own pull
+// request abandoned by the writer without a marker blocks nothing and
+// counts as no decline, and the core opens a new one. Only when the
+// abandon fails too does the pull request stay active without its marker;
+// the core's reconcile then writes the marker through EditPR. A failure of
+// a label fails the call with the pull request open and its marker
+// stored.
 func (t *target) CreatePR(ctx context.Context, np platform.NewPR) (platform.PR, error) {
 	const op = "create pull request"
 	if err := t.live(op); err != nil {
@@ -289,7 +297,7 @@ func (t *target) CreatePR(ctx context.Context, np platform.NewPR) (platform.PR, 
 		return platform.PR{}, err
 	}
 	if line != "" {
-		if err := t.setMarker(ctx, op, p.ID, line); err != nil {
+		if err := t.storeNewMarker(ctx, op, p.ID, line); err != nil {
 			return platform.PR{}, err
 		}
 	}
@@ -297,6 +305,75 @@ func (t *target) CreatePR(ctx context.Context, np platform.NewPR) (platform.PR, 
 		return platform.PR{}, err
 	}
 	return t.finish(ctx, op, &p, line, true)
+}
+
+// markerDelays are the pauses before the attempts of storeNewMarker after
+// the first; a rate limit's RetryAfter wins when it is longer, and one
+// longer than maxMarkerWait ends the attempts. abandonTime bounds the
+// abandon that follows failed attempts, which runs even when ctx has ended.
+var markerDelays = []time.Duration{time.Second, 2 * time.Second, 4 * time.Second}
+
+const (
+	maxMarkerWait = 30 * time.Second
+	abandonTime   = 30 * time.Second
+)
+
+// sleep waits d, or until ctx ends (its error). Tests replace it.
+var sleep = func(ctx context.Context, d time.Duration) error {
+	tm := time.NewTimer(d)
+	defer tm.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-tm.C:
+		return nil
+	}
+}
+
+// storeNewMarker writes line into the property of pull request number,
+// which CreatePR has just opened. It is the one write the driver tries
+// again itself: replace is idempotent, and a pull request left without its
+// marker would block its target (marker-invalid). A transient failure or a
+// rate limit is tried again after markerDelays; any other failure, the
+// last one, or the end of ctx stops. Then the pull request is abandoned
+// and the error says so, with the class of the property's failure (the
+// core reconciles a transient one and opens a new pull request).
+func (t *target) storeNewMarker(ctx context.Context, op string, number int64, line string) error {
+	var err error
+	for i := 0; ; i++ {
+		if err = t.setMarker(ctx, op, number, line); err == nil {
+			return nil
+		}
+		class := platform.ClassOf(err)
+		if i == len(markerDelays) || class != platform.ClassTransient && class != platform.ClassRateLimited || ctx.Err() != nil {
+			break
+		}
+		d := markerDelays[i]
+		if class == platform.ClassRateLimited {
+			var pe *platform.Error
+			if errors.As(err, &pe) && pe.RetryAfter > maxMarkerWait {
+				break
+			}
+			if pe != nil {
+				d = max(d, pe.RetryAfter)
+			}
+		}
+		if sleep(ctx, d) != nil {
+			break
+		}
+	}
+	actx, cancel := context.WithTimeout(context.WithoutCancel(ctx), abandonTime)
+	defer cancel()
+	s := statusAbandoned
+	var got apiPR
+	_, aerr := t.c.call(actx, op, http.MethodPatch, t.c.repoAPI(t.repo.ID, "pullrequests", strconv.FormatInt(number, 10)), nil, "", updatePR{Status: &s}, &got)
+	if aerr == nil && got.Status == statusActive {
+		aerr = errors.New("the pull request is still active")
+	}
+	if aerr != nil {
+		return fmt.Errorf("%w; #%d stays active without its marker: abandoning it failed: %w", err, number, aerr)
+	}
+	return fmt.Errorf("#%d was abandoned, since its marker could not be stored: %w", number, err)
 }
 
 // existing returns the active pull request from np.Head in the repository
@@ -434,19 +511,32 @@ func uniqueLabels(names []string) []string {
 	return out
 }
 
-// EditPR changes a pull request. It reads the pull request first.
+// EditPR changes a pull request. It reads the pull request and its stored
+// marker first. The description changes only when e.Body without its
+// marker line differs from the current description without any marker
+// line a person pasted into it (marker.Strip), line endings and trailing
+// whitespace aside (sameDescription): an edit that keeps people's
+// description, as a close or a marker refresh does where the marker lives
+// apart, sends no description at all.
 //
-//   - Active: the marker line of e.Body goes into the property first (when
-//     it differs from the stored one), then the labels to add, then one
-//     PATCH with what changes of title, description (e.Body without its
-//     marker line), base and, for State Closed, status abandoned: the
-//     closing body's marker is stored before the pull request is
-//     abandoned, after which touchmark never writes to it again. A failure
-//     between them leaves an active pull request with part of the edit,
-//     which the next run decides on again.
+//   - Active, State Closed: the marker line of e.Body goes into the
+//     property first (when it differs from the stored one), then the
+//     labels to add, then one PATCH with what changes of title,
+//     description, base and status abandoned: the closing marker is stored
+//     before the pull request is abandoned, after which touchmark never
+//     writes to it again. A description that would not fit Azure DevOps'
+//     limit stays as it is: the close does not wait on a description
+//     people lengthened.
+//   - Active otherwise: one PATCH with what changes of title, description
+//     and base first, then the labels, then the property. A failure in
+//     between leaves the marker of the previous body, which the next run
+//     sees as an edit still to make, never a marker that claims a
+//     description the pull request does not have.
 //   - Abandoned: touchmark never reactivates one, nor changes it
 //     (Caps.ClosedImmutable): State Open is ClassUnsupported, and so is any
-//     change of title, body or base; State Closed alone changes nothing.
+//     change of title, body or base; State Closed alone changes nothing,
+//     and neither does State Closed with the marker already stored, whatever
+//     the description (a close that left it as it was).
 //   - Completed: any change is ClassConflict, as a pull request merged
 //     since the core read it.
 //
@@ -486,14 +576,14 @@ func (t *target) EditPR(ctx context.Context, number int64, e platform.PREdit) (p
 		desc, line = marker.Detach(*e.Body)
 	}
 	base := strings.TrimPrefix(cur.TargetRefName, "refs/heads/")
+	closing := e.State != nil && *e.State == platform.Closed
 	newTitle := e.Title != nil && *e.Title != cur.Title
-	newDesc := e.Body != nil && desc != curDesc
+	newDesc := e.Body != nil && !sameDescription(desc, curDesc)
 	newMarker := e.Body != nil && line != stored
 	newBase := e.Base != nil && *e.Base != base
-	changes := newTitle || newDesc || newMarker || newBase
 	switch cur.Status {
 	case statusCompleted:
-		if changes || e.State != nil {
+		if newTitle || newDesc || newMarker || newBase || e.State != nil {
 			return platform.PR{}, conflict(op, "#%d is completed: it can no longer be changed", number)
 		}
 		return t.finish(ctx, op, cur, stored, false)
@@ -501,24 +591,21 @@ func (t *target) EditPR(ctx context.Context, number int64, e platform.PREdit) (p
 		switch {
 		case e.State != nil && *e.State == platform.Open:
 			return platform.PR{}, unsupported(op, "#%d is abandoned: touchmark never reactivates a pull request", number)
-		case changes:
+		case closing && !newTitle && !newMarker && !newBase:
+			// Closed again with its marker: the description may be one the
+			// close left as it was.
+		case newTitle || newDesc || newMarker || newBase:
 			return platform.PR{}, unsupported(op, "#%d is abandoned: touchmark changes active pull requests only", number)
 		}
 		return t.finish(ctx, op, cur, stored, false)
 	}
 	if newDesc {
 		if err := checkDescription(op, desc); err != nil {
-			return platform.PR{}, err
+			if !closing {
+				return platform.PR{}, err
+			}
+			newDesc = false
 		}
-	}
-	if newMarker {
-		if err := t.setMarker(ctx, op, number, line); err != nil {
-			return platform.PR{}, err
-		}
-		stored = line
-	}
-	if err := t.addLabels(ctx, op, cur, e.AddLabels); err != nil {
-		return platform.PR{}, err
 	}
 	var patch updatePR
 	if newTitle {
@@ -531,28 +618,71 @@ func (t *target) EditPR(ctx context.Context, number int64, e platform.PREdit) (p
 		ref := "refs/heads/" + *e.Base
 		patch.TargetRefName = &ref
 	}
-	if e.State != nil && *e.State == platform.Closed {
+	if closing {
 		s := statusAbandoned
 		patch.Status = &s
+		if newMarker {
+			if err := t.setMarker(ctx, op, number, line); err != nil {
+				return platform.PR{}, err
+			}
+			stored = line
+		}
+		if err := t.addLabels(ctx, op, cur, e.AddLabels); err != nil {
+			return platform.PR{}, err
+		}
+		if cur, err = t.patchPR(ctx, op, cur, patch); err != nil {
+			return platform.PR{}, err
+		}
+		return t.finish(ctx, op, cur, stored, cur.cut())
 	}
-	if patch != (updatePR{}) {
-		var got apiPR
-		if _, err := t.c.call(ctx, op, http.MethodPatch, t.c.repoAPI(t.repo.ID, "pullrequests", strconv.FormatInt(number, 10)), nil, "", patch, &got); err != nil {
+	if cur, err = t.patchPR(ctx, op, cur, patch); err != nil {
+		return platform.PR{}, err
+	}
+	if err := t.addLabels(ctx, op, cur, e.AddLabels); err != nil {
+		return platform.PR{}, err
+	}
+	if newMarker {
+		if err := t.setMarker(ctx, op, number, line); err != nil {
 			return platform.PR{}, err
 		}
-		if err := got.check(op); err != nil {
-			return platform.PR{}, err
-		}
-		if patch.Status != nil && got.Status == statusActive {
-			return platform.PR{}, conflict(op, "Azure DevOps did not abandon #%d", number)
-		}
-		labels := cur.Labels
-		cur = &got
-		if len(cur.Labels) == 0 {
-			cur.Labels = labels
-		}
+		stored = line
 	}
 	return t.finish(ctx, op, cur, stored, cur.cut())
+}
+
+// patchPR sends patch to pull request cur (Pull Requests - Update) and
+// returns the pull request it answers with, with cur's labels when the
+// answer lists none; cur itself when patch changes nothing. A patch that
+// abandons the pull request and answers an active one is ClassConflict.
+func (t *target) patchPR(ctx context.Context, op string, cur *apiPR, patch updatePR) (*apiPR, error) {
+	if patch == (updatePR{}) {
+		return cur, nil
+	}
+	var got apiPR
+	if _, err := t.c.call(ctx, op, http.MethodPatch, t.c.repoAPI(t.repo.ID, "pullrequests", strconv.FormatInt(cur.ID, 10)), nil, "", patch, &got); err != nil {
+		return nil, err
+	}
+	if err := got.check(op); err != nil {
+		return nil, err
+	}
+	if patch.Status != nil && got.Status == statusActive {
+		return nil, conflict(op, "Azure DevOps did not abandon #%d", cur.ID)
+	}
+	if len(got.Labels) == 0 {
+		got.Labels = cur.Labels
+	}
+	return &got, nil
+}
+
+// sameDescription reports whether desc, a description touchmark would
+// write, is the current description cur, which may hold marker lines a
+// person pasted (marker.Strip drops them, as toPR does), whatever line
+// endings and trailing whitespace either has.
+func sameDescription(desc, cur string) bool {
+	norm := func(s string) string {
+		return strings.TrimRight(strings.ReplaceAll(s, "\r\n", "\n"), " \t\r\n")
+	}
+	return norm(marker.Strip(desc)) == norm(marker.Strip(cur))
 }
 
 // Comment adds a comment to pull request number: a new thread with one

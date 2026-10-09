@@ -236,7 +236,14 @@ func TestCreatePRDuplicate(t *testing.T) {
 // the pull request.
 func editWorld(t *testing.T, s *apiServer, status string) (patches *[]updatePR) {
 	t.Helper()
-	pr, _ := createWorld(t, s)
+	patches, _ = editWorldPR(t, s, status)
+	return patches
+}
+
+// editWorldPR is editWorld that also returns #11 as the routes answer it.
+func editWorldPR(t *testing.T, s *apiServer, status string) (patches *[]updatePR, pr *map[string]any) {
+	t.Helper()
+	pr, _ = createWorld(t, s)
 	bot := identityRef(botID, "touchmark bot", "aad.Ym90")
 	*pr = prJSON(11, status, syncBranch, "main", bot, "old text")
 	var got []updatePR
@@ -258,7 +265,7 @@ func editWorld(t *testing.T, s *apiServer, status string) (patches *[]updatePR) 
 		}
 		writeJSON(w, http.StatusOK, *pr)
 	})
-	return &got
+	return &got, pr
 }
 
 func TestEditPR(t *testing.T) {

@@ -24,11 +24,15 @@ const (
 	// maxSweepPages bounds the active pull requests of one author in one
 	// project.
 	maxSweepPages = 100
-	// maxCloserReads bounds the abandoned pull requests per call whose
-	// closer is read (one GET each), newest first: memory looks at the 50
-	// newest closed pull requests (decide.MemoryConfig.Window); an older one
-	// reports no closer.
-	maxCloserReads = 60
+	// maxClosedReads bounds, per call and per status, the pull requests
+	// that are not active whose marker property is read (one GET each),
+	// newest first, and the abandoned ones whose closer is read (one GET
+	// each, the same ones): memory looks at the 50 newest closed pull
+	// requests of touchmark's (decide.MemoryConfig.Window, which hub.yml
+	// does not change), and the core reads no completed one. An older one
+	// reports neither a marker nor a closer: a closed pull request without
+	// a marker is nothing to the core.
+	maxClosedReads = 60
 	// listedDescription is how long a description a listing may show in
 	// full: listings cut descriptions to 400 characters (assumed from the
 	// observed listing; the REST reference says nothing), so a longer one,
@@ -186,14 +190,16 @@ func (c *client) toPR(p *apiPR, markerLine string) platform.PR {
 // HeadRepoID. The listing is complete or the call fails.
 //
 // Each pull request kept costs reads of its own: its properties, for the
-// marker (Pull Request Properties - List; one request each); the pull
-// request alone when the listing may have cut its description, and for an
-// abandoned one, to learn its closer (listings leave closedBy out; at most
-// maxCloserReads of them, newest first). BaseExists reads the Refs API for
-// a base other than r's default branch (once per base); HeadSHA, for an
-// active pull request from r itself, is its source branch's head (Refs
-// API: lastMergeSourceCommit lags behind pushes until the merge is
-// computed again), "" when the branch is gone.
+// marker (Pull Request Properties - List; one request each), for every
+// active one and for the maxClosedReads newest abandoned and completed
+// ones each; the pull request alone when the listing may have cut its
+// description, and for an abandoned one, to learn its closer (listings
+// leave closedBy out; the same maxClosedReads newest). An older pull
+// request that is not active comes without its marker. BaseExists reads
+// the Refs API for a base other than r's default branch (once per base);
+// HeadSHA, for an active pull request from r itself, is its source
+// branch's head (Refs API: lastMergeSourceCommit lags behind pushes until
+// the merge is computed again), "" when the branch is gone.
 func (d *reader) PRs(ctx context.Context, r platform.Repo, heads []string, authors []platform.Account) ([]platform.PR, error) {
 	const op = "list pull requests"
 	if !guidRe.MatchString(r.ID) {
@@ -232,15 +238,19 @@ func (d *reader) PRs(ctx context.Context, r platform.Repo, heads []string, autho
 	slices.SortFunc(found, func(a, b apiPR) int { return cmp.Compare(b.ID, a.ID) })
 	out := make([]platform.PR, 0, len(found))
 	bases := map[string]bool{}
-	closers := 0
+	closed := map[string]int{}
 	for i := range found {
 		p := &found[i]
 		alone := p.cut()
-		if p.Status == statusAbandoned && closers < maxCloserReads {
-			alone = true
-			closers++
+		props := true
+		if p.Status != statusActive {
+			props = closed[p.Status] < maxClosedReads
+			closed[p.Status]++
+			if props && p.Status == statusAbandoned {
+				alone = true
+			}
 		}
-		pr, err := d.c.complete(ctx, op, r, p, alone, bases)
+		pr, err := d.c.complete(ctx, op, r, p, alone, props, bases)
 		if err != nil {
 			return nil, err
 		}
@@ -250,9 +260,9 @@ func (d *reader) PRs(ctx context.Context, r platform.Repo, heads []string, autho
 }
 
 // complete reads what a listed pull request p of r lacks (the pull request
-// alone when alone is set, its marker property, its base, its head) and
-// converts it. known holds the bases found so far.
-func (c *client) complete(ctx context.Context, op string, r platform.Repo, p *apiPR, alone bool, known map[string]bool) (platform.PR, error) {
+// alone when alone is set, its marker property when props is set, its
+// base, its head) and converts it. known holds the bases found so far.
+func (c *client) complete(ctx context.Context, op string, r platform.Repo, p *apiPR, alone, props bool, known map[string]bool) (platform.PR, error) {
 	if alone {
 		full, err := c.getPR(ctx, op, r.ID, p.ID)
 		if err != nil {
@@ -260,10 +270,14 @@ func (c *client) complete(ctx context.Context, op string, r platform.Repo, p *ap
 		}
 		*p = *full
 	}
-	line, err := c.markerOf(ctx, op, r.ID, p.ID)
-	if err != nil {
-		return platform.PR{}, err
+	line := ""
+	if props {
+		var err error
+		if line, err = c.markerOf(ctx, op, r.ID, p.ID); err != nil {
+			return platform.PR{}, err
+		}
 	}
+	var err error
 	pr := c.toPR(p, line)
 	if pr.BaseExists, err = c.baseExists(ctx, op, r, pr.Base, known); err != nil {
 		return platform.PR{}, err

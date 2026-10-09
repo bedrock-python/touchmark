@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 	"unicode"
 
 	"github.com/bedrock-python/touchmark/internal/auth"
@@ -16,6 +18,7 @@ import (
 	"github.com/bedrock-python/touchmark/internal/httpx"
 	"github.com/bedrock-python/touchmark/internal/platform"
 	"github.com/bedrock-python/touchmark/internal/redact"
+	"github.com/bedrock-python/touchmark/internal/throttle"
 )
 
 // apiVersion is the REST API version every request asks for.
@@ -204,7 +207,29 @@ func (c *client) call(ctx context.Context, op, method, u string, query url.Value
 	if err != nil {
 		return resp, c.apiError(op, err)
 	}
+	slowDown(ctx, resp.Status, resp.Header)
 	return resp, nil
+}
+
+// slowDown pauses the provider's throttle when a successful answer
+// carries Retry-After: Azure DevOps delays the requests of an identity
+// over its threshold and asks it, in Retry-After, to wait before the next
+// one so as not to be delayed or blocked
+// (https://learn.microsoft.com/en-us/azure/devops/integrate/concepts/rate-limits).
+// The wait goes to the Meter of ctx as an exhausted budget
+// (throttle.Observe: a pause without a strike), bounded by maxRetryAfter;
+// nothing without a Meter. A refusal with Retry-After is a rate limit
+// instead (statusError).
+func slowDown(ctx context.Context, status int, h http.Header) {
+	if status < 200 || status > 299 || strings.TrimSpace(h.Get("Retry-After")) == "" {
+		return
+	}
+	d := retryAfter(http.Header{"Retry-After": h.Values("Retry-After")}, now())
+	if d <= 0 {
+		return
+	}
+	secs := int64((d + time.Second - 1) / time.Second)
+	throttle.Observe(ctx, http.Header{"X-Ratelimit-Remaining": {"0"}, "X-Ratelimit-Reset": {strconv.FormatInt(secs, 10)}})
 }
 
 // get is call with GET.
@@ -232,7 +257,8 @@ func signIn(status int, h http.Header) bool {
 func (c *client) signInError(op string, status int) error {
 	why := "Azure DevOps sent the request to its sign-in page: the credential is missing, expired or refused"
 	if c.token == "" {
-		why = "Azure DevOps sent the anonymous request to its sign-in page: the resource is not public"
+		why = "Azure DevOps sent the anonymous request to its sign-in page: it answers some reads only with a token, " +
+			"even in public projects (the Trees API, pull request properties); give the reader a personal access token with Code (read)"
 	}
 	return &platform.Error{Op: op, Class: platform.ClassAuth, Status: status, Err: errors.New(why)}
 }
@@ -261,6 +287,7 @@ func (c *client) raw(ctx context.Context, op, u string, query url.Values) ([]byt
 		return nil, c.signInError(op, resp.Status)
 	}
 	if resp.Status >= 200 && resp.Status <= 299 {
+		slowDown(ctx, resp.Status, resp.Header)
 		return resp.Body, nil
 	}
 	return nil, c.statusError(op, &httpx.StatusError{

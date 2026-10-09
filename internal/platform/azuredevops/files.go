@@ -67,8 +67,11 @@ type apiTreeEntry struct {
 // target's pull requests: a missing branch or commit
 // (GitUnresolvableToCommitException), a missing repository, or any other
 // 404 are ClassUnknown. An empty repository has no file: ErrNotFound. A
-// default branch that r names and the repository no longer has is read
-// once more as the repository names it now.
+// disabled repository (r.Disabled, or isDisabled when the repository is
+// read for its default branch) is ClassUnknown: it shows no default branch,
+// as an empty one does, and its files are unknown, not missing. A default
+// branch that r names and the repository no longer has is read once more
+// as the repository names it now.
 func (d *reader) ReadFile(ctx context.Context, r platform.Repo, ref, filePath string, max int64) (platform.File, error) {
 	const op = "read file"
 	if !guidRe.MatchString(r.ID) {
@@ -79,6 +82,9 @@ func (d *reader) ReadFile(ctx context.Context, r platform.Repo, ref, filePath st
 	}
 	if max < 0 {
 		return platform.File{}, invalid(op, "negative size limit %d", max)
+	}
+	if r.Disabled {
+		return platform.File{}, unknown(op, nil, "%s: the repository is disabled", r.Path)
 	}
 	dir, name := path.Split(filePath)
 	dir = "/" + strings.TrimSuffix(dir, "/")
@@ -155,7 +161,8 @@ func (d *reader) ReadFile(ctx context.Context, r platform.Repo, ref, filePath st
 // folder reads the item of dir (an absolute folder path, "/" for the root)
 // of r at ref. A missing path is ErrNotFound; a missing branch, commit or
 // repository, or any other 404, is ClassUnknown. ref "" is r's default
-// branch: an empty repository is ErrNotFound, and a default branch the
+// branch: an empty repository is ErrNotFound, a disabled one (which shows
+// no default branch either) ClassUnknown, and a default branch the
 // repository no longer has is read once more as the repository names it.
 func (c *client) folder(ctx context.Context, op string, r platform.Repo, ref, dir string) (*apiItem, error) {
 	if ref != "" {
@@ -176,6 +183,10 @@ func (c *client) folder(ctx context.Context, op string, r platform.Repo, ref, di
 			return nil, unknown(op, err, "%s: the repository is not found", r.Path)
 		case err != nil:
 			return nil, err
+		case repo.IsDisabled:
+			// A disabled repository shows no default branch either: never
+			// ErrNotFound, which would read as a missing opt-in file.
+			return nil, unknown(op, nil, "%s: the repository is disabled", r.Path)
 		case repo.DefaultBranch == "":
 			return nil, notFound(op, "%s: the repository is empty", r.Path)
 		case strings.TrimPrefix(repo.DefaultBranch, "refs/heads/") == branch:

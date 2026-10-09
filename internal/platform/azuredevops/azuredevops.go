@@ -55,8 +55,10 @@
 //     (Pull Request Properties) carry the marker under touchmark.marker;
 //   - limits are in TSTUs over a sliding five minutes, announced in
 //     X-RateLimit-Remaining and X-RateLimit-Reset (which internal/throttle
-//     reads from every answer) and in Retry-After; a blocked request is 429
-//     with TF400733 (https://learn.microsoft.com/en-us/azure/devops/integrate/concepts/rate-limits);
+//     reads from every answer) and in Retry-After, which the driver reads
+//     from refusals (a rate limit) and from answers that went through
+//     delayed (a pause of the throttle, without a strike); a blocked
+//     request is 429 with TF400733 (https://learn.microsoft.com/en-us/azure/devops/integrate/concepts/rate-limits);
 //   - branch policies refuse direct pushes to a branch they protect
 //     (TF402455) and a missing permission refuses a push with TF401027; the
 //     writer reads neither upfront.
@@ -64,10 +66,13 @@
 // What only a live organization can confirm is marked "assumed" where the
 // driver relies on it, and listed in docs/guide/providers.md.
 //
-// The driver never retries or paces (internal/throttle does), knows the
-// marker only as an opaque line it stores apart (marker.Detach,
-// marker.Attach: platform.MarkerInProperties), and masks secrets in its
-// errors.
+// The driver never retries or paces (internal/throttle does), with one
+// exception: the marker property of a pull request CreatePR has just
+// opened, which is tried again a few times and, should it still fail, gets
+// the pull request abandoned (an own pull request without its marker would
+// block its target). It knows the marker only as an opaque line it stores
+// apart (marker.Detach, marker.Attach: platform.MarkerInProperties), and
+// masks secrets in its errors.
 package azuredevops
 
 import (
@@ -80,9 +85,13 @@ import (
 )
 
 // NewReader returns the read driver for provider p (type "azure-devops")
-// with credential c (an auth.Token, a PAT with Code (read); a zero
-// credential reads anonymously, public projects only) over client, which
-// sends the token only to the organization's API hosts.
+// with credential c (an auth.Token, a PAT with Code (read)) over client,
+// which sends the token only to the organization's API hosts. A zero
+// credential reads anonymously, and gets little: public projects only, and
+// even there Azure DevOps sends anonymous reads of the Trees API (ReadFile)
+// and of pull request properties (PRs, the marker) to its sign-in page,
+// which the driver reports as ClassAuth: an anonymous reader serves
+// listings of public repositories, not a plan.
 func NewReader(p config.ResolvedProvider, c auth.Credential, client *httpx.Client) (platform.Reader, error) {
 	cl, err := newClient(p, c, client)
 	if err != nil {

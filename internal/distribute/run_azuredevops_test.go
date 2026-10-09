@@ -62,7 +62,8 @@ func (g *gitWorld) azCheckBody(pr platform.PR) marker.Marker {
 // then distribute and distribute again (which must write nothing), and
 // checks the target acme/api of distribute's report: outcome, reason, pull
 // request (the new one's number for opened, which the plan does not know)
-// and how many writes the fake saw. It returns the plan's report.
+// and how many writes the fake saw (the first pull request of a repository
+// creates its label too). It returns the plan's report.
 func (g *gitWorld) azStep(what string, edit func(*Deps), outcome report.Outcome, reason string, pr int64, writes int) *report.Delivery {
 	g.t.Helper()
 	plan := g.both(edit)
@@ -105,7 +106,7 @@ func TestRunAzureDevOpsDecline(t *testing.T) {
 	api := g.optedIn("acme/api", nil)
 	t0 := time.Date(2026, 9, 2, 12, 0, 0, 0, time.UTC)
 
-	g.azStep("the first run", nil, report.OutcomeOpened, "", 1, 2)
+	g.azStep("the first run", nil, report.OutcomeOpened, "", 1, 3)
 	pr := g.p.PR(api.ID, 1)
 	if m := g.azCheckBody(pr); m.Data.OptIn != optInHash(t, "version: 1\n") || m.Data.Ack {
 		t.Errorf("#1: optin %q ack %v, want the opt-in file's hash, no ack", m.Data.OptIn, m.Data.Ack)
@@ -172,7 +173,7 @@ func TestRunAzureDevOpsSelfClose(t *testing.T) {
 	t.Parallel()
 	g := azWorld(t)
 	api := g.optedIn("acme/api", nil)
-	g.azStep("the first run", nil, report.OutcomeOpened, "", 1, 2)
+	g.azStep("the first run", nil, report.OutcomeOpened, "", 1, 3)
 
 	g.push(api, "main", g.person, baseFiles...)
 	g.azStep("no-diff", nil, report.OutcomeClosed, "no-diff", 1, 3)
@@ -201,7 +202,7 @@ func TestRunAzureDevOpsLongBody(t *testing.T) {
 	}
 	g.pack(files...)
 	api := g.optedIn("acme/api", nil)
-	g.azStep("the first run", nil, report.OutcomeOpened, "", 1, 2)
+	g.azStep("the first run", nil, report.OutcomeOpened, "", 1, 3)
 	pr := g.p.PR(api.ID, 1)
 	m := g.azCheckBody(pr)
 	if len(m.Data.Changes) != 120 || !m.Data.ChangesComplete {

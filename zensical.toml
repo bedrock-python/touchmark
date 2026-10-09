@@ -21,6 +21,7 @@ nav = [
         { "A hub on GitLab" = "getting-started/gitlab.md" },
         { "A hub on Gitea or Forgejo" = "getting-started/gitea-forgejo.md" },
         { "A hub on Bitbucket Cloud" = "getting-started/bitbucket.md" },
+        { "A hub on Azure DevOps" = "getting-started/azure-devops.md" },
         { "Opt a repository in" = "getting-started/opt-in.md" },
     ] },
     { "Concepts" = [

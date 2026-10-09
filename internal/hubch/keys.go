@@ -2,6 +2,7 @@ package hubch
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
@@ -21,15 +22,15 @@ import (
 
 // KeyStoreInput locates the hub for ReadKeyStore.
 type KeyStoreInput struct {
-	// Platform is "github", "gitlab", "gitea", "forgejo" or "bitbucket";
-	// "azure-devops" is refused for now.
+	// Platform is "github", "gitlab", "gitea", "forgejo", "bitbucket" or
+	// "azure-devops".
 	Platform string
 	// APIURL is the REST base of the hub's platform (…/api/v3, /api/v4,
-	// /api/v1, https://api.github.com).
+	// /api/v1, https://api.github.com, https://dev.azure.com/<org>).
 	APIURL string
 	// RepoID is the hub repository's immutable id (the fingerprint's): a
-	// number, or on Bitbucket the repository's UUID (with or without
-	// braces).
+	// number, on Bitbucket the repository's UUID (with or without braces),
+	// on Azure DevOps the repository's GUID.
 	RepoID string
 	// Token is the maintainer's token.
 	Token string
@@ -64,26 +65,40 @@ type KeyStore struct {
 	// variables (ci_pipeline_variables_minimum_override_role); "" when
 	// not shown.
 	PipelineVariables string
+	// VariableGroups are the variable groups of the hub's project on Azure
+	// DevOps, with the checks and pipeline permissions of those that may
+	// hold a write key; VariableGroupsUnread says why they could not be
+	// listed ("" when they were).
+	VariableGroups       []VariableGroup
+	VariableGroupsUnread string
+	// PipelineSettings are the Azure DevOps project's pipeline settings
+	// that bear on the write key; nil when they could not be read
+	// (PipelineSettingsUnread says why).
+	PipelineSettings       *PipelineSettings
+	PipelineSettingsUnread string
 	// Unread lists what could not be read, and why: the checks that need it
 	// are unknown.
 	Unread []string
 }
 
-// Secret is one secret (GitHub, Gitea, Forgejo), CI/CD variable (GitLab)
-// or Pipelines variable (Bitbucket).
+// Secret is one secret (GitHub, Gitea, Forgejo), CI/CD variable (GitLab),
+// Pipelines variable (Bitbucket) or pipeline or variable group variable
+// (Azure DevOps).
 type Secret struct {
 	Name string
 	// Where is "repository", "organization" (shared with the hub),
 	// "dependabot", "environment" (Environment names it; a deployment
 	// variable on Bitbucket), "project" or "group" (Group names it, GitLab),
-	// "workspace" (Bitbucket).
+	// "workspace" (Bitbucket), "pipeline" (Group names the pipeline) or
+	// "variable group" (Group names it; Azure DevOps).
 	Where       string
 	Environment string
 	Group       string
 	// Protected, Masked and Scope are GitLab's: a protected variable
 	// reaches pipelines of protected refs only; Scope is its environment
 	// scope ("*" for every job). On Bitbucket Masked is a secured
-	// variable: hidden in the logs and the API.
+	// variable, on Azure DevOps a secret one: hidden in the logs and the
+	// API.
 	Protected bool
 	Masked    bool
 	Scope     string
@@ -124,7 +139,10 @@ const (
 //   - Gitea and Forgejo: the repository by id, the names of its Actions
 //     secrets and of its organization's;
 //   - Bitbucket: the repository by UUID; its Pipelines variables, its
-//     workspace's, and each deployment environment's (secured or not).
+//     workspace's, and each deployment environment's (secured or not);
+//   - Azure DevOps: the repository by id; the variables of the pipelines
+//     that build it, the project's variable groups, and the checks and
+//     pipeline permissions of the groups that may hold a write key.
 //
 // A listing the token may not read is noted in Unread, or in the field of
 // its own (EnvironmentsUnread, ProtectedBranchesUnread,
@@ -138,6 +156,10 @@ func ReadKeyStore(ctx context.Context, in KeyStoreInput) (KeyStore, error) {
 	case in.Platform == "bitbucket":
 		if in.RepoID = BitbucketRepoID(in.RepoID); in.RepoID == "" {
 			return KeyStore{}, errors.New("hub keys: the hub's repository UUID is unknown")
+		}
+	case in.Platform == "azure-devops":
+		if in.RepoID = AzureRepoID(in.RepoID); in.RepoID == "" {
+			return KeyStore{}, errors.New("hub keys: the hub's repository id is unknown")
 		}
 	case repoID(in.RepoID) == "":
 		return KeyStore{}, errors.New("hub keys: the hub's repository id is unknown")
@@ -167,7 +189,10 @@ func ReadKeyStore(ctx context.Context, in KeyStoreInput) (KeyStore, error) {
 		k.auth = &httpx.Auth{Hosts: []string{api.Host}, Header: k.header("Bearer ")}
 		return k.bitbucket(ctx)
 	case "azure-devops":
-		return KeyStore{}, errors.New("hub keys: a hub on Azure DevOps is not supported yet")
+		// A personal access token: Basic with an empty user name.
+		basic := "Basic " + base64.StdEncoding.EncodeToString([]byte(":"+in.Token))
+		k.auth = &httpx.Auth{Hosts: []string{api.Host}, Header: func(context.Context) (string, error) { return basic, nil }}
+		return k.azure(ctx)
 	}
 	return KeyStore{}, fmt.Errorf("hub keys: unknown platform %q", in.Platform)
 }

@@ -67,7 +67,9 @@ of what each one would receive on every pull request to the hub.
   fails the run when a branch could see the write key. See the
   [security model](concepts/security.md).
 - **One hub, several platforms.** GitHub (github.com, GHE.com, GitHub Enterprise Server),
-  GitLab (gitlab.com and self-managed), Gitea and Forgejo, at once from one hub.
+  GitLab (gitlab.com and self-managed), Gitea, Forgejo, Bitbucket Cloud and Azure DevOps
+  Services, at once from one hub. Bitbucket and Azure DevOps are built from their
+  documentation and not yet run on a live account.
 
 ## Where to start
 
@@ -115,7 +117,7 @@ of what each one would receive on every pull request to the hub.
 
 | | |
 |---|---|
-| Platforms | GitHub (github.com, GHE.com, GHES 3.19+), GitLab 17.0+, Gitea 1.26+, Forgejo 15+ |
+| Platforms | GitHub (github.com, GHE.com, GHES 3.19+), GitLab 17.0+, Gitea 1.26+, Forgejo 15+, Bitbucket Cloud, Azure DevOps Services |
 | Runs as | a GitHub Action, a container image, a single static binary |
 | Needs | git 2.31+ for `check`, `status`, `apply`; git 2.45+ for `plan` and `distribute` (the image brings its own) |
 | Configuration | `hub.yml`, `targets.yml`, `.touchmark/operations.yml` in the hub; `.engineering-assets.yml` in a target |

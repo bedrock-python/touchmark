@@ -38,7 +38,10 @@ const (
 	// BitbucketPipelines is Bitbucket Pipelines, which runs on Bitbucket
 	// Cloud only (bitbucket.org).
 	BitbucketPipelines CI = "bitbucket-pipelines"
-	Local              CI = "local"
+	// AzurePipelines is Azure Pipelines building a repository of Azure
+	// Repos on Azure DevOps Services (dev.azure.com).
+	AzurePipelines CI = "azure-pipelines"
+	Local          CI = "local"
 )
 
 // GitLabUser is the user of the job token in git's Basic header; register
@@ -107,6 +110,8 @@ type Context struct {
 //   - Bitbucket Pipelines (BITBUCKET_BUILD_NUMBER set): see
 //     detectBitbucket. Pipelines names no default branch: the hub channel
 //     reads it (RepositoryReader).
+//   - Azure Pipelines (TF_BUILD=True): see detectAzure. No variable names
+//     the default branch or the visibility: the hub channel reads them.
 //   - Otherwise Local with everything empty.
 //
 // readFile reads the event payload; errors reading or parsing it leave the
@@ -150,6 +155,8 @@ func Detect(getenv func(string) string, readFile func(string) ([]byte, error)) C
 		return detectGitLab(env)
 	case env("BITBUCKET_BUILD_NUMBER") != "":
 		return detectBitbucket(env)
+	case isTrue(env("TF_BUILD")):
+		return detectAzure(env)
 	}
 	return Context{CI: Local}
 }
@@ -404,7 +411,8 @@ type Channel interface {
 // on GitHub Actions, CI_JOB_TOKEN on GitLab CI, GITEA_TOKEN or GITHUB_TOKEN
 // on Gitea and Forgejo Actions, TOUCHMARK_PIPELINES_TOKEN on Bitbucket
 // Pipelines (BitbucketTokenVar: Pipelines gives a step no API token of its
-// own); "" when absent or Local.
+// own), SYSTEM_ACCESSTOKEN on Azure Pipelines (AzureTokenVar, mapped into
+// the step); "" when absent or Local.
 //
 // The caller registers the token with its redact.Registry before use, on
 // GitLab with the basic user GitLabUser.
@@ -425,6 +433,8 @@ func Token(c Context, getenv func(string) string) string {
 		return env("GITHUB_TOKEN")
 	case BitbucketPipelines:
 		return env(BitbucketTokenVar)
+	case AzurePipelines:
+		return env(AzureTokenVar)
 	}
 	return ""
 }
@@ -436,6 +446,8 @@ func Token(c Context, getenv func(string) string) string {
 //     the host of c.APIURL;
 //   - Bitbucket: REST over client (newBitbucket), with the hub's access
 //     token as a Bearer token sent only to the host of c.APIURL;
+//   - Azure DevOps: REST over client (newAzure), with the job access token
+//     as a Bearer token sent only to the host of c.APIURL;
 //   - GitLab: `git ls-remote` of c.RepositoryURL with the job token passed
 //     as an http.extraHeader through GIT_CONFIG_COUNT/KEY/VALUE environment
 //     variables (never in the URL or argv), because CI_JOB_TOKEN cannot
@@ -467,6 +479,8 @@ func New(c Context, client *httpx.Client, token string) (Channel, error) {
 		return newGit(c, token)
 	case BitbucketPipelines:
 		return newBitbucket(c, client, token)
+	case AzurePipelines:
+		return newAzure(c, client, token)
 	case Local, "":
 		return nil, errors.New("hub channel: not running in a known CI")
 	}

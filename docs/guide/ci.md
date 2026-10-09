@@ -1,8 +1,8 @@
 # Run it in CI
 
 The [hub template](https://github.com/bedrock-python/engineering-assets-template) ships
-the CI files for GitHub Actions, GitLab CI, Gitea and Forgejo Actions, and Bitbucket
-Pipelines; each platform reads only its own. Copy them rather
+the CI files for GitHub Actions, GitLab CI, Gitea and Forgejo Actions, Bitbucket
+Pipelines and Azure Pipelines; each platform reads only its own. Copy them rather
 than writing your own: the jobs, the probe and the environment fit together. This page
 explains what they rely on.
 
@@ -184,6 +184,66 @@ pipelines:
 - **The hub's fingerprint** is `bitbucket.org/` and `BITBUCKET_REPO_UUID` without its
   braces, lowercase.
 
+## Azure Pipelines
+
+A hub in Azure Repos (Azure DevOps Services) runs touchmark with docker on the agent: an
+Azure container job needs bash, glibc and Node.js in the image, which touchmark's Alpine
+image does not have. The template's `azure-pipelines.yml` calls one step template,
+`.azure-pipelines/touchmark.yml`, which runs the image pinned by digest as the agent's
+user and maps the keys into the step:
+
+```yaml
+stages:
+  - stage: probe                    # every run, without the variable group
+    jobs:
+      - job: probe
+        steps:
+          - checkout: none
+          - template: .azure-pipelines/touchmark.yml
+            parameters: { name: probe, args: probe, write: true }
+  - stage: check                    # pull request builds (Build validation)
+    condition: and(succeeded(), eq(variables['Build.Reason'], 'PullRequest'))
+    jobs:
+      - job: check                  # touchmark check --hub .
+      - job: plan                   # fetch the target branch, then plan --hub . --strict --comment
+  - stage: distribute               # pushes to the default branch, the daily schedule, Run pipeline
+    jobs:
+      - deployment: distribute
+        environment: touchmark-distribute
+        variables:
+          - group: touchmark-distribute
+        timeoutInMinutes: 60
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                  fetchDepth: 0
+                - template: .azure-pipelines/touchmark.yml
+                  parameters: { name: distribute, args: distribute --hub . --deadline 50m, write: true, report: true }
+  - stage: doctor                   # the weekly schedule, Run pipeline: the same deployment job
+```
+
+- **The write key** is a secret variable of the variable group `touchmark-distribute`,
+  which only the deployment jobs link. Any branch's copy of the file could link it too:
+  the group's Branch control check, admitting the default branch only, is what keeps
+  the others out, and touchmark cannot read it from the job, so `platform` needs
+  `security.reason` there. touchmark checks `Environment.Name` (`ENVIRONMENT_NAME`) in
+  `distribute` and `doctor`: see
+  [A hub on Azure DevOps](../getting-started/azure-devops.md#where-the-write-key-can-live).
+- **The hub channel** uses the job access token, `System.AccessToken`, which the step
+  template maps into `SYSTEM_ACCESSTOKEN`: no variable names the default branch, so
+  touchmark reads it, its tip and the project's visibility through the API, and keeps
+  `plan`'s comment with it.
+- **`probe`** runs in a stage of its own, without the group, at the start of every run,
+  and maps the writer's variable: a write key in a pipeline variable stops the run there.
+- **Pull request builds** come from the branch policy *Build validation*: Azure Repos
+  ignores `pr:` triggers.
+- **Logging commands.** The Azure agent runs any `##vso[…]` it finds in a step's output.
+  Under Azure Pipelines (`TF_BUILD=True`) touchmark breaks every `##vso[` it prints, so
+  that nothing a platform or a target says becomes a command.
+- **The hub's fingerprint** is `dev.azure.com/` and `Build.Repository.ID`, lowercase.
+
 ## Reports, summaries and annotations
 
 In CI, `plan` and `distribute` leave their report as `touchmark-report.json` and
@@ -205,6 +265,11 @@ job's artifacts.
   artifacts. `plan --comment` keeps the report in one comment of the hub pull request
   with `TOUCHMARK_PIPELINES_TOKEN`, without HTML (Bitbucket shows it as text), its marker
   a Markdown link reference definition.
+- **Azure Pipelines:** the step template uploads the Markdown reports to the run's
+  summary and publishes the report files as an artifact. `plan --comment` keeps the
+  report in one closed comment thread of the hub pull request with the job access token,
+  as on Bitbucket without HTML, when the project's build service may contribute to pull
+  requests on the hub (see the guide for when to grant it).
 
 In a public hub, targets that are not public are only counted in all of these outputs,
 never named.

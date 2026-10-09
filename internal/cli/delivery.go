@@ -232,17 +232,18 @@ type failedChannel struct{ err error }
 func (c failedChannel) Head(context.Context) (string, error) { return "", c.err }
 
 // hubRepository fills in what the CI does not say about the hub: Bitbucket
-// Pipelines names no default branch, so on Bitbucket the hub channel reads
-// it, with the hub's access token (TOUCHMARK_PIPELINES_TOKEN; a public hub
-// answers without one), and the visibility when BITBUCKET_REPO_IS_PRIVATE
-// was missing. It reads the hub repository only, before any guard: the
-// guards then compare the run's branch with it. When the channel cannot
-// read it the context stays without a default branch, with a warning:
-// distribute and doctor refuse to run then (distribute.DistributeGuard),
-// and plan reads its providers without credentials. Every other CI is
-// returned as it is.
+// Pipelines and Azure Pipelines name no default branch, so there the hub
+// channel reads it, and the visibility when the CI names none: on Bitbucket
+// with the hub's access token (TOUCHMARK_PIPELINES_TOKEN; a public hub
+// answers without one), on Azure with the job access token
+// (SYSTEM_ACCESSTOKEN, mapped into the step). It reads the hub repository
+// only, before any guard: the guards then compare the run's branch with it.
+// When the channel cannot read it the context stays without a default
+// branch, with a warning: distribute and doctor refuse to run then
+// (distribute.DistributeGuard), and plan reads its providers without
+// credentials. Every other CI is returned as it is.
 func hubRepository(ctx context.Context, hctx hubch.Context, getenv func(string) string) (hubch.Context, []string) {
-	if hctx.CI != hubch.BitbucketPipelines || hctx.DefaultBranch != "" {
+	if (hctx.CI != hubch.BitbucketPipelines && hctx.CI != hubch.AzurePipelines) || hctx.DefaultBranch != "" {
 		return hctx, nil
 	}
 	reg := redact.New()
@@ -260,11 +261,17 @@ func hubRepository(ctx context.Context, hctx hubch.Context, getenv func(string) 
 		return r.Repository(ctx)
 	}()
 	if err != nil {
-		hint := ""
-		if token == "" {
+		ci, hint := "Bitbucket Pipelines", ""
+		switch {
+		case hctx.CI == hubch.AzurePipelines:
+			ci = "Azure Pipelines"
+			if token == "" {
+				hint = "; map the job access token into the step: env: " + hubch.AzureTokenVar + ": $(System.AccessToken)"
+			}
+		case token == "":
 			hint = "; a private hub needs " + hubch.BitbucketTokenVar + ", an access token of the hub repository with Repositories: Read"
 		}
-		return hctx, []string{reg.Replace(fmt.Sprintf("Bitbucket Pipelines names no default branch of the hub, and the hub channel could not read it: %v%s", err, hint))}
+		return hctx, []string{reg.Replace(fmt.Sprintf("%s names no default branch of the hub, and the hub channel could not read it: %v%s", ci, err, hint))}
 	}
 	hctx.DefaultBranch = info.DefaultBranch
 	if hctx.Visibility == "" {

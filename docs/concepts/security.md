@@ -60,12 +60,22 @@ their own workflow instead of running yours. So the probe runs where an attacker
   not show them, so under `platform` `distribute` and `doctor` refuse to run unless
   `security.reason` states them. Without Premium use `none` with a reason, or
   `external`. See [A hub on Bitbucket Cloud](../getting-started/bitbucket.md).
+- **Azure Pipelines:** `touchmark probe` runs in a stage of its own at the start of every
+  run, without the variable group, with the writer's variable mapped, and fails if it
+  sees a write key: a pipeline variable reaches every branch's runs, pull request builds
+  included. The variable group `touchmark-distribute` reaches any stage that links it, in
+  any branch's `azure-pipelines.yml`, unless its Branch control check admits the default
+  branch alone; a job's token is not known to read that check, so under `platform`
+  `distribute` and `doctor` refuse to run unless `security.reason` states it, and
+  `doctor --hub-token` verifies it. See
+  [A hub on Azure DevOps](../getting-started/azure-devops.md).
 
 **The guards** of `distribute` (and of `doctor` in CI), each exit 2 with nothing written:
 the run is not on the default branch, or is a pull request event; on GitLab the ref is
 not protected or the job is not in the environment `touchmark-distribute`; on Bitbucket
 the step has no `deployment: touchmark-distribute`, the default branch could not be read,
-or `platform` comes without the statement in `security.reason`; the probe saw
+or `platform` comes without the statement in `security.reason`; on Azure Pipelines the
+same, for a deployment job to the environment `touchmark-distribute`; the probe saw
 a write key or did not run; an operation flag was given in CI; git is older than 2.45;
 the write key belongs to another account than `hub.yml`'s `writer`. `plan` in CI exits 2
 when it sees any write key. A run on a commit that is no longer the tip of the default

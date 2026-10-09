@@ -288,6 +288,11 @@ jobs:
         if: steps.template.outputs.public == 'true'
         run: TOUCHMARK_E2E_TEMPLATE="$PWD/.ci/template" go test -count=1 -v -run '^TestTemplatePipelines$' ./internal/e2e/bitbucket/
 
+      # Skips while the published template has no azure-pipelines.yml.
+      - name: go test -run TestTemplateAzurePipelines
+        if: steps.template.outputs.public == 'true'
+        run: TOUCHMARK_E2E_TEMPLATE="$PWD/.ci/template" go test -count=1 -v -run '^TestTemplateAzurePipelines$' ./internal/e2e/azure/
+
   release-snapshot:
     # The release without publishing anything (docs/project/release.md):
     # the scripts of the release and of the Action by their tests;

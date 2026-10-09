@@ -300,12 +300,9 @@ func (h *hub) keyLocation(ctx context.Context, e *env, rps []config.ResolvedProv
 	i := strings.LastIndexByte(fp, '/')
 	host, id := strings.ToLower(fp[:i]), fp[i+1:]
 	in := hubch.KeyStoreInput{RepoID: id, Token: token}
-	var pp *planProvider
-	for _, rp := range rps {
-		if strings.EqualFold(rp.Host, host) {
-			pp = &planProvider{ResolvedProvider: rp}
-			break
-		}
+	pp, err := h.hubProvider(ctx, rps, host)
+	if err != nil {
+		return nil, err
 	}
 	switch {
 	case pp != nil:
@@ -352,6 +349,35 @@ func (h *hub) keyLocation(ctx context.Context, e *env, rps []config.ResolvedProv
 		return nil, err
 	}
 	return distribute.KeyLocationChecks(ks, config.WriteKeySecrets(workflows), h.cfg), nil
+}
+
+// hubProvider returns the provider of hub.yml on the hub's host, nil when
+// none is there. Azure DevOps puts every organization on dev.azure.com, and
+// the fingerprint names the repository alone: with providers of several
+// organizations there, the one of the hub's origin remote
+// (https://dev.azure.com/<organization>/…) is the hub's.
+func (h *hub) hubProvider(ctx context.Context, rps []config.ResolvedProvider, host string) (*planProvider, error) {
+	var on []config.ResolvedProvider
+	for _, rp := range rps {
+		if strings.EqualFold(rp.Host, host) {
+			on = append(on, rp)
+		}
+	}
+	switch {
+	case len(on) == 0:
+		return nil, nil
+	case len(on) == 1 || on[0].Type != "azure-devops":
+		return &planProvider{ResolvedProvider: on[0]}, nil
+	}
+	org, _ := strings.CutPrefix(h.originHost(ctx), host+"/")
+	for _, rp := range on {
+		if o, ok := config.AzureDevOpsOrg(rp.URL); ok && org != "" && strings.EqualFold(o, org) {
+			return &planProvider{ResolvedProvider: rp}, nil
+		}
+	}
+	return nil, configErrorf("--hub-token: %s has several Azure DevOps organizations on %s, and the hub's origin remote names none of them: "+
+		"run doctor --hub-token from a clone of the hub, whose origin is https://%s/<organization>/<project>/_git/<repository> "+
+		"or its SSH form", config.HubFile, host, host)
 }
 
 // hubAPIHost is the host name of the API of a hub on host (a fingerprint's

@@ -206,9 +206,10 @@ their scopes: `doctor` reports both as unknown, so keep a reminder to rotate the
 A provider of type `azure-devops` is one organization of Azure DevOps Services, and its
 `url` names it: `https://dev.azure.com/<organization>` (one provider per organization;
 the old `https://<organization>.visualstudio.com` form and Azure DevOps Server are not
-supported). `plan`, `distribute` and `doctor` work on it from a hub on GitHub or GitLab,
-or wherever you run touchmark; a hub whose own CI is Azure Pipelines is not supported
-yet, and `setup` has nothing for it.
+supported). `plan`, `distribute` and `doctor` work on it from a hub on any platform, or
+wherever you run touchmark, and from a hub in Azure Repos itself, whose CI is Azure
+Pipelines (see [A hub on Azure DevOps](../getting-started/azure-devops.md)); `setup` has
+nothing for it.
 
 ```yaml
 # hub.yml

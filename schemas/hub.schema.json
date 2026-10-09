@@ -146,6 +146,10 @@
         "private_targets_in_public_hub": {
           "description": "What a public hub does with non-public targets: skip them, or deliver and let their names reach public CI logs. Default: skip.",
           "enum": ["skip", "deliver"]
+        },
+        "writer_on_hub": {
+          "description": "What a writer that reaches the hub means. refuse: doctor fails it, and setup gitlab refuses a hub inside the group of targets. guard (GitLab): the writer may be a Developer of the hub; doctor verifies that it cannot get content onto the default branch, and plan refuses a hub merge request the writer opened or pushed to. Default: refuse.",
+          "enum": ["refuse", "guard"]
         }
       },
       "if": {

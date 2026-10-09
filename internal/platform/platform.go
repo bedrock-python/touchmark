@@ -497,6 +497,42 @@ type PushGuard interface {
 	NoPush(ctx context.Context, r Repo, branches []string) ([]Protected, error)
 }
 
+// HubGuard tells, for a writer that reaches the hub
+// (security.writer_on_hub: guard), whether it can get content onto the
+// hub's default branch. Optional (GitLab); doctor uses it.
+type HubGuard interface {
+	// GuardHub returns the findings of check "hub-guard" on hub, one per
+	// condition: the writer's role, the protection of the default branch
+	// against its pushes and merges, the other protected branches and tags
+	// it may push or create, and the hub's settings that make a merge wait
+	// for the plan of the default branch's CI configuration. A condition it
+	// cannot read is FindingUnknown. Only a rate limit, a refused credential
+	// or the end of ctx fail the call.
+	GuardHub(ctx context.Context, hub Repo) ([]Finding, error)
+}
+
+// MergeRequestAuditor tells who opened a merge request of the hub and who
+// pushed to its source branch, for plan's guard under
+// security.writer_on_hub guard. Optional (GitLab); the reader answers.
+type MergeRequestAuditor interface {
+	// MergeRequestPushes reads merge request number of hub and the pushes
+	// to its source branch since the branch was created.
+	MergeRequestPushes(ctx context.Context, hub Repo, number int64) (MergeRequestPushes, error)
+}
+
+// MergeRequestPushes is what MergeRequestAuditor found.
+type MergeRequestPushes struct {
+	Author Account
+	// Branch is the source branch; Pushers the accounts that pushed to it,
+	// each once, since it was created.
+	Branch  string
+	Pushers []Account
+	// Complete is false when the pushes could not be read back to the
+	// branch's creation; Why then says why.
+	Complete bool
+	Why      string
+}
+
 // Protected is a branch a protection rule keeps the identity from pushing
 // to, and the rule (its name or pattern; empty when the platform does not
 // show it).

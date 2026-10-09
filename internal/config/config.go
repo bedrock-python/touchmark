@@ -93,6 +93,12 @@ type Security struct {
 	WriteIsolation            string `yaml:"write_isolation"` // platform | external | none
 	Reason                    string `yaml:"reason"`
 	PrivateTargetsInPublicHub string `yaml:"private_targets_in_public_hub"` // skip | deliver
+	// WriterOnHub is what touchmark makes of a writer that reaches the hub:
+	// refuse (the default: doctor fails hub-hidden, setup refuses a hub
+	// inside the group of targets) or guard (on GitLab, doctor verifies
+	// that the writer cannot get content onto the hub's default branch, and
+	// plan refuses a hub merge request the writer opened or pushed to).
+	WriterOnHub string `yaml:"writer_on_hub"` // refuse | guard
 }
 
 type Provider struct {
@@ -234,7 +240,8 @@ func (o *OptIn) Disabled() bool { return o != nil && o.Enabled != nil && !*o.Ena
 // takes its default: branch touchmark/<id>, the commit message and PR title
 // "chore: sync engineering assets", the label engineering-assets, link_hub
 // auto, max_new_prs_per_run 100, max_close_fraction 0.1, auto_close_cooldown
-// 30d, write_isolation platform, private_targets_in_public_hub skip, and per
+// 30d, write_isolation platform, private_targets_in_public_hub skip,
+// writer_on_hub refuse, and per
 // provider sign auto and the public URL of github and gitlab; the hosts of
 // previous_fingerprints are canonical (CanonicalFingerprint). The
 // single-provider shorthand with platform (platform, base_url, writer, sign)

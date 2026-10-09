@@ -654,3 +654,58 @@ func TestDefaultNames(t *testing.T) {
 		t.Errorf("%d characters", len(r))
 	}
 }
+
+// TestGitLabWriterOnHub: under security.writer_on_hub guard a hub inside
+// the group of targets is set up: the writer reaches it as a Developer,
+// merges wait for a pipeline that succeeded, and the CI file is read from
+// the default branch; a writer that is a Maintainer fails.
+func TestGitLabWriterOnHub(t *testing.T) {
+	w := newGLWorld(t, "18.11")
+	inner := w.f.addProject("hub2", w.services.id, nil)
+	in := w.input(false)
+	in.Project, in.WriterOnHub = "acme/services/hub2", "guard"
+	rep := w.run(t, in)
+	wantSteps(t, rep, map[string]Status{"group": StatusOK, "writer-guard": StatusOK, "merge-checks": StatusDone, "ci-config": StatusDone})
+	if d := step(t, rep, "group").Detail; !strings.Contains(d, "holds the targets and the hub") {
+		t.Errorf("group %q", d)
+	}
+	if d := step(t, rep, "writer-guard").Detail; !strings.Contains(d, "Developer") {
+		t.Errorf("writer-guard %q", d)
+	}
+	w.f.mu.Lock()
+	settings := inner.settings
+	w.f.mu.Unlock()
+	if settings["ci_config_path"] != ".gitlab-ci.yml@acme/services/hub2:main" || settings["only_allow_merge_if_pipeline_succeeds"] != true ||
+		settings["allow_merge_on_skipped_pipeline"] != false {
+		t.Errorf("settings %v", settings)
+	}
+	if s := step(t, rep, "check hub-guard"); s.Status != StatusOK {
+		t.Errorf("check hub-guard %s %q", s.Status, s.Detail)
+	}
+	// A second run changes nothing.
+	rep = w.run(t, in)
+	wantSteps(t, rep, map[string]Status{"merge-checks": StatusOK, "ci-config": StatusOK})
+
+	// A custom CI file keeps its name.
+	w.f.mu.Lock()
+	inner.settings["ci_config_path"] = "ci/hub.yml"
+	w.f.mu.Unlock()
+	w.run(t, in)
+	w.f.mu.Lock()
+	got := inner.settings["ci_config_path"]
+	w.f.mu.Unlock()
+	if got != "ci/hub.yml@acme/services/hub2:main" {
+		t.Errorf("ci_config_path %v", got)
+	}
+
+	// A writer that is a Maintainer of the hub fails.
+	for _, u := range w.f.users {
+		if u.username == rep.Writer {
+			inner.members[u.id] = 40
+		}
+	}
+	rep = w.run(t, in)
+	if s := step(t, rep, "writer-guard"); s.Status != StatusFail || rep.ExitCode() != ExitFailed {
+		t.Errorf("writer-guard %s %q, exit %d", s.Status, s.Detail, rep.ExitCode())
+	}
+}

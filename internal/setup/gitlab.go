@@ -62,6 +62,11 @@ type GitLabInput struct {
 	Client *httpx.Client
 	// Isolation is security.write_isolation: platform or external.
 	Isolation string
+	// WriterOnHub is security.writer_on_hub: refuse (or "") keeps the hub
+	// outside the group of targets; guard lets the writer reach the hub as
+	// a Developer, and sets up and checks what then keeps it from getting
+	// content onto the hub's default branch.
+	WriterOnHub string
 	// Accounts is AccountsAuto (service accounts where the instance lets
 	// the token create them, else group access tokens), AccountsService or
 	// AccountsGroup.
@@ -149,6 +154,10 @@ type glProject struct {
 	PipelineVariablesRole *string `json:"ci_pipeline_variables_minimum_override_role"`
 	RestrictVariables     *bool   `json:"restrict_user_defined_variables"`
 	ProtectMRPipelines    *bool   `json:"protect_merge_request_pipelines"`
+	// The settings of security.writer_on_hub guard.
+	CIConfigPath       *string `json:"ci_config_path"`
+	MergeAfterPipeline *bool   `json:"only_allow_merge_if_pipeline_succeeds"`
+	MergeOnSkipped     *bool   `json:"allow_merge_on_skipped_pipeline"`
 }
 
 // glGroup is a group.
@@ -240,6 +249,9 @@ type gitlabSetup struct {
 	reader  *glAccount
 	writer  *glAccount
 	variabs []glVariable
+	// inside is set when the hub is inside the group of targets
+	// (security.writer_on_hub guard only).
+	inside bool
 }
 
 // GitLab sets up the hub's GitLab for touchmark (see the package
@@ -303,7 +315,11 @@ func GitLab(ctx context.Context, in GitLabInput) (*Report, error) {
 		g.role(ctx, g.writer)
 	}
 	r.Reader, r.Writer = g.reader.login, g.writer.login
-	g.writerHidden(ctx)
+	if g.guard() {
+		g.writerGuard(ctx)
+	} else {
+		g.writerHidden(ctx)
+	}
 	g.environment(ctx)
 	if err := g.readVariables(ctx); err != nil {
 		r.add("variables", StatusFail, "cannot list the hub's CI/CD variables: %v", err)
@@ -334,7 +350,7 @@ func id(n int64) string { return strconv.FormatInt(n, 10) }
 
 // identify reads who the token is, the hub and the group, and checks that
 // setup may go on: a Maintainer of the hub, an Owner of the group, and the
-// hub outside the group.
+// hub outside the group unless security.writer_on_hub is guard.
 func (g *gitlabSetup) identify(ctx context.Context) error {
 	in := g.in
 	if err := g.get(ctx, &g.me, "user"); err != nil {
@@ -381,9 +397,11 @@ func (g *gitlabSetup) identify(ctx context.Context) error {
 	}
 	g.r.Group = g.group.FullPath
 	ns, gp := strings.ToLower(g.hub.Namespace.FullPath), strings.ToLower(g.group.FullPath)
-	if ns == gp || strings.HasPrefix(ns, gp+"/") {
+	g.inside = ns == gp || strings.HasPrefix(ns, gp+"/")
+	if g.inside && !g.guard() {
 		return precondition("the hub %s is inside the group of targets %s: the writer, a member of that group, would reach the hub "+
-			"and could change the packs with a leaked key; keep the hub in a group outside it", g.hub.Path, g.group.FullPath)
+			"and could change the packs with a leaked key; keep the hub in a group outside it, or set security.writer_on_hub: guard "+
+			"in hub.yml so that setup checks the writer cannot get content onto the hub's default branch", g.hub.Path, g.group.FullPath)
 	}
 	if !g.me.IsAdmin {
 		var m struct {
@@ -418,9 +436,16 @@ func (g *gitlabSetup) identify(ctx context.Context) error {
 		version = fmt.Sprintf("GitLab %d.%d, ", g.major, g.minor)
 	}
 	g.r.add("hub", StatusOK, "%s%s, default branch %s; %s is %s", version, g.hub.Path, g.hub.DefaultBranch, g.me.Username, who)
-	g.r.add("group", StatusOK, "%s holds the targets; the hub is outside it", g.group.FullPath)
+	if g.inside {
+		g.r.add("group", StatusOK, "%s holds the targets and the hub (security.writer_on_hub: guard)", g.group.FullPath)
+	} else {
+		g.r.add("group", StatusOK, "%s holds the targets; the hub is outside it", g.group.FullPath)
+	}
 	return nil
 }
+
+// guard reports whether the run sets up security.writer_on_hub guard.
+func (g *gitlabSetup) guard() bool { return g.in.WriterOnHub == "guard" }
 
 // chooseAccounts decides what the reader and the writer are: what the run
 // was told; else group access tokens when setup's tokens already exist in
@@ -745,6 +770,37 @@ func (g *gitlabSetup) writerHidden(ctx context.Context) {
 	default:
 		g.r.add("writer-hidden", StatusFail, "%s reaches the hub as %s (directly, through a group or a share): remove it, "+
 			"a leaked write key must not change the packs", w.login, levelName(m.Level))
+	}
+}
+
+// writerGuard checks, under security.writer_on_hub guard, that the
+// writer's role on the hub is below Maintainer: a Maintainer changes the
+// hub's protection, settings and variables. The rest of the guard is what
+// setup sets up after it (defaultBranch, projectSettings) and checks
+// (verify).
+func (g *gitlabSetup) writerGuard(ctx context.Context) {
+	w := g.writer
+	switch {
+	case w.skip:
+		return
+	case w.id == 0:
+		g.r.add("writer-guard", StatusWould, "would check that the writer is below Maintainer on the hub")
+		return
+	}
+	var m struct {
+		Level int `json:"access_level"`
+	}
+	err := g.get(ctx, &m, "projects", id(g.hub.ID), "members", "all", id(w.id))
+	switch {
+	case isStatus(err, http.StatusNotFound):
+		g.r.add("writer-guard", StatusOK, "%s is no member of the hub", w.login)
+	case err != nil:
+		g.r.add("writer-guard", StatusUnknown, "cannot read the role of %s on the hub: %v", w.login, err)
+	case m.Level >= glMaintainer:
+		g.r.add("writer-guard", StatusFail, "%s reaches the hub as %s, and a Maintainer changes the hub's protection, settings and variables: "+
+			"give it the Developer role", w.login, levelName(m.Level))
+	default:
+		g.r.add("writer-guard", StatusOK, "%s reaches the hub as %s, below Maintainer (security.writer_on_hub: guard)", w.login, levelName(m.Level))
 	}
 }
 
@@ -1256,6 +1312,9 @@ func (g *gitlabSetup) projectSettings(ctx context.Context) {
 		}
 		did = append(did, "pipeline-variables")
 	}
+	if g.guard() {
+		did = append(did, g.guardSettings(put)...)
+	}
 	switch {
 	case h.ProtectMRPipelines != nil && *h.ProtectMRPipelines:
 		put["protect_merge_request_pipelines"] = false
@@ -1274,6 +1333,8 @@ func (g *gitlabSetup) projectSettings(ctx context.Context) {
 	detail := map[string]string{
 		"pipeline-variables": "the minimum role for pipeline variables is No one allowed",
 		"mr-pipelines":       "merge request pipelines get no protected variables",
+		"merge-checks":       "a merge waits for a pipeline that succeeded, and a skipped pipeline does not count",
+		"ci-config":          "the pipelines read their CI file from the default branch: " + g.pinnedCIConfig(),
 	}
 	if g.r.DryRun {
 		for _, d := range did {
@@ -1291,10 +1352,67 @@ func (g *gitlabSetup) projectSettings(ctx context.Context) {
 			g.r.add(d, StatusFail, "GitLab kept the minimum role for pipeline variables: set it to No one allowed in Settings > CI/CD > Variables")
 		case d == "mr-pipelines" && (after.ProtectMRPipelines == nil || *after.ProtectMRPipelines):
 			g.r.add(d, StatusFail, "GitLab still lets merge request pipelines read protected variables: turn it off in Settings > CI/CD > Variables")
+		case d == "merge-checks" && (after.MergeAfterPipeline == nil || !*after.MergeAfterPipeline || after.MergeOnSkipped == nil || *after.MergeOnSkipped):
+			g.r.add(d, StatusFail, "GitLab kept the merge checks: in Settings > Merge requests turn on Pipelines must succeed and turn off "+
+				"Skipped pipelines are considered successful")
+		case d == "ci-config" && (after.CIConfigPath == nil || *after.CIConfigPath != g.pinnedCIConfig()):
+			g.r.add(d, StatusFail, "GitLab kept the CI configuration path: set Settings > CI/CD > General pipelines > CI/CD configuration file "+
+				"to %s", g.pinnedCIConfig())
 		default:
 			g.r.add(d, StatusDone, "%s", detail[d])
 		}
 	}
+}
+
+// guardSettings adds to put, under security.writer_on_hub guard, the
+// hub's settings that make a merge wait for the plan of the default
+// branch's CI configuration: Pipelines must succeed, no merge on a skipped
+// pipeline, and the CI file read from the default branch
+// (ci_config_path <file>@<hub>:<default branch>), so that a merge request
+// pipeline runs the reviewed configuration, whose plan refuses a merge
+// request the writer opened or pushed to. It reports the settings already
+// so, and returns the steps whose settings it put.
+func (g *gitlabSetup) guardSettings(put map[string]any) []string {
+	h := g.hub
+	var did []string
+	switch {
+	case h.MergeAfterPipeline == nil || h.MergeOnSkipped == nil:
+		g.r.add("merge-checks", StatusManual, "this GitLab does not show the merge checks to the token: in Settings > Merge requests turn on "+
+			"Pipelines must succeed and turn off Skipped pipelines are considered successful")
+	case *h.MergeAfterPipeline && !*h.MergeOnSkipped:
+		g.r.add("merge-checks", StatusOK, "a merge waits for a pipeline that succeeded, and a skipped pipeline does not count")
+	default:
+		put["only_allow_merge_if_pipeline_succeeds"] = true
+		put["allow_merge_on_skipped_pipeline"] = false
+		did = append(did, "merge-checks")
+	}
+	pinned := g.pinnedCIConfig()
+	switch {
+	case h.CIConfigPath == nil:
+		g.r.add("ci-config", StatusManual, "this GitLab does not show the CI configuration path to the token: set Settings > CI/CD > "+
+			"General pipelines > CI/CD configuration file to %s", pinned)
+	case config.PinnedCIConfig(*h.CIConfigPath, h.Path, h.DefaultBranch):
+		g.r.add("ci-config", StatusOK, "the pipelines read their CI file from the default branch: %s", *h.CIConfigPath)
+	default:
+		put["ci_config_path"] = pinned
+		did = append(did, "ci-config")
+	}
+	return did
+}
+
+// pinnedCIConfig is the hub's CI configuration path that reads its CI file
+// from the default branch: the file the hub reads now (.gitlab-ci.yml by
+// default), @ the hub's path, : the default branch.
+func (g *gitlabSetup) pinnedCIConfig() string {
+	file := ".gitlab-ci.yml"
+	if p := g.hub.CIConfigPath; p != nil && *p != "" && !strings.ContainsAny(*p, "@:") {
+		file = *p
+	} else if p != nil && *p != "" {
+		if f, _, ok := strings.Cut(*p, "@"); ok && f != "" && !strings.Contains(f, ":") {
+			file = f
+		}
+	}
+	return file + "@" + g.hub.Path + ":" + g.hub.DefaultBranch
 }
 
 // schedules creates the daily distribute and weekly doctor schedules of
@@ -1347,7 +1465,8 @@ func (g *gitlabSetup) verify(ctx context.Context) {
 		g.r.add("check", StatusUnknown, "cannot read where the hub keeps its keys: %v", err)
 		return
 	}
-	addChecks(g.r, distribute.KeyLocationChecks(ks, []string{g.in.WriteVar}, &config.Hub{Security: config.Security{WriteIsolation: g.in.Isolation}}))
+	addChecks(g.r, distribute.KeyLocationChecks(ks, []string{g.in.WriteVar}, &config.Hub{Security: config.Security{WriteIsolation: g.in.Isolation,
+		WriterOnHub: g.in.WriterOnHub}}))
 }
 
 // addChecks adds doctor's checks as steps "check <name>".

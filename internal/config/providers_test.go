@@ -772,3 +772,25 @@ func TestAzureOrigin(t *testing.T) {
 		t.Error("dev.azure.com: an origin there names its organization")
 	}
 }
+
+func TestPinnedCIConfig(t *testing.T) {
+	for p, want := range map[string]bool{
+		".gitlab-ci.yml@acme/hub:main":           true,
+		"ci/hub.yml@Acme/Hub:main":               true,
+		" .gitlab-ci.yml@acme/hub:main ":         true,
+		".gitlab-ci.yml@acme/hub":                true, // the project's default branch
+		".gitlab-ci.yml@acme/hub:dev":            false,
+		".gitlab-ci.yml@acme/other:main":         false,
+		".gitlab-ci.yml":                         false,
+		"":                                       false,
+		"@acme/hub:main":                         false,
+		"https://x.example/ci.yml@acme/hub:main": false,
+	} {
+		if got := PinnedCIConfig(p, "acme/hub", "main"); got != want {
+			t.Errorf("PinnedCIConfig(%q) = %v, want %v", p, got, want)
+		}
+	}
+	if PinnedCIConfig(".gitlab-ci.yml@acme/hub:", "acme/hub", "") {
+		t.Error("no default branch")
+	}
+}

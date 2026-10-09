@@ -1,0 +1,5 @@
+version: 1
+id: acme-eng
+writer: touchmark-writer
+security:
+  writer_on_hub: guard

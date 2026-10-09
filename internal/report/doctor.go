@@ -37,7 +37,9 @@ var Statuses = []CheckStatus{StatusOK, StatusWarn, StatusFail, StatusUnknown}
 //     --hub-token);
 //   - provider: writer (the write credential acts as hub.yml's writer),
 //     token-expiry, scopes (a token's scopes), 2fa, hub-hidden (the writer
-//     cannot write to the hub), signing (whether pushes
+//     cannot write to the hub), hub-guard (under security.writer_on_hub
+//     guard: the writer reaches the hub but cannot get content onto its
+//     default branch), signing (whether pushes
 //     that need a signature will get one), signing-key (the key is the
 //     writer's on the platform);
 //   - target: opt-in (the file could not be read), access, permissions,
@@ -45,7 +47,7 @@ var Statuses = []CheckStatus{StatusOK, StatusWarn, StatusFail, StatusUnknown}
 //     foreign fingerprint, the hub's markers by unknown authors).
 var DoctorChecks = []string{
 	"write-isolation", "environment", "key-location", "pipeline-variables", "protected-branches", "protected-tags",
-	"writer", "token-expiry", "scopes", "2fa", "hub-hidden", "signing", "signing-key",
+	"writer", "token-expiry", "scopes", "2fa", "hub-hidden", "hub-guard", "signing", "signing-key",
 	"opt-in", "access", "permissions", "workflows", "rules", "markers",
 }
 

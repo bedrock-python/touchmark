@@ -599,3 +599,17 @@ func (o *OptIn) Hash() string {
 	}
 	return "sha256:" + hex.EncodeToString(h.Sum(nil))
 }
+
+// PinnedCIConfig reports whether a GitLab CI configuration path reads the
+// hub's file from the hub's default branch: "<file>@<hub path>:<branch>",
+// or "<file>@<hub path>", which GitLab reads from the project's default
+// branch; the project path compared without case.
+func PinnedCIConfig(p, hubPath, branch string) bool {
+	file, rest, ok := strings.Cut(strings.TrimSpace(p), "@")
+	if !ok || file == "" || strings.Contains(file, ":") {
+		return false
+	}
+	// Without a ref GitLab reads the project's default branch.
+	project, ref, hasRef := strings.Cut(rest, ":")
+	return branch != "" && (!hasRef || ref == branch) && strings.EqualFold(project, hubPath)
+}

@@ -194,6 +194,11 @@ func runPlan(ctx context.Context, e *env, o *options, p *planOptions) (err error
 		}
 		providers[i] = distribute.Provider{Config: pp.ResolvedProvider, Reader: reader, Anonymous: pp.anonymous}
 	}
+	guardWarnings, err := h.writerMergeGuard(ctx, hctx, e.getenv, pps, providers)
+	warnings = append(warnings, guardWarnings...)
+	if err != nil {
+		return err
+	}
 	channel := h.hubChannel(ctx, hctx, pps, token, reg)
 	hctx, visWarnings := channelVisibility(ctx, hctx, channel)
 	warnings = append(warnings, visWarnings...)

@@ -1,0 +1,5 @@
+# error: security.writer_on_hub: "allow"
+version: 1
+id: acme-eng
+security:
+  writer_on_hub: allow

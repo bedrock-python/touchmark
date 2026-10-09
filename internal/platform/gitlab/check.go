@@ -50,10 +50,12 @@ type apiProtectedBranch struct {
 	Name           string              `json:"name"`
 	AllowForcePush bool                `json:"allow_force_push"`
 	Push           []apiProtectedLevel `json:"push_access_levels"`
+	Merge          []apiProtectedLevel `json:"merge_access_levels"`
 }
 
-// apiProtectedLevel is who may push to a protected branch: a role (0 is
-// No one, 30 Developers, 40 Maintainers), a user, a group or a deploy key.
+// apiProtectedLevel is who may push or merge to a protected branch, or
+// create a protected tag: a role (0 is No one, 30 Developers, 40
+// Maintainers), a user, a group or a deploy key.
 type apiProtectedLevel struct {
 	AccessLevel int    `json:"access_level"`
 	UserID      *int64 `json:"user_id"`

@@ -21,7 +21,12 @@ with the checks of `doctor --hub-token`.
 
 Everything goes through the API. The token needs the `api` scope and must belong to a
 Maintainer of the hub and an Owner of the group whose projects are the targets (or to an
-administrator). The hub must live outside that group. The final check also reads the
+administrator). The hub must live outside that group, unless `hub.yml` says
+`security.writer_on_hub: guard`: then setup accepts a hub inside it, checks that the writer
+is below Maintainer on the hub (`writer-guard`), and also turns on *Pipelines must succeed*,
+turns off *Skipped pipelines are considered successful* (`merge-checks`), and sets the *CI/CD
+configuration file* to `.gitlab-ci.yml@<hub path>:<default branch>` (`ci-config`), so that
+merge request pipelines run the default branch's CI file. The final check also reads the
 variables of the groups above the hub, which GitLab shows to their Owners only: for a
 Maintainer that check stays `unknown`.
 
@@ -32,7 +37,7 @@ setup:
   create them only when an administrator allows it), group access tokens of the group
   otherwise. `--accounts` chooses, `--reader-name` and `--writer-name` name them. The
   reader is a Reporter of the group, the writer a Developer, and the writer must not
-  reach the hub;
+  reach the hub (under `writer_on_hub: guard`, not as a Maintainer);
 - **mints their tokens straight into the hub's variables**: `TOUCHMARK_READ_TOKEN` masked
   and not protected, since merge request pipelines read it, and `TOUCHMARK_WRITE_TOKEN`
   protected, masked and hidden, with the environment scope `touchmark-distribute`. A

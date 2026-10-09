@@ -43,7 +43,7 @@ func TestParseHubDefaults(t *testing.T) {
 		},
 		Limits:   Limits{MaxNewPRsPerRun: 100, MaxCloseFraction: 0.1},
 		Memory:   Memory{AutoCloseCooldown: "30d"},
-		Security: Security{WriteIsolation: "platform", PrivateTargetsInPublicHub: "skip"},
+		Security: Security{WriteIsolation: "platform", PrivateTargetsInPublicHub: "skip", WriterOnHub: "refuse"},
 	}
 	if !reflect.DeepEqual(h, want) {
 		t.Errorf("got  %+v\nwant %+v", h, want)

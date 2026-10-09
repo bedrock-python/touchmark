@@ -92,7 +92,9 @@ configures it: `hub.yml`, `targets.yml`, `.touchmark/operations.yml`, the CI fil
 * **Accounts.** A **reader** (read-only) runs `plan` on hub pull requests. A **writer**,
   a different account, runs `distribute` and `doctor` from the hub's default branch only.
   The **hub channel**, the CI's own token (`GITHUB_TOKEN`, `CI_JOB_TOKEN`), reaches the hub
-  repository alone. The writer has no access to the hub.
+  repository alone. The writer has no access to the hub, unless the hub says
+  `security.writer_on_hub: guard` (GitLab: the writer reaches the hub as a Developer, and
+  touchmark verifies it cannot get content onto the default branch).
 * **Fingerprint.** The hub is known by its host and immutable repository id
   (`github.com/712345678`), which CI provides. `id` in `hub.yml` names the sync branch
   `touchmark/<id>` and is for people.
@@ -262,6 +264,7 @@ ten `::error` and ten `::warning` annotations.
 | `memory.auto_close_cooldown` | `30d` | how long content a bot closed waits before it is proposed again |
 | `security.write_isolation` | `platform` | `platform` (CI keeps the key to the default branch; probed), `external` (an OIDC secret store), `none` (needs `security.reason`) |
 | `security.private_targets_in_public_hub` | `skip` | `deliver` puts their names into public CI logs |
+| `security.writer_on_hub` | `refuse` | `guard` (GitLab): the writer may reach the hub as a Developer; `doctor` verifies the guard (`hub-guard`), `plan` refuses a hub merge request the writer opened or pushed to |
 | `sensitive_paths` | none | patterns added to the built-in list highlighted under ⚠ in pull requests |
 | `packs.<pack>.description`, `.requires`, `.formerly` | none | metadata; `requires` adds and orders dependencies; `formerly` keeps a renamed pack's history |
 
@@ -324,7 +327,12 @@ from its environment once read:
    probe does not test.
 5. **The writer has no access to the hub.** Install the Apps on targets only; keep the
    hub outside the GitLab groups the accounts belong to. `doctor` fails when the writer
-   can push to the hub, and warns when it can see a private one.
+   can push to the hub, and warns when it can see a private one. On GitLab a hub that
+   must live in the group of its targets sets `security.writer_on_hub: guard`: the writer
+   is then a Developer of the hub, `doctor`'s `hub-guard` verifies that it can neither
+   push nor merge to the default branch and that merge request pipelines run the default
+   branch's CI file and must succeed, and `plan` exits 2 in a hub merge request the
+   writer opened or pushed to.
 6. **Nothing reaches a repository without its consent.** `.engineering-assets.yml` at
    the root, possibly empty, or an entry with `opt_in: assumed` when the hub owns the
    decision; `enabled: false` in the file overrides the hub. Never ship that file in a

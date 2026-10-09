@@ -257,6 +257,18 @@ func (t *target) createPR(ctx context.Context, np platform.NewPR) (platform.PR, 
 				p.runQuickActions(s, ps, np.Body, t.as, "the description")
 			}
 		}
+		if desc, line := marker.Detach(np.Body); p.apart() && line != "" {
+			if f, ok := p.takeMarkerFault(); ok {
+				// The property failed: the pull request has no marker, and
+				// the writer abandons it unless that fails too.
+				ps.pr.Body = desc
+				if !f.leaveOpen {
+					closer := t.as
+					ps.pr.State, ps.pr.ClosedBy, ps.pr.ClosedAt = platform.Closed, &closer, p.now()
+				}
+				return platform.PR{}, f.err
+			}
+		}
 		return p.prView(ps.pr), nil
 	})
 }
@@ -301,9 +313,30 @@ func (t *target) editPR(ctx context.Context, number int64, e platform.PREdit) (p
 		if e.Title != nil && strings.TrimSpace(*e.Title) == "" {
 			return platform.PR{}, invalid(op, "the title is empty")
 		}
-		if e.Body != nil {
+		// Where the marker lives apart, the description changes only when it
+		// differs from the current one (sameDescription), and a close
+		// leaves one that would not fit as it is, as Azure DevOps' driver
+		// does.
+		closing := e.State != nil && *e.State == platform.Closed
+		var desc, line, curDesc, stored string
+		keepDesc := false
+		if p.apart() && e.Body != nil {
+			curDesc, stored = marker.Detach(pr.Body)
+			desc, line = marker.Detach(*e.Body)
+			keepDesc = sameDescription(desc, curDesc)
+		}
+		switch {
+		case e.Body == nil, keepDesc:
+		case !p.apart():
 			if err := p.checkBody(op, *e.Body); err != nil {
 				return platform.PR{}, err
+			}
+		default:
+			if err := p.checkText(op, desc); err != nil {
+				if !closing {
+					return platform.PR{}, err
+				}
+				keepDesc = true
 			}
 		}
 		if e.State != nil {
@@ -318,13 +351,21 @@ func (t *target) editPR(ctx context.Context, number int64, e platform.PREdit) (p
 			return platform.PR{}, invalid(op, "base %q is empty or the head", *e.Base)
 		}
 		if p.caps.ClosedImmutable && pr.State == platform.Closed {
-			changes := e.Title != nil && p.draftTitle(*e.Title, pr.Draft) != pr.Title ||
-				e.Body != nil && p.stored(*e.Body) != pr.Body || e.Base != nil && *e.Base != pr.Base
+			newTitle := e.Title != nil && p.draftTitle(*e.Title, pr.Draft) != pr.Title
+			newBase := e.Base != nil && *e.Base != pr.Base
+			changes := newTitle || e.Body != nil && p.stored(*e.Body) != pr.Body || newBase
+			if p.apart() && e.Body != nil {
+				changes = newTitle || newBase || line != stored || !keepDesc && !closing
+			}
 			switch {
 			case e.State != nil && *e.State == platform.Open:
 				return platform.PR{}, unsupported(op, "#%d: a declined pull request cannot be reopened", number)
 			case changes:
 				return platform.PR{}, unsupported(op, "#%d is declined: only open pull requests can be changed", number)
+			case p.apart():
+				// Closed again: a close that left the description as it
+				// was changes nothing.
+				return p.prView(pr), nil
 			}
 		}
 		if err := t.p.checkLabels(op, e.AddLabels); err != nil {
@@ -339,10 +380,26 @@ func (t *target) editPR(ctx context.Context, number int64, e platform.PREdit) (p
 				return platform.PR{}, invalid(op, "#%d cannot be reopened: its head branch %q is gone", number, pr.Head)
 			}
 		}
+		var markerErr error
+		if p.apart() && e.Body != nil && line != stored && pr.State == platform.Open {
+			if f, ok := p.takeMarkerFault(); ok {
+				if closing {
+					// The closing marker goes first: nothing changed.
+					return platform.PR{}, f.err
+				}
+				markerErr, line = f.err, stored
+			}
+		}
 		if e.Title != nil {
 			pr.Title = p.draftTitle(*e.Title, pr.Draft)
 		}
-		if e.Body != nil {
+		switch {
+		case e.Body == nil:
+		case p.apart() && keepDesc:
+			pr.Body = marker.Attach(curDesc, line)
+		case p.apart():
+			pr.Body = marker.Attach(desc, line)
+		default:
 			pr.Body = p.stored(*e.Body)
 		}
 		if e.Base != nil {
@@ -375,8 +432,22 @@ func (t *target) editPR(ctx context.Context, number int64, e platform.PREdit) (p
 				p.runQuickActions(s, ps, *e.Body, t.as, "the description")
 			}
 		}
+		if markerErr != nil {
+			return platform.PR{}, markerErr
+		}
 		return p.prView(ps.pr), nil
 	})
+}
+
+// sameDescription reports whether desc, a description the writer would
+// write where the marker lives apart, is the current description cur,
+// marker lines, line endings and trailing whitespace aside, as Azure
+// DevOps' driver compares them.
+func sameDescription(desc, cur string) bool {
+	norm := func(s string) string {
+		return strings.TrimRight(strings.ReplaceAll(marker.Strip(s), "\r\n", "\n"), " \t\r\n")
+	}
+	return norm(desc) == norm(cur)
 }
 
 // Comment adds a comment by the writer. The body must not be blank, must

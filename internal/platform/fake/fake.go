@@ -19,8 +19,8 @@
 // edited or reopened (Caps.ClosedImmutable), and so on Azure DevOps, whose
 // marker lives in a pull request property (Caps.MarkerInProperties: the
 // description alone is held to Caps.MaxBody, a marker line in it never
-// counts, and a person editing the description cannot change the stored
-// marker). Branch rulesets, the
+// counts, and a person editing the description leaves the stored marker
+// as it is). Branch rulesets, the
 // Preflighter of GitHub's driver (WithPreflight) and its API commits
 // (WithAPICommits, platform.Committer) are modeled in rules.go.
 //
@@ -190,6 +190,10 @@ type Platform struct {
 	calls      []call
 	err        error // the first setup error
 
+	// markerFaults are the failures of the marker property queued by
+	// FailMarkerNext.
+	markerFaults []markerFault
+
 	// logRequests turns on the log of API requests (WithRequestLog).
 	logRequests bool
 	requests    []Request
@@ -244,6 +248,13 @@ type prState struct {
 type fault struct {
 	err     error
 	applied bool
+}
+
+// markerFault is a failed write of the marker property (FailMarkerNext):
+// the error, and whether CreatePR leaves the pull request active.
+type markerFault struct {
+	err       error
+	leaveOpen bool
 }
 
 type call struct {
@@ -768,7 +779,11 @@ func (p *Platform) SetPRState(repoID string, number int64, state platform.PRStat
 // kept as fn leaves them: an empty HeadRepoID is a PR whose fork was
 // deleted. Where the marker lives in a property (Caps.MarkerInProperties)
 // the body fn leaves is the description, without any marker line in it,
-// and the stored marker stays: people cannot edit properties.
+// and the stored marker stays, as when a person edits the description in
+// the web UI, which shows no properties. That is no protection of the
+// marker: whoever may contribute to pull requests may be able to write
+// their properties through the API (project Readers included, by default;
+// see docs/project/threat-model.md), which this fake does not model.
 func (p *Platform) UpdatePR(repoID string, number int64, fn func(*platform.PR)) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -990,6 +1005,41 @@ func (p *Platform) queue(method string, f fault) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.queued[method] = append(p.queued[method], f)
+}
+
+// FailMarkerNext makes the next write of the marker property fail with
+// err, where the marker lives in a property (Caps.MarkerInProperties), as
+// Azure DevOps' driver meets it once its own attempts are spent; the rest
+// of the call takes effect, in the driver's order. CreatePR makes the pull
+// request without its marker and the writer abandons it at once (it stays
+// active with leaveOpen, as when the abandon fails too). EditPR of an
+// active pull request that is not a close changes its title, description,
+// base and labels and keeps the previous marker; a close changes nothing
+// (its marker is stored before anything else). Either fails with err.
+// Faults queue; a call that writes no new marker line takes none. On a
+// flavor that keeps the marker in the body it is a setup error.
+func (p *Platform) FailMarkerNext(err error, leaveOpen bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if !p.apart() {
+		p.setupf("FailMarkerNext: %s keeps the marker in the body", p.caps.Flavor)
+		return
+	}
+	if err == nil {
+		return
+	}
+	p.markerFaults = append(p.markerFaults, markerFault{err: err, leaveOpen: leaveOpen})
+}
+
+// takeMarkerFault returns the next queued failure of the marker property,
+// if any. Called with p.mu held.
+func (p *Platform) takeMarkerFault() (markerFault, bool) {
+	if len(p.markerFaults) == 0 {
+		return markerFault{}, false
+	}
+	f := p.markerFaults[0]
+	p.markerFaults = p.markerFaults[1:]
+	return f, true
 }
 
 // Fail makes every call of method (or "*") fail with err, without effect,

@@ -142,7 +142,7 @@
       "required": ["id", "type", "host", "write_check", "resolve_complete"],
       "properties": {
         "id": { "$ref": "#/$defs/providerId" },
-        "type": { "enum": ["github", "gitlab", "gitea", "forgejo", "bitbucket"] },
+        "type": { "enum": ["github", "gitlab", "gitea", "forgejo", "bitbucket", "azure-devops"] },
         "host": {
           "description": "The provider's host, with a port when it has one.",
           "type": "string",

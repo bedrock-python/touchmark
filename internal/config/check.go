@@ -192,7 +192,11 @@ func (c *checker) exclude() {
 		}
 		segs := strings.Split(pat.Path, "/")
 		if typ := c.flatType(res.provider(pat.Provider)); typ != "" && len(segs) > 2 && !slices.Contains(segs, "**") {
-			c.warnf(TargetsFile, "exclude[%d]: %s has %d path segments, and a %s repository path is owner/name, so it excludes nothing", i, ex, len(segs), typ)
+			shape := "a " + typ + " repository path is owner/name"
+			if typ == "azure-devops" {
+				shape = "an Azure DevOps repository path is project/repository"
+			}
+			c.warnf(TargetsFile, "exclude[%d]: %s has %d path segments, and %s, so it excludes nothing", i, ex, len(segs), shape)
 		}
 		for j := range c.targets.Targets {
 			e := &c.targets.Targets[j]
@@ -219,7 +223,10 @@ func (c *checker) exclude() {
 // match warns about a pattern of an org or group entry's match that no
 // repository of its namespace can match: it selects nothing. A namespace
 // on a platform without nested namespaces (flatType) holds no subgroups,
-// whatever subgroups says.
+// whatever subgroups says. On Azure DevOps the namespace is the
+// organization, which no repository path starts with (they are
+// project/repository): a pattern there selects nothing only when it is
+// deeper than that.
 func (c *checker) match() {
 	res := resolver{hub: c.hub, targets: c.targets}
 	for i := range c.targets.Targets {
@@ -231,7 +238,18 @@ func (c *checker) match() {
 		if err != nil {
 			continue
 		}
-		typ := c.flatType(res.provider(firstNonEmpty(e.Provider, ns.Provider)))
+		id := res.provider(firstNonEmpty(e.Provider, ns.Provider))
+		typ := c.flatType(id)
+		if c.providerType(id) == "azure-devops" {
+			for j, pat := range e.Match {
+				segs := strings.Split(pat, "/")
+				if checkMatchPattern(pat) == nil && len(segs) != 2 && !slices.Contains(segs, "**") {
+					c.warnf(TargetsFile, "targets[%d].match[%d]: %s has %d path segments, and an Azure DevOps repository path is project/repository, "+
+						"so it selects nothing", i, j, pat, len(segs))
+				}
+			}
+			continue
+		}
 		for j, pat := range e.Match {
 			if checkMatchPattern(pat) == nil && !globUnder(pat, ns.Path, includeSubgroups(e) && typ == "") {
 				where := "under " + ns.Path
@@ -248,12 +266,13 @@ func (c *checker) match() {
 }
 
 // flatType returns the type of the provider with id when its platform has no
-// nested namespaces (github, gitea, forgejo, bitbucket): a repository path
-// there is owner/name. It returns "" for any other type, and for a provider
-// hub.yml does not list (the implicit one, whose type the CI tells).
+// nested namespaces (github, gitea, forgejo, bitbucket, azure-devops): a
+// repository path there is owner/name (project/repository on Azure DevOps).
+// It returns "" for any other type, and for a provider hub.yml does not
+// list (the implicit one, whose type the CI tells).
 func (c *checker) flatType(id string) string {
 	switch typ := c.providerType(id); typ {
-	case "github", "gitea", "forgejo", "bitbucket":
+	case "github", "gitea", "forgejo", "bitbucket", "azure-devops":
 		return typ
 	}
 	return ""
@@ -270,9 +289,9 @@ func (c *checker) providerType(id string) string {
 	return ""
 }
 
-// topics refuses topics on an entry whose provider is Bitbucket Cloud,
-// whose repositories have none: the entry would select nothing, and the
-// driver refuses the selector.
+// topics refuses topics on an entry whose provider is Bitbucket Cloud or
+// Azure DevOps, whose repositories have none: the entry would select
+// nothing, and the driver refuses the selector.
 func (c *checker) topics() {
 	res := resolver{hub: c.hub, targets: c.targets}
 	for i := range c.targets.Targets {
@@ -285,9 +304,13 @@ func (c *checker) topics() {
 			continue
 		}
 		id := res.provider(firstNonEmpty(e.Provider, ns.Provider))
-		if c.providerType(id) == "bitbucket" {
+		switch c.providerType(id) {
+		case "bitbucket":
 			c.errorf(TargetsFile, "targets[%d].topics: provider %s is Bitbucket, whose repositories have no topics; "+
 				"select them with match: (paths like %s/svc-*) or list them with repo:", i, id, ns.Path)
+		case "azure-devops":
+			c.errorf(TargetsFile, "targets[%d].topics: provider %s is Azure DevOps, whose repositories have no topics; "+
+				"select them with match: (paths like <project>/svc-*) or list them with repo: (<project>/<repository>)", i, id)
 		}
 	}
 }

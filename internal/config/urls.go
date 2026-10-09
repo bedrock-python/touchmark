@@ -106,6 +106,12 @@ func siteOf(raw string) (site, bool) {
 	return site{origin: scheme + "://" + host, segs: segs}, true
 }
 
+// same reports whether s and base are the same place: the same origin and
+// path segments, compared ignoring case.
+func (s site) same(base site) bool {
+	return s.origin == base.origin && slices.EqualFunc(s.segs, base.segs, strings.EqualFold)
+}
+
 // under reports whether s lies strictly beneath base: the same origin, and
 // base's path segments, compared ignoring case, followed by at least one
 // more.
@@ -153,7 +159,12 @@ func (t *Targets) HasURLs() bool {
 // namespaces, a repository URL must name owner/name (workspace/repository on
 // Bitbucket, as in https://bitbucket.org/acme/billing) and an organisation
 // URL one namespace; on GitLab a URL with a /-/ segment points inside a project and
-// is refused.
+// is refused. On Azure DevOps, whose provider url is an organization
+// (https://dev.azure.com/acme), a repository URL is
+// https://dev.azure.com/acme/<project>/_git/<repository> and names
+// <project>/<repository>, and the organization URL itself is the namespace
+// of an org entry (the whole organization: a project is selected with
+// match).
 //
 // The result is a copy: targets is left as it is, and returned as it is
 // when it holds no URL. Errors name the field of each URL that did not
@@ -233,7 +244,9 @@ func (r urlResolver) resolve(s string, k urlKind, want, fallback string) (string
 	}
 	var match []int
 	for i, ps := range r.sites {
-		if ps.origin != "" && u.under(ps) {
+		// An Azure DevOps organization is the provider's url itself.
+		whole := k == urlNamespace && r.providers[i].Type == "azure-devops" && u.same(ps)
+		if ps.origin != "" && (u.under(ps) || whole) {
 			match = append(match, i)
 		}
 	}
@@ -261,7 +274,14 @@ func (r urlResolver) resolve(s string, k urlKind, want, fallback string) (string
 			s, r.list(match))
 	}
 	p := r.providers[match[0]]
-	segs := slices.Clone(u.segs[len(r.sites[match[0]].segs):])
+	base := r.sites[match[0]].segs
+	segs := slices.Clone(u.segs[len(base):])
+	if p.Type == "azure-devops" {
+		var err error
+		if segs, err = azureSegments(segs, base, k); err != nil {
+			return "", fmt.Errorf("%s: %w", s, err)
+		}
+	}
 	if last := len(segs) - 1; k != urlNamespace && len(segs[last]) > len(".git") && strings.HasSuffix(strings.ToLower(segs[last]), ".git") {
 		// A repository URL may end in .git; dropping it from a pattern
 		// would widen it (acme/*.git to acme/*).
@@ -303,6 +323,30 @@ func (r urlResolver) list(indexes []int) string {
 		parts = append(parts, r.providers[i].ID+" at "+r.providers[i].URL)
 	}
 	return strings.Join(parts, ", ")
+}
+
+// azureSegments returns the path an Azure DevOps URL of kind k names, from
+// segs, its path segments after the provider's url base (the
+// organization): the organization itself for an org entry, which takes the
+// organization URL only; <project>/<repository> for a repository URL,
+// <project>/_git/<repository>; and for an exclude entry the same, or a
+// pattern of the project's repositories (Legacy/*, Legacy/**).
+func azureSegments(segs, base []string, k urlKind) ([]string, error) {
+	const repoForm = "an Azure DevOps repository URL is https://dev.azure.com/<organization>/<project>/_git/<repository>"
+	switch {
+	case k == urlNamespace && len(segs) == 0 && len(base) > 0:
+		return []string{base[len(base)-1]}, nil
+	case k == urlNamespace:
+		return nil, errors.New("an Azure DevOps org entry names the whole organization, the provider's url https://dev.azure.com/<organization>; " +
+			"select a project's repositories with match: (<project>/*)")
+	case len(segs) == 3 && segs[1] == "_git":
+		return []string{segs[0], segs[2]}, nil
+	case k == urlExclude && !slices.Contains(segs, "_git") && (len(segs) == 2 && isGlob(segs[1]) || slices.Contains(segs, "**")):
+		return segs, nil
+	case k == urlExclude:
+		return nil, errors.New(repoForm + ", or a pattern of a project's repositories like https://dev.azure.com/<organization>/<project>/*")
+	}
+	return nil, errors.New(repoForm)
 }
 
 // checkURLShape checks the path segments a URL of kind k names on a

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -37,6 +38,51 @@ func isBitbucketCloud(raw string) bool {
 	return err == nil && strings.EqualFold(u.Scheme, "https") && strings.EqualFold(u.Host, "bitbucket.org") && u.Path == ""
 }
 
+// Azure DevOps Services: the host of every organization's web URL and REST
+// base, https://dev.azure.com/<organization>. A provider of type
+// azure-devops is one organization; its url names it.
+const azureDevOpsHost = "dev.azure.com"
+
+// azureDevOpsURLError is the complaint about an azure-devops provider whose
+// url is not an organization of Azure DevOps Services.
+const azureDevOpsURLError = "a provider of type azure-devops is one organization of Azure DevOps Services: " +
+	"url is https://dev.azure.com/<organization> (one provider per organization; the old " +
+	"https://<organization>.visualstudio.com form and Azure DevOps Server are not supported). " +
+	"Elsewhere (a test server) set api_url too, and keep the organization as the url's only path segment"
+
+// azureOrgRe matches an organization name of Azure DevOps Services:
+// letters, digits and hyphens, starting and ending with a letter or digit.
+var azureOrgRe = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9-]{0,48}[A-Za-z0-9])?$`)
+
+// AzureDevOpsOrg returns the organization an azure-devops provider's url
+// names, its only path segment ("acme" of https://dev.azure.com/acme); ok is
+// false when the url has another shape.
+func AzureDevOpsOrg(raw string) (org string, ok bool) {
+	u, err := url.Parse(strings.TrimRight(raw, "/"))
+	if err != nil || u.Host == "" {
+		return "", false
+	}
+	org = strings.TrimPrefix(u.Path, "/")
+	if !azureOrgRe.MatchString(org) {
+		return "", false
+	}
+	return org, true
+}
+
+// azureDevOpsURLOK reports whether raw, a checked URL, can be an
+// azure-devops provider's url: one organization segment, and, without an
+// api_url, on https://dev.azure.com.
+func azureDevOpsURLOK(raw string, hasAPIURL bool) bool {
+	if _, ok := AzureDevOpsOrg(raw); !ok {
+		return false
+	}
+	if hasAPIURL {
+		return true
+	}
+	u, err := url.Parse(raw)
+	return err == nil && strings.EqualFold(u.Scheme, "https") && strings.EqualFold(u.Host, azureDevOpsHost)
+}
+
 // ResolvedProvider is a provider from hub.yml (or the implicit one) with
 // everything a driver needs besides credentials.
 type ResolvedProvider struct {
@@ -46,7 +92,8 @@ type ResolvedProvider struct {
 	// APIURL is the REST base: https://api.github.com, https://api.<host>
 	// for *.ghe.com, <url>/api/v3 for GitHub Enterprise Server,
 	// <url>/api/v4 for GitLab, <url>/api/v1 for Gitea and Forgejo,
-	// https://api.bitbucket.org/2.0 for Bitbucket Cloud;
+	// https://api.bitbucket.org/2.0 for Bitbucket Cloud, the url itself
+	// (https://dev.azure.com/<organization>) for Azure DevOps;
 	// Provider.APIURL when set. On GitHub Actions for the hub's own host,
 	// GITHUB_API_URL wins over the derived URL, not over Provider.APIURL:
 	// an explicit api_url means the same in CI and locally.
@@ -94,7 +141,9 @@ type ResolvedProvider struct {
 // Every provider is checked again, with ParseHub's defaults, so a hub built
 // in code resolves like a parsed one: a valid id, no duplicate ids, a known
 // type, the public URL of github, gitlab and bitbucket when URL is empty,
-// an api_url for a bitbucket provider anywhere but Bitbucket Cloud, https URLs
+// an api_url for a bitbucket provider anywhere but Bitbucket Cloud, the url
+// of an organization for azure-devops (an api_url anywhere but
+// dev.azure.com), https URLs
 // (http only for localhost), sign auto. A nil hub is a legacy hub. Error
 // messages never quote environment values. A nil getenv reads the process
 // environment.
@@ -279,6 +328,9 @@ func resolveProvider(p Provider, env ciEnv) (ResolvedProvider, error) {
 	if p.Type == "bitbucket" && p.APIURL == "" && !isBitbucketCloud(p.URL) {
 		return ResolvedProvider{}, fmt.Errorf("url: %s", bitbucketURLError)
 	}
+	if p.Type == "azure-devops" && !azureDevOpsURLOK(p.URL, p.APIURL != "") {
+		return ResolvedProvider{}, fmt.Errorf("url: %s", azureDevOpsURLError)
+	}
 	setDefault(&p.Sign, defaultSign)
 	u, err := url.Parse(p.URL)
 	if err != nil {
@@ -327,6 +379,10 @@ func derivedAPIURL(typ, webURL, hostname, host string) string {
 	case "bitbucket":
 		// resolveProvider asks for api_url anywhere else.
 		return bitbucketAPIURL
+	case "azure-devops":
+		// The REST API of an organization is under its web URL,
+		// https://dev.azure.com/<organization>/_apis.
+		return webURL
 	}
 	return webURL + "/api/v1"
 }

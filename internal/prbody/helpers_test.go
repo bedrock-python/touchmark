@@ -27,7 +27,7 @@ const (
 )
 
 // flavors are the platforms of the golden bodies.
-var flavors = []string{"github", "gitlab", "gitea", "bitbucket"}
+var flavors = []string{"github", "gitlab", "gitea", "bitbucket", "azure-devops"}
 
 // capsOf returns the capabilities that matter to bodies, as the drivers
 // report them (and fake.CapsFor does).
@@ -41,6 +41,10 @@ func capsOf(flavor string) platform.Caps {
 		c.MaxBody = 60000
 		c.Marker = platform.MarkerInRefDef
 		c.NoLabels = true
+		c.ClosedImmutable = true
+	case "azure-devops":
+		c.MaxBody = 4000
+		c.Marker = platform.MarkerInProperties
 		c.ClosedImmutable = true
 	}
 	return c

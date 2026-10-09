@@ -185,3 +185,28 @@ func FuzzFind(f *testing.F) {
 		}
 	})
 }
+
+// FuzzDetach: a body split for a platform that keeps the marker apart and
+// joined again keeps its human part, and the line kept apart is a marker
+// line or nothing.
+func FuzzDetach(f *testing.F) {
+	for _, line := range seedLines(f) {
+		f.Add("text\r\n\r\n" + line + " \n")
+	}
+	f.Add("<!-- touchmark:\n\n- [ ] <!-- touchmark:recreate -->")
+	f.Fuzz(func(t *testing.T, body string) {
+		desc, line := Detach(body)
+		if line != "" && !IsLine(line) {
+			t.Fatalf("Detach kept %.80q apart, no marker line", line)
+		}
+		if Strip(desc) != desc {
+			t.Fatal("the description keeps a marker line or trailing blanks")
+		}
+		if got := Strip(Attach(desc, line)); got != Strip(body) {
+			t.Fatalf("Strip(Attach(Detach)) = %.80q, want %.80q", got, Strip(body))
+		}
+		if d2, l2 := Detach(Attach(desc, line)); d2 != desc || l2 != line {
+			t.Fatal("Detach(Attach(Detach(body))) differs from Detach(body)")
+		}
+	})
+}

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/bedrock-python/touchmark/internal/marker"
+	"github.com/bedrock-python/touchmark/internal/platform"
 )
 
 // intro is the pr.intro_file of the tests.
@@ -159,7 +160,17 @@ func checkBody(t *testing.T, in Input, body string) {
 			}
 		}
 	}
-	if in.Caps.MaxBody > 0 && len(full) > in.Caps.MaxBody {
+	if in.Caps.Marker == platform.MarkerInProperties {
+		// The marker lives apart: the description alone is bounded, and it
+		// is what the driver stores (marker.Detach).
+		desc, line := marker.Detach(body)
+		if in.Caps.MaxBody > 0 && len(desc) > in.Caps.MaxBody {
+			t.Errorf("description of %d bytes, more than %d", len(desc), in.Caps.MaxBody)
+		}
+		if line != in.Marker || marker.Attach(desc, line) != body {
+			t.Error("the body does not split into its description and its marker line")
+		}
+	} else if in.Caps.MaxBody > 0 && len(full) > in.Caps.MaxBody {
 		t.Errorf("body of %d bytes with its marker, more than %d", len(full), in.Caps.MaxBody)
 	}
 	if in.Marker != "" {

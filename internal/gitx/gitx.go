@@ -4,9 +4,11 @@
 // Every command gets:
 //   - "-c core.quotePath=false -c color.ui=false -c log.showSignature=false";
 //   - GIT_TERMINAL_PROMPT=0, GIT_OPTIONAL_LOCKS=0, LC_ALL=C, LANGUAGE=C;
-//   - no inherited variables that select another repository or change
-//     pathspec matching (GIT_DIR, GIT_LITERAL_PATHSPECS, …; see Run), nor
-//     touchmark's own (TOUCHMARK_*: credentials among them);
+//   - no inherited variables that select another repository, change
+//     pathspec matching, add config or name a program git runs
+//     (GIT_DIR, GIT_LITERAL_PATHSPECS, GIT_CONFIG_*, GIT_SSH_COMMAND,
+//     LD_PRELOAD, …; see droppedEnv), nor touchmark's own (TOUCHMARK_*:
+//     credentials among them);
 //   - NUL-separated output (-z) wherever git offers it;
 //   - on a cancelled context, a stop of the whole process tree it started
 //     (SIGTERM to its process group on Unix, so git cleans up its lock
@@ -105,18 +107,22 @@ var defaultEnv = []string{
 }
 
 // droppedEnv lists inherited variables that are not passed to git; Git.Env
-// may still set them explicitly. Neither is any variable whose name starts
-// with droppedPrefix: touchmark's own, among them the write credentials and
-// signing keys a CI job has in its environment until distribute reads them.
-// git needs none of them, and whatever git starts (a hook, a filter, a
-// credential helper of a repository's config) must not see them.
+// may still set them explicitly (the isolation of a target's repository and
+// the hub channel set GIT_CONFIG_GLOBAL and GIT_CONFIG_COUNT this way).
+// Neither is any variable whose name starts with one of droppedPrefixes.
 //
-// The first group would point git at another repository, index or object
-// store than Dir (git sets them for hooks, for example): the non-config
-// entries of `git rev-parse --local-env-vars`. The second group changes how
-// pathspecs match; GIT_LITERAL_PATHSPECS, for one, would silently turn the
-// ":(top)" pathspec of History into a path that matches nothing.
+// Whoever sets the environment touchmark starts in (a CI variable of the
+// hub, a custom pipeline run with variables, a step before touchmark's) must
+// not be able to change what git does in the hub or a target through it:
+// run a program, read another config or repository, or write a file. The
+// variables that only take something away from git (GIT_CONFIG_NOSYSTEM,
+// GIT_ATTR_NOSYSTEM, GIT_CEILING_DIRECTORIES) stay: they cannot make git run
+// or read anything, and tests rely on them to keep the machine's config out.
 var droppedEnv = []string{
+	// Another repository, index or object store than Dir (git sets them
+	// for hooks, for example): the non-config entries of
+	// `git rev-parse --local-env-vars`, and GIT_NAMESPACE, which moves every
+	// ref git reads.
 	"GIT_ALTERNATE_OBJECT_DIRECTORIES",
 	"GIT_OBJECT_DIRECTORY",
 	"GIT_DIR",
@@ -130,20 +136,91 @@ var droppedEnv = []string{
 	"GIT_INTERNAL_SUPER_PREFIX",
 	"GIT_SHALLOW_FILE",
 	"GIT_COMMON_DIR",
+	"GIT_NAMESPACE",
+	"GIT_DISCOVERY_ACROSS_FILESYSTEM",
 
+	// How pathspecs match; GIT_LITERAL_PATHSPECS, for one, would silently
+	// turn the ":(top)" pathspec of History into a path that matches
+	// nothing.
 	"GIT_LITERAL_PATHSPECS",
 	"GIT_GLOB_PATHSPECS",
 	"GIT_NOGLOB_PATHSPECS",
 	"GIT_ICASE_PATHSPECS",
+
+	// Config from outside the repository: any setting, core.fsmonitor or
+	// core.hooksPath among them, names a program git runs on an ordinary
+	// read of the index. GIT_CONFIG_COUNT and its GIT_CONFIG_KEY_n and
+	// GIT_CONFIG_VALUE_n (droppedPrefixes) and GIT_CONFIG_PARAMETERS carry
+	// settings themselves; GIT_CONFIG_GLOBAL and GIT_CONFIG_SYSTEM name a
+	// file of them, and GIT_CONFIG the file git config writes.
+	"GIT_CONFIG_COUNT",
+	"GIT_CONFIG_PARAMETERS",
+	"GIT_CONFIG_GLOBAL",
+	"GIT_CONFIG_SYSTEM",
+	"GIT_CONFIG",
+
+	// Where attributes come from (git 2.41): they decide how
+	// HashPaths hashes a target's file.
+	"GIT_ATTR_SOURCE",
+
+	// Programs git runs: its own helpers (GIT_EXEC_PATH), ssh and its
+	// password prompts, a proxy, a diff tool, a pager and an editor.
+	"GIT_EXEC_PATH",
+	"GIT_SSH",
+	"GIT_SSH_COMMAND",
+	"GIT_SSH_VARIANT",
+	"GIT_ASKPASS",
+	"SSH_ASKPASS",
+	"GIT_PROXY_COMMAND",
+	"GIT_EXTERNAL_DIFF",
+	"GIT_PAGER",
+	"PAGER",
+	"GIT_EDITOR",
+	"GIT_SEQUENCE_EDITOR",
+	"EDITOR",
+	"VISUAL",
+
+	// Files git copies into a new repository, hooks among them.
+	"GIT_TEMPLATE_DIR",
+
+	// Prints request headers, credentials included (GIT_TRACE* is a
+	// prefix).
+	"GIT_CURL_VERBOSE",
+}
+
+// droppedPrefixes start the names of inherited variables no git process
+// gets (see droppedEnv):
+//   - TOUCHMARK_: touchmark's own, among them the write credentials and
+//     signing keys a CI job has in its environment until distribute reads
+//     them; git needs none of them, and whatever git starts (a hook, a
+//     filter, a credential helper of a repository's config) must not see
+//     them;
+//   - GIT_CONFIG_KEY_ and GIT_CONFIG_VALUE_: the settings of
+//     GIT_CONFIG_COUNT, dropped even when the count is, so a git that reads
+//     them some other way finds none;
+//   - GIT_TRACE: GIT_TRACE, GIT_TRACE2_EVENT and the rest take a file name
+//     to write to, and print headers and packets;
+//   - LD_ and DYLD_: the dynamic loader's, which load a library of the
+//     caller's choice into git (LD_PRELOAD, LD_LIBRARY_PATH, LD_AUDIT,
+//     DYLD_INSERT_LIBRARIES, …) or write its debug output to a file.
+var droppedPrefixes = []string{
+	"TOUCHMARK_",
+	"GIT_CONFIG_KEY_",
+	"GIT_CONFIG_VALUE_",
+	"GIT_TRACE",
+	"LD_",
+	"DYLD_",
 }
 
 // Run runs git with args and returns stdout. stdin may be nil.
 //
 // A command that exits non-zero returns an *Error. Variables that locate
-// another repository (GIT_DIR, GIT_WORK_TREE, GIT_INDEX_FILE, …) or change
-// pathspec matching (GIT_LITERAL_PATHSPECS, …) are not inherited from the
-// environment; set them through Env when needed. Neither are touchmark's
-// own variables (TOUCHMARK_*).
+// another repository (GIT_DIR, GIT_WORK_TREE, GIT_INDEX_FILE, …), change
+// pathspec matching (GIT_LITERAL_PATHSPECS, …), add config
+// (GIT_CONFIG_COUNT, GIT_CONFIG_PARAMETERS, GIT_CONFIG_GLOBAL, …) or name a
+// program git runs (GIT_SSH_COMMAND, GIT_EXEC_PATH, LD_PRELOAD, …) are not
+// inherited from the environment (droppedEnv); set them through Env when
+// needed. Neither are touchmark's own variables (TOUCHMARK_*).
 func (g *Git) Run(ctx context.Context, stdin io.Reader, args ...string) ([]byte, error) {
 	out, err := g.runPartial(ctx, stdin, args...)
 	if err != nil {
@@ -206,17 +283,15 @@ func (g *Git) environ() []string {
 	return append(env, g.Env...)
 }
 
-// droppedPrefix starts the names of touchmark's variables, which no git
-// process inherits (see droppedEnv).
-const droppedPrefix = "TOUCHMARK_"
-
 // isDroppedEnv reports whether the "NAME=value" entry kv sets one of
-// droppedEnv, or a variable of touchmark's. Names compare
-// case-insensitively, as on Windows.
+// droppedEnv, or a variable whose name starts with one of droppedPrefixes.
+// Names compare case-insensitively, as on Windows.
 func isDroppedEnv(kv string) bool {
 	name := envName(kv)
-	if len(name) >= len(droppedPrefix) && strings.EqualFold(name[:len(droppedPrefix)], droppedPrefix) {
-		return true
+	for _, p := range droppedPrefixes {
+		if len(name) >= len(p) && strings.EqualFold(name[:len(p)], p) {
+			return true
+		}
 	}
 	return slices.ContainsFunc(droppedEnv, func(v string) bool { return strings.EqualFold(v, name) })
 }

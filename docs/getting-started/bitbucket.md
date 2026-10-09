@@ -23,7 +23,7 @@ touchmark cannot check them. Choose by plan:
 
 | Plan | `hub.yml` | What keeps the write key |
 |---|---|---|
-| Premium | `write_isolation: platform` and a `reason` that states the restriction | the deployment `touchmark-distribute` admits the default branch only (or only admins); you state it, touchmark cannot read it |
+| Premium | `write_isolation: platform` and a `reason` that states the restriction | the deployment `touchmark-distribute` admits the default branch only, and only admins or selected users deploy to it; you state it, touchmark cannot read it |
 | Free, Standard | `write_isolation: none` and a `reason` | nothing but who may push: every branch of the hub can read the write key; protect the branches and keep write access to the hub tight |
 | any | `write_isolation: external` | an external secret store that releases the key to the default branch only |
 
@@ -34,7 +34,7 @@ id: acme-eng
 writer: "{3f2a8d4e-1b6c-4f0a-9e7d-5c2b1a0f9e8d}"   # the writer account's UUID
 security:
   write_isolation: platform
-  reason: "Bitbucket Premium: only main may deploy to touchmark-distribute"
+  reason: "Bitbucket Premium: only admins may deploy to touchmark-distribute, from main only"
 ```
 
 Under `platform` without a `reason`, which is how the template ships, `distribute` and
@@ -73,8 +73,12 @@ write key in a repository or workspace variable.
     - create the deployment environment `touchmark-distribute` and store the writer's
       API token as its variable `TOUCHMARK_WRITE_TOKEN`, and nowhere else: not as a
       repository or workspace variable;
-    - on Premium, open the environment's settings and allow deployments from the
-      default branch only (or by admins only).
+    - on Premium, open the environment's settings: allow deployments from the default
+      branch only, **and** let only admins deploy (*Only allow admins to deploy to this
+      environment*) or only named users or groups (*Allow selected users or groups to
+      deploy to this environment*). The branch alone is not enough: anyone with write
+      access to the hub can run the custom pipelines on the default branch and pass
+      them variables ([below](#what-the-pipelines-do)).
    The hub delivers to Bitbucket Cloud with these one-provider names; with `providers`
    in `hub.yml` they carry the provider's id (`TOUCHMARK_BB_WRITE_TOKEN`).
 5. **Protect the hub.** Under *Repository settings → Branch restrictions*, let no one
@@ -132,8 +136,12 @@ write key in a repository or workspace variable.
 - **Custom pipelines** accept variables when they run: anyone with write access to the
   hub can run them, through the website or the API, and a pipeline variable overrides a
   deployment variable. The template's scripts reference no variable, so the website asks
-  for none. On Premium, deployment permissions also pause a run by someone not allowed
-  to deploy.
+  for none, but the API takes any. touchmark's git ignores the variables that would
+  change its config or the programs it runs (`GIT_CONFIG_*`, `GIT_SSH_COMMAND`,
+  `LD_PRELOAD`, …; see the [threat model](../project/threat-model.md#tokens-and-git)),
+  but whoever runs the step chooses its whole environment. So restrict the deployment
+  `touchmark-distribute` to admins or named users, not only to the default branch: on
+  Premium, deployment permissions pause a run by anyone else.
 
 ## Check it
 
@@ -159,5 +167,12 @@ reported as not read.
 - Bitbucket renders a link reference definition in a comment as nothing.
 - `restrictions.admin_only` of a deployment environment, which the API returns but does
   not document.
+- Custom pipeline variables via the API: a run started through the API with variables
+  the YAML does not declare gets them in its environment, overriding deployment
+  variables, and a deployment restricted to admins or selected users pauses it when
+  someone else starts it.
+- A scheduled run, and the push pipeline after a merge, pass a deployment restricted to
+  admins or selected users; Atlassian says deployment permissions hold scheduled and
+  automated deployments too, until an allowed user resumes them.
 
 Next: [opt a repository in](opt-in.md).

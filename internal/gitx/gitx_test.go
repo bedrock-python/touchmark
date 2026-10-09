@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -145,6 +146,100 @@ func TestRunInherit(t *testing.T) {
 	}
 }
 
+// TestRunDropsInheritedConfig: config the environment carries
+// (GIT_CONFIG_COUNT with its KEY_n/VALUE_n, GIT_CONFIG_PARAMETERS,
+// GIT_CONFIG_GLOBAL, GIT_CONFIG_SYSTEM) never reaches git, while the same
+// variables set through Env do. Each variable is first shown to work on this
+// git, so a pass is not a git that ignores it.
+func TestRunDropsInheritedConfig(t *testing.T) {
+	r := newTestRepo(t, false)
+	home := t.TempDir()
+	evil := filepath.Join(t.TempDir(), "evil.gitconfig")
+	if err := os.WriteFile(evil, []byte("[core]\n\tfsmonitor = evil-global\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		name string
+		env  []string
+		want string
+	}{
+		{"GIT_CONFIG_COUNT", []string{"GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=core.fsmonitor", "GIT_CONFIG_VALUE_0=evil-count"}, "evil-count"},
+		{"GIT_CONFIG_PARAMETERS", []string{"GIT_CONFIG_PARAMETERS='core.fsmonitor'='evil-parameters'"}, "evil-parameters"},
+		{"GIT_CONFIG_GLOBAL", []string{"GIT_CONFIG_GLOBAL=" + evil}, "evil-global"},
+		{"GIT_CONFIG_SYSTEM", []string{"GIT_CONFIG_SYSTEM=" + evil}, "evil-global"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// The control: git itself reads the variable.
+			cmd := exec.Command("git", "-C", r.dir, "config", "--get", "core.fsmonitor")
+			cmd.Env = append(os.Environ(), append([]string{"HOME=" + home, "XDG_CONFIG_HOME=" + home}, tc.env...)...)
+			if out, err := cmd.Output(); err != nil || strings.TrimSpace(string(out)) != tc.want {
+				t.Fatalf("plain git reads core.fsmonitor = %q, %v; want %q", out, err, tc.want)
+			}
+			// Through Git, inherited: dropped.
+			for _, kv := range tc.env {
+				name, value, _ := strings.Cut(kv, "=")
+				t.Setenv(name, value)
+			}
+			g := &Git{Dir: r.dir, Env: []string{"HOME=" + home, "XDG_CONFIG_HOME=" + home}}
+			out, err := g.Run(t.Context(), nil, "config", "--get", "core.fsmonitor")
+			var gitErr *Error
+			if !errors.As(err, &gitErr) || gitErr.Code != 1 {
+				t.Errorf("Git inherits %s: core.fsmonitor = %q, %v", tc.name, out, err)
+			}
+			// Through Env: kept, as touchmark's own isolation needs.
+			g.Env = append(g.Env, tc.env...)
+			out, err = g.Run(t.Context(), nil, "config", "--get", "core.fsmonitor")
+			if err != nil || strings.TrimSpace(string(out)) != tc.want {
+				t.Errorf("Env %s: core.fsmonitor = %q, %v; want %q", tc.name, out, err, tc.want)
+			}
+		})
+	}
+}
+
+// TestDroppedEnv: which inherited variables git gets. Names compare
+// case-insensitively; prefixes drop whole families.
+func TestDroppedEnv(t *testing.T) {
+	t.Parallel()
+	dropped := []string{
+		"GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=core.fsmonitor", "GIT_CONFIG_VALUE_0=x",
+		"git_config_key_12=x", "GIT_CONFIG_PARAMETERS='a.b'='c'", "GIT_CONFIG_GLOBAL=/x",
+		"GIT_CONFIG_SYSTEM=/x", "GIT_CONFIG=/x", "GIT_EXEC_PATH=/x", "GIT_SSH=/x",
+		"GIT_SSH_COMMAND=x", "GIT_ASKPASS=x", "SSH_ASKPASS=x", "GIT_PROXY_COMMAND=x",
+		"GIT_EXTERNAL_DIFF=x", "GIT_PAGER=x", "PAGER=x", "EDITOR=x", "GIT_EDITOR=x",
+		"VISUAL=x", "GIT_TRACE=/x", "GIT_TRACE2_EVENT=/x", "GIT_TRACE_PACKET=1",
+		"GIT_CURL_VERBOSE=1", "GIT_TEMPLATE_DIR=/x", "GIT_ALTERNATE_OBJECT_DIRECTORIES=/x",
+		"GIT_OBJECT_DIRECTORY=/x", "GIT_DIR=/x", "GIT_WORK_TREE=/x", "GIT_INDEX_FILE=/x",
+		"GIT_NAMESPACE=x", "GIT_ATTR_SOURCE=HEAD", "LD_PRELOAD=/x.so", "LD_LIBRARY_PATH=/x",
+		"LD_AUDIT=/x.so", "DYLD_INSERT_LIBRARIES=/x.dylib", "DYLD_LIBRARY_PATH=/x",
+		"TOUCHMARK_GITHUB_TOKEN=x",
+	}
+	kept := []string{
+		"GIT_CONFIG_NOSYSTEM=1", "GIT_ATTR_NOSYSTEM=1", "GIT_CEILING_DIRECTORIES=/tmp",
+		"GIT_AUTHOR_NAME=a", "HOME=/home/a", "PATH=/bin", "HTTPS_PROXY=http://proxy",
+		"LDFLAGS=-s", "GIT_SSL_CAINFO=/ca.pem",
+	}
+	for _, kv := range dropped {
+		if !isDroppedEnv(kv) {
+			t.Errorf("%q is inherited", kv)
+		}
+	}
+	for _, kv := range kept {
+		if isDroppedEnv(kv) {
+			t.Errorf("%q is dropped", kv)
+		}
+	}
+	g := &Git{
+		Inherit: func() []string { return slices.Concat(dropped, kept) },
+		Env:     []string{"GIT_CONFIG_GLOBAL=/own", "GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=a.b", "GIT_CONFIG_VALUE_0=c"},
+	}
+	env := g.environ()
+	want := slices.Concat(kept, defaultEnv, g.Env)
+	if !slices.Equal(env, want) {
+		t.Errorf("environ() = %q\nwant %q", env, want)
+	}
+}
+
 func TestRunStartFailure(t *testing.T) {
 	t.Parallel()
 	g := &Git{Bin: "touchmark-no-such-git-binary"}
@@ -198,7 +293,7 @@ func TestEnvName(t *testing.T) {
 			t.Errorf("envName(%q) = %q, want %q", kv, got, want)
 		}
 	}
-	if !isDroppedEnv("git_dir=/x") || !isDroppedEnv("GIT_LITERAL_PATHSPECS=1") || isDroppedEnv("GIT_DIRX=/x") || isDroppedEnv("GIT_CONFIG_COUNT=1") {
+	if !isDroppedEnv("git_dir=/x") || !isDroppedEnv("GIT_LITERAL_PATHSPECS=1") || isDroppedEnv("GIT_DIRX=/x") || !isDroppedEnv("GIT_CONFIG_COUNT=1") || isDroppedEnv("GIT_CONFIG_NOSYSTEM=1") {
 		t.Error("isDroppedEnv misclassifies")
 	}
 	// touchmark's own variables, credentials first, reach no git process.

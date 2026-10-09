@@ -87,10 +87,12 @@ func runDoctor(ctx context.Context, e *env, o *options, d *doctorOptions) (err e
 		return err
 	}
 	hctx := hubch.Detect(e.getenv, os.ReadFile)
+	hctx, repoWarnings := hubRepository(ctx, hctx, e.getenv)
 	fp, warnings, err := planFingerprint(hctx, string(o.hubFP))
 	if err != nil {
 		return err
 	}
+	warnings = append(warnings, repoWarnings...)
 	ci := inCI(hctx, e.getenv)
 	if d.hubToken && ci {
 		return configErrorf("--hub-token is for a maintainer's local run: a CI job must not hold a maintainer's token of the hub")
@@ -289,10 +291,11 @@ func isolationChecks(ctx context.Context, hctx hubch.Context, cfg *config.Hub, g
 // The token goes to the hub's own API only, whatever the hub.yml of this
 // checkout says (a branch under review may say anything): the provider's
 // API must be on the fingerprint's host (api.github.com for github.com,
-// api.<host> for GHE.com), and a provider with a ca_file must have the
-// same endpoints and CA bundle on the default branch (origin/HEAD), whose
-// bundle is used (trustedTokenProvider). The host is printed on stderr
-// before the first request.
+// api.<host> for GHE.com, api.bitbucket.org for bitbucket.org, whose
+// fingerprint's id is the repository's UUID), and a provider with a
+// ca_file must have the same endpoints and CA bundle on the default branch
+// (origin/HEAD), whose bundle is used (trustedTokenProvider). The host is
+// printed on stderr before the first request.
 func (h *hub) keyLocation(ctx context.Context, e *env, rps []config.ResolvedProvider, fp, token string, reg *redact.Registry) ([]report.DoctorCheck, error) {
 	i := strings.LastIndexByte(fp, '/')
 	host, id := strings.ToLower(fp[:i]), fp[i+1:]
@@ -323,6 +326,8 @@ func (h *hub) keyLocation(ctx context.Context, e *env, rps []config.ResolvedProv
 		in.Platform, in.APIURL = "github", "https://api."+host
 	case host == "gitlab.com":
 		in.Platform, in.APIURL = "gitlab", "https://gitlab.com/api/v4"
+	case host == "bitbucket.org":
+		in.Platform, in.APIURL = "bitbucket", "https://api.bitbucket.org/2.0"
 	default:
 		return nil, configErrorf("--hub-token: no provider of %s is on the hub's host %s, so touchmark cannot tell its platform", config.HubFile, host)
 	}
@@ -351,9 +356,9 @@ func (h *hub) keyLocation(ctx context.Context, e *env, rps []config.ResolvedProv
 
 // hubAPIHost is the host name of the API of a hub on host (a fingerprint's
 // host, perhaps with a port) on platform typ: api.github.com for
-// github.com, api.<host> for GHE.com, the hub's host itself elsewhere
-// (GitHub Enterprise Server, GitLab, Gitea and Forgejo serve their API
-// under their own URL).
+// github.com, api.<host> for GHE.com, api.bitbucket.org for bitbucket.org,
+// the hub's host itself elsewhere (GitHub Enterprise Server, GitLab, Gitea
+// and Forgejo serve their API under their own URL).
 func hubAPIHost(typ, host string) string {
 	name := strings.ToLower(host)
 	if hn, _, err := net.SplitHostPort(name); err == nil {
@@ -364,6 +369,8 @@ func hubAPIHost(typ, host string) string {
 		return "api.github.com"
 	case typ == "github" && strings.HasSuffix(name, ".ghe.com"):
 		return "api." + name
+	case typ == "bitbucket" && name == "bitbucket.org":
+		return "api.bitbucket.org"
 	}
 	return name
 }

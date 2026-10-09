@@ -79,9 +79,9 @@
           "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
         },
         "fingerprint": {
-          "description": "The hub's host and immutable repository id, e.g. github.com/712345678.",
+          "description": "The hub's host and immutable repository id, e.g. github.com/712345678; on Bitbucket the repository UUID, lowercase without braces.",
           "type": "string",
-          "pattern": "^[A-Za-z0-9.-]+(:[0-9]{1,5})?/[0-9]+$"
+          "pattern": "^[A-Za-z0-9.-]+(:[0-9]{1,5})?/([0-9]+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$"
         },
         "commit": {
           "description": "Full commit id: 40 or 64 lowercase hex digits.",

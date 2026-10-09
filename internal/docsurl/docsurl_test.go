@@ -30,7 +30,7 @@ func slug(heading string) string {
 // and its anchor a heading of that page.
 func TestPagesExist(t *testing.T) {
 	docs := filepath.Join("..", "..", "docs")
-	for _, url := range []string{WriteIsolation, Migrate, GiteaForgejo, GettingStarted("github"), GettingStarted("gitlab")} {
+	for _, url := range []string{WriteIsolation, Migrate, GiteaForgejo, GettingStarted("github"), GettingStarted("gitlab"), GettingStarted("bitbucket")} {
 		rest, ok := strings.CutPrefix(url, Base)
 		if !ok {
 			t.Errorf("%s is not under %s", url, Base)

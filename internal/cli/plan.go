@@ -119,10 +119,12 @@ func runPlan(ctx context.Context, e *env, o *options, p *planOptions) (err error
 		return err
 	}
 	hctx := hubch.Detect(e.getenv, os.ReadFile)
+	hctx, repoWarnings := hubRepository(ctx, hctx, e.getenv)
 	fp, warnings, err := planFingerprint(hctx, string(o.hubFP))
 	if err != nil {
 		return err
 	}
+	warnings = append(warnings, repoWarnings...)
 	rps, err := h.resolveProviders(ctx, hctx, e.getenv)
 	if err != nil {
 		return configError(err)
@@ -303,8 +305,9 @@ func planFingerprint(hctx hubch.Context, flag string) (string, []string, error) 
 		warnings = append(warnings, fmt.Sprintf("--hub-fp %s differs from %s, the fingerprint CI reports", flag, ci))
 	}
 	if flag == "" {
-		return "", nil, configErrorf("the hub's fingerprint is unknown: CI provides it (GITHUB_REPOSITORY_ID, CI_PROJECT_ID); " +
-			"outside CI pass --hub-fp HOST/ID, the hub's host and repository id, e.g. github.com/712345678")
+		return "", nil, configErrorf("the hub's fingerprint is unknown: CI provides it (GITHUB_REPOSITORY_ID, CI_PROJECT_ID, BITBUCKET_REPO_UUID); " +
+			"outside CI pass --hub-fp HOST/ID, the hub's host and repository id, e.g. github.com/712345678 " +
+			"(on Bitbucket the repository's UUID, BITBUCKET_REPO_UUID: bitbucket.org/{…})")
 	}
 	return flag, warnings, nil
 }
@@ -680,7 +683,8 @@ func (h *hub) caPool(ctx context.Context, name, rev string) (*x509.CertPool, err
 
 // hubPR returns the number of the hub pull request a CI run builds: from
 // GITHUB_REF (refs/pull/<n>/merge) on Actions, CI_MERGE_REQUEST_IID on
-// GitLab; 0 when the run builds none.
+// GitLab, BITBUCKET_PR_ID on Bitbucket Pipelines; 0 when the run builds
+// none.
 func hubPR(hctx hubch.Context, getenv func(string) string) int64 {
 	var n string
 	switch hctx.CI {
@@ -692,6 +696,8 @@ func hubPR(hctx hubch.Context, getenv func(string) string) int64 {
 		n, _, _ = strings.Cut(rest, "/")
 	case hubch.GitLabCI:
 		n = strings.TrimSpace(getenv("CI_MERGE_REQUEST_IID"))
+	case hubch.BitbucketPipelines:
+		n = strings.TrimSpace(getenv("BITBUCKET_PR_ID"))
 	}
 	v, err := strconv.ParseInt(n, 10, 64)
 	if err != nil || v <= 0 {
@@ -776,12 +782,13 @@ func (l *refList) Set(s string) error {
 }
 
 // fingerprintRe is a hub fingerprint: a host with an optional port, and a
-// positive repository id.
-var fingerprintRe = regexp.MustCompile(`^[A-Za-z0-9.-]+(:[0-9]{1,5})?/[1-9][0-9]{0,19}$`)
+// positive repository id or a Bitbucket repository UUID, with or without
+// its braces (BITBUCKET_REPO_UUID has them).
+var fingerprintRe = regexp.MustCompile(`^[A-Za-z0-9.-]+(:[0-9]{1,5})?/([1-9][0-9]{0,19}|[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}|\{[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\})$`)
 
 // fingerprintFlag is the value of --hub-fp: HOST[:PORT]/ID in the form CI
 // reports it (config.CanonicalFingerprint: the host lowercased, without the
-// default ports 443 and 80).
+// default ports 443 and 80; a Bitbucket UUID lowercased, without braces).
 type fingerprintFlag string
 
 func (f *fingerprintFlag) String() string { return string(*f) }
@@ -789,7 +796,7 @@ func (f *fingerprintFlag) String() string { return string(*f) }
 func (f *fingerprintFlag) Set(s string) error {
 	s = strings.TrimSpace(s)
 	if !fingerprintRe.MatchString(s) {
-		return fmt.Errorf("%q is not HOST/ID, like github.com/712345678", s)
+		return fmt.Errorf("%q is not HOST/ID, like github.com/712345678 or bitbucket.org/{repository-uuid}", s)
 	}
 	*f = fingerprintFlag(config.CanonicalFingerprint(s))
 	return nil

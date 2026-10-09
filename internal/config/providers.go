@@ -155,7 +155,7 @@ func (h *Hub) ResolveProviders(getenv func(string) string) ([]ResolvedProvider, 
 // remote is on originHost ("" when unknown). Outside CI, a hub without
 // providers takes its implicit provider from that host when it is a public
 // instance whose type the host tells: github.com and *.ghe.com (github at
-// https://<host>), gitlab.com (gitlab). Any other host is a self-managed
+// https://<host>), gitlab.com (gitlab), bitbucket.org (bitbucket). Any other host is a self-managed
 // instance, whose type only hub.yml can tell: the error asks for providers
 // there. In CI the environment decides, whatever the origin.
 func (h *Hub) ResolveProvidersWithOrigin(getenv func(string) string, originHost string) ([]ResolvedProvider, error) {
@@ -203,7 +203,8 @@ func (h *Hub) ResolveProvidersWithOrigin(getenv func(string) string, originHost 
 // ciEnv is what the CI environment says about the hub's own platform.
 type ciEnv struct {
 	// kind is the provider type of the CI: "github", "gitlab", "gitea",
-	// "forgejo", or "" outside CI.
+	// "forgejo", "bitbucket" (Bitbucket Pipelines, always on Bitbucket
+	// Cloud), or "" outside CI.
 	kind string
 	// serverVar names the variable with the platform's URL, and serverURL
 	// is its value, trimmed.
@@ -226,6 +227,11 @@ func readCIEnv(getenv func(string) string) ciEnv {
 		env.kind, env.serverVar = "github", "GITHUB_SERVER_URL"
 	case isTrue("GITLAB_CI"):
 		env.kind, env.serverVar = "gitlab", "CI_SERVER_URL"
+	case strings.TrimSpace(getenv("BITBUCKET_BUILD_NUMBER")) != "":
+		// Bitbucket Pipelines runs on Bitbucket Cloud only, and names no
+		// server URL: the hub is on https://bitbucket.org.
+		env.kind, env.serverURL = "bitbucket", bitbucketURL
+		return env
 	default:
 		return env
 	}
@@ -256,8 +262,8 @@ func implicitProvider(h *Hub, env ciEnv, originHost string) (Provider, error) {
 	default:
 		var ok bool
 		if p, ok = originProvider(originHost); !ok {
-			return Provider{}, fmt.Errorf("%s declares no providers, no CI environment names one (GitHub Actions, GitLab CI, Gitea or Forgejo Actions), "+
-				"and the hub's origin remote is not on github.com, a *.ghe.com host or gitlab.com; add providers to %s, or set platform and base_url there", HubFile, HubFile)
+			return Provider{}, fmt.Errorf("%s declares no providers, no CI environment names one (GitHub Actions, GitLab CI, Gitea or Forgejo Actions, Bitbucket Pipelines), "+
+				"and the hub's origin remote is not on github.com, a *.ghe.com host, gitlab.com or bitbucket.org; add providers to %s, or set platform and base_url there", HubFile, HubFile)
 		}
 	}
 	if h != nil {
@@ -268,14 +274,16 @@ func implicitProvider(h *Hub, env ciEnv, originHost string) (Provider, error) {
 
 // OriginTellsProvider reports whether a hub without providers can take its
 // implicit provider outside CI from an origin remote on host: only a public
-// instance (github.com, a *.ghe.com host, gitlab.com) tells its type.
+// instance (github.com, a *.ghe.com host, gitlab.com, bitbucket.org) tells
+// its type.
 func OriginTellsProvider(host string) bool {
 	_, ok := originProvider(host)
 	return ok
 }
 
 // originProvider returns the provider of a public instance at host, the
-// host of a hub's origin remote: only there does the host tell the type.
+// host of a hub's origin remote: only there does the host tell the type
+// (Bitbucket Cloud's bitbucket.org included).
 func originProvider(host string) (Provider, bool) {
 	host = strings.ToLower(strings.TrimSpace(host))
 	switch {
@@ -285,6 +293,8 @@ func originProvider(host string) (Provider, bool) {
 		return Provider{ID: "github", Type: "github", URL: "https://" + host}, true
 	case host == "gitlab.com":
 		return Provider{ID: "gitlab", Type: "gitlab", URL: "https://gitlab.com"}, true
+	case host == "bitbucket.org":
+		return Provider{ID: "bitbucket", Type: "bitbucket", URL: bitbucketURL}, true
 	}
 	return Provider{}, false
 }

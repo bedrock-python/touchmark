@@ -47,8 +47,9 @@ no lock file, no header, no marker in their files. It never checks a target out 
 and never runs a script, hook, filter or LFS from the hub or a target. It delivers
 nothing to a repository without the opt-in file, unless `targets.yml` subscribes it
 (`opt_in: assumed`). There is no pull mode (targets do not
-fetch from the hub), no remote pack sources, and no hub on Bitbucket Pipelines or Azure
-Pipelines: Bitbucket Cloud and Azure DevOps are providers a hub elsewhere delivers to.
+fetch from the hub), no remote pack sources, no `setup` for Bitbucket (a hub on Bitbucket Cloud
+runs in Bitbucket Pipelines, set up by hand), and no hub on Azure Pipelines: Azure DevOps is a
+provider a hub elsewhere delivers to.
 
 ## Mental model
 

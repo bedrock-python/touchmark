@@ -98,8 +98,9 @@ func runSetup(ctx context.Context, e *env, o *options, s *setupOptions) (err err
 	case "gitea", "forgejo":
 		return giteaRefusal(platform)
 	case "bitbucket":
-		return configErrorf("setup does not set up bitbucket yet: a hub on Bitbucket Pipelines comes in a later release; " +
-			"a hub on GitHub or GitLab delivers to Bitbucket Cloud as one of its providers")
+		return configErrorf("setup does not set up bitbucket yet: set up a hub on Bitbucket Pipelines by hand (the bot accounts and their API "+
+			"tokens, the hub's access token, the repository and deployment variables), as %s shows; a hub on GitHub or GitLab "+
+			"delivers to Bitbucket Cloud as one of its providers", docsurl.GettingStarted("bitbucket"))
 	case "azure-devops":
 		return configErrorf("setup does not set up azure-devops yet: a hub on Azure Pipelines comes in a later release; " +
 			"a hub on GitHub or GitLab delivers to Azure DevOps as one of its providers")

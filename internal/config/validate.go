@@ -57,7 +57,7 @@ const (
 	repoURLPattern      = `^` + urlBase + `(/` + refSegment + `){2,}/?$`
 	namespaceURLPattern = `^` + urlBase + `(/` + refSegment + `)+/?$`
 	excludeURLPattern   = `^` + urlBase + `(/` + urlGlobSegment + `){2,}/?$`
-	fingerprintPattern  = `^[A-Za-z0-9.-]+(:[0-9]{1,5})?/[0-9]+$`
+	fingerprintPattern  = `^[A-Za-z0-9.-]+(:[0-9]{1,5})?/([0-9]+|[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}|\{[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\})$`
 	cooldownPattern     = `^[1-9][0-9]{0,4}[dh]$`
 	accountPattern      = `^[^` + space + `]+$`
 	labelPattern        = `^[^,]*[^,` + space + `][^,]*$`

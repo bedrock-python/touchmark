@@ -35,7 +35,10 @@ const (
 	GitLabCI       CI = "gitlab-ci"
 	GiteaActions   CI = "gitea-actions"
 	ForgejoActions CI = "forgejo-actions"
-	Local          CI = "local"
+	// BitbucketPipelines is Bitbucket Pipelines, which runs on Bitbucket
+	// Cloud only (bitbucket.org).
+	BitbucketPipelines CI = "bitbucket-pipelines"
+	Local              CI = "local"
 )
 
 // GitLabUser is the user of the job token in git's Basic header; register
@@ -66,11 +69,14 @@ type Context struct {
 	RefName     string
 	RefIsBranch bool
 	// Event is the triggering event: push, pull_request, schedule,
-	// workflow_dispatch, merge_request_event, web, …
+	// workflow_dispatch, merge_request_event, web, … Bitbucket Pipelines
+	// tells only pull requests (pull_request) from the rest (push: a branch
+	// or tag pipeline, a custom pipeline run by hand or on a schedule).
 	Event string
 	// RefProtected is GitLab's CI_COMMIT_REF_PROTECTED.
 	RefProtected bool
-	// Environment is GitLab's CI_ENVIRONMENT_NAME.
+	// Environment is GitLab's CI_ENVIRONMENT_NAME, or Bitbucket's
+	// BITBUCKET_DEPLOYMENT_ENVIRONMENT (the deployment of the step).
 	Environment string
 	// Visibility is "public", "internal" or "private"; "" when unknown.
 	Visibility string
@@ -98,6 +104,9 @@ type Context struct {
 //     CI_COMMIT_REF_NAME, CI_COMMIT_BRANCH (set only for branches),
 //     CI_PIPELINE_SOURCE, CI_COMMIT_REF_PROTECTED, CI_ENVIRONMENT_NAME,
 //     CI_PROJECT_VISIBILITY, CI_REPOSITORY_URL, CI_SERVER_TLS_CA_FILE.
+//   - Bitbucket Pipelines (BITBUCKET_BUILD_NUMBER set): see
+//     detectBitbucket. Pipelines names no default branch: the hub channel
+//     reads it (RepositoryReader).
 //   - Otherwise Local with everything empty.
 //
 // readFile reads the event payload; errors reading or parsing it leave the
@@ -139,6 +148,8 @@ func Detect(getenv func(string) string, readFile func(string) ([]byte, error)) C
 		return detectActions(GitHubActions, env, readFile)
 	case isTrue(env("GITLAB_CI")):
 		return detectGitLab(env)
+	case env("BITBUCKET_BUILD_NUMBER") != "":
+		return detectBitbucket(env)
 	}
 	return Context{CI: Local}
 }
@@ -391,7 +402,9 @@ type Channel interface {
 
 // Token returns the hub CI's own token from the environment: GITHUB_TOKEN
 // on GitHub Actions, CI_JOB_TOKEN on GitLab CI, GITEA_TOKEN or GITHUB_TOKEN
-// on Gitea and Forgejo Actions; "" when absent or Local.
+// on Gitea and Forgejo Actions, TOUCHMARK_PIPELINES_TOKEN on Bitbucket
+// Pipelines (BitbucketTokenVar: Pipelines gives a step no API token of its
+// own); "" when absent or Local.
 //
 // The caller registers the token with its redact.Registry before use, on
 // GitLab with the basic user GitLabUser.
@@ -410,6 +423,8 @@ func Token(c Context, getenv func(string) string) string {
 			return t
 		}
 		return env("GITHUB_TOKEN")
+	case BitbucketPipelines:
+		return env(BitbucketTokenVar)
 	}
 	return ""
 }
@@ -419,6 +434,8 @@ func Token(c Context, getenv func(string) string) string {
 //     GET {api}/repos/{path}/git/ref/heads/{branch}; Gitea and Forgejo
 //     GET {api}/repos/{path}/branches/{branch} — with the token sent only to
 //     the host of c.APIURL;
+//   - Bitbucket: REST over client (newBitbucket), with the hub's access
+//     token as a Bearer token sent only to the host of c.APIURL;
 //   - GitLab: `git ls-remote` of c.RepositoryURL with the job token passed
 //     as an http.extraHeader through GIT_CONFIG_COUNT/KEY/VALUE environment
 //     variables (never in the URL or argv), because CI_JOB_TOKEN cannot
@@ -448,6 +465,8 @@ func New(c Context, client *httpx.Client, token string) (Channel, error) {
 		return newREST(c, client, token)
 	case GitLabCI:
 		return newGit(c, token)
+	case BitbucketPipelines:
+		return newBitbucket(c, client, token)
 	case Local, "":
 		return nil, errors.New("hub channel: not running in a known CI")
 	}
@@ -588,6 +607,11 @@ type Environment struct {
 	// Policies are its custom deployment branch and tag policies, when it
 	// has them: name patterns (fnmatch) with type "branch" or "tag".
 	Policies []EnvironmentPolicy
+	// AdminOnly is a Bitbucket deployment environment's
+	// restrictions.admin_only (Premium: deployments by others pause). The
+	// field is not in Bitbucket's API reference (assumed from the API's
+	// answers); Bitbucket shows no deployment branch restriction at all.
+	AdminOnly bool
 }
 
 // EnvironmentPolicy is one custom deployment branch or tag policy.

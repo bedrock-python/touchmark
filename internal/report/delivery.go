@@ -755,7 +755,7 @@ func (d *Delivery) mdGroups(m *mdWriter) {
 	}
 	for _, g := range groups {
 		m.line("")
-		m.open(fmt.Sprintf("<details><summary>%s (%d)</summary>", mdText(g.label), len(g.targets)))
+		m.details(fmt.Sprintf("%s (%d)", mdText(g.label), len(g.targets)))
 		m.line("")
 		hidden := 0
 		for _, t := range g.targets {
@@ -769,7 +769,7 @@ func (d *Delivery) mdGroups(m *mdWriter) {
 			m.line(fmt.Sprintf("- %d private in public hub, not named", hidden))
 		}
 		m.line("")
-		m.close("</details>")
+		m.endDetails()
 	}
 }
 
@@ -815,6 +815,10 @@ type mdWriter struct {
 	// openTag is set while a <details> section is open.
 	openTag bool
 	cut     bool
+	// plain writes Markdown without HTML, for a platform that shows HTML as
+	// text (Bitbucket escapes it): a section is a bold title, not
+	// <details>.
+	plain bool
 }
 
 // cutNote ends a cut report.
@@ -856,6 +860,23 @@ func (m *mdWriter) close(s string) {
 	m.line(s)
 	if !m.cut {
 		m.openTag = false
+	}
+}
+
+// details opens a collapsible section titled summary (Markdown text): a
+// <details> block, or with plain a bold line.
+func (m *mdWriter) details(summary string) {
+	if m.plain {
+		m.line("**" + summary + "**")
+		return
+	}
+	m.open("<details><summary>" + summary + "</summary>")
+}
+
+// endDetails closes the section details opened.
+func (m *mdWriter) endDetails() {
+	if !m.plain {
+		m.close("</details>")
 	}
 }
 

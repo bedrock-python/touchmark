@@ -1,0 +1,6 @@
+version: 1
+id: acme-eng
+previous_fingerprints:
+  - "bitbucket.org/{3F2A8D4E-1B6C-4F0A-9E7D-5C2B1A0F9E8D}"
+  - bitbucket.org/0b7e5a2c-9d4f-4e1b-8a3c-6f5d2e1c0b9a
+  - github.com/712345678

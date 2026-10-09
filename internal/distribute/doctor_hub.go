@@ -20,9 +20,9 @@ import (
 
 // DoctorGuard runs the guards of doctor before any platform call: in CI
 // (a CI hubch recognizes, or CI set), the job builds the hub's default
-// branch for no pull request, and on GitLab in the protected environment
-// touchmark-distribute, as distribute's (the writer is used on the default
-// branch only). A local run passes.
+// branch for no pull request, and on GitLab and Bitbucket in the
+// environment touchmark-distribute, as distribute's (the writer is used on
+// the default branch only). A local run passes.
 func DoctorGuard(c hubch.Context, getenv func(string) string) error {
 	if !guardInCI(c, getenv) {
 		return nil
@@ -57,6 +57,9 @@ type IsolationInput struct {
 //     pipelines and doctor --hub-token tell;
 //   - platform, on Gitea and Forgejo Actions: fail, their secrets reach
 //     every branch's jobs;
+//   - platform, on Bitbucket Pipelines: fail without security.reason
+//     (BitbucketPlatformRefusal); with it unknown: the API does not show
+//     who may deploy, and the reason states it;
 //   - platform, locally: unknown, doctor --hub-token tells.
 func IsolationChecks(in IsolationInput) []report.DoctorCheck {
 	mode := "platform"
@@ -114,6 +117,18 @@ func IsolationChecks(in IsolationInput) []report.DoctorCheck {
 	case hubch.GiteaActions, hubch.ForgejoActions:
 		c.Status, c.Detail = report.StatusFail, "security.write_isolation: platform cannot hold on Gitea and Forgejo Actions, whose secrets every branch's jobs see: "+
 			"run distribute on GitHub Actions or GitLab CI, or set write_isolation to external, or to none with a reason; see "+docsurl.WriteIsolation
+	case hubch.BitbucketPipelines:
+		reason := ""
+		if in.Hub != nil {
+			reason = strings.TrimSpace(in.Hub.Security.Reason)
+		}
+		if reason == "" {
+			c.Status, c.Detail = report.StatusFail, BitbucketPlatformRefusal
+			break
+		}
+		c.Status, c.Detail = report.StatusUnknown, "Bitbucket's API does not show which branches may deploy to "+distributeEnvironment+
+			" (Premium deployment permissions); the hub states: "+reason+". `touchmark probe` in the hub's pipelines fails when a repository "+
+			"or workspace variable holds a write key, and doctor --hub-token reads the variables"
 	default:
 		c.Status, c.Detail = report.StatusUnknown, "a local run cannot see where the hub's CI keeps the write key: doctor --hub-token reads it with a maintainer's token"
 	}
@@ -156,6 +171,12 @@ func IsWriteKeyName(name string, known []string) bool {
 //     no_one_allowed warns.
 //   - Gitea and Forgejo: a write key in an Actions secret fails, unless
 //     the hub accepted the risk (none: warn).
+//   - Bitbucket: a write key in a repository or workspace variable fails
+//     (every branch's pipelines, pull requests included, read it); one in
+//     a deployment variable of touchmark-distribute is unknown (the API
+//     does not show which branches may deploy), ok when only admins may
+//     deploy there, a warning under none, and a warning in another
+//     environment; one not secured warns.
 //
 // Under security.write_isolation external no write key is expected in the
 // hub, and one found there is graded the same. A key found nowhere is
@@ -184,6 +205,8 @@ func KeyLocationChecks(ks hubch.KeyStore, known []string, cfg *config.Hub) []rep
 			out = append(out, githubKeyCheck(s, envs, ks.DefaultBranch))
 		case "gitlab":
 			out = append(out, gitlabKeyChecks(s)...)
+		case "bitbucket":
+			out = append(out, bitbucketKeyChecks(s, envs, mode)...)
 		default:
 			if mode == "none" {
 				add(report.StatusWarn, "Actions secret %s (%s): every branch's jobs read it; the hub accepted the risk (security.write_isolation: none)", s.Name, s.Where)
@@ -195,13 +218,13 @@ func KeyLocationChecks(ks hubch.KeyStore, known []string, cfg *config.Hub) []rep
 	if found == 0 {
 		add(report.StatusUnknown, "no secret or variable named like a write key was found where this token can see; the key may live elsewhere (an organization secret not shared with the hub, a parent group, an external store)")
 	}
-	if ks.Platform == "github" {
+	if ks.Platform == "github" || ks.Platform == "bitbucket" {
 		switch _, ok := envs[distributeEnvironment]; {
 		case ok || mode != "platform":
 		case ks.EnvironmentsUnread != "":
 			add(report.StatusUnknown, "whether the hub has the environment %s is not known: %s", distributeEnvironment, ks.EnvironmentsUnread)
 		default:
-			add(report.StatusFail, "the hub has no environment %s: keep the write key in its secrets, with Deployment branches set to the default branch only", distributeEnvironment)
+			add(report.StatusFail, "the hub has no environment %s: keep the write key in its secrets (its deployment variables on Bitbucket), with deployments limited to the default branch", distributeEnvironment)
 		}
 	}
 	if ks.Platform == "gitlab" {
@@ -242,6 +265,39 @@ func githubKeyCheck(s hubch.Secret, envs map[string]hubch.NamedEnvironment, defa
 		c.Status, c.Detail = report.StatusUnknown, fmt.Sprintf("secret %s (%s)", s.Name, s.Where)
 	}
 	return c
+}
+
+// bitbucketKeyChecks grade one write-key variable on Bitbucket.
+func bitbucketKeyChecks(s hubch.Secret, envs map[string]hubch.NamedEnvironment, mode string) []report.DoctorCheck {
+	c := report.DoctorCheck{Name: "key-location"}
+	where := s.Where + " variable " + s.Name
+	switch s.Where {
+	case "repository", "workspace":
+		c.Status, c.Detail = report.StatusFail, fmt.Sprintf("%s: the pipelines of every branch, pull requests included, read it; "+
+			"move it into the deployment environment %s", where, distributeEnvironment)
+	case "environment":
+		where = fmt.Sprintf("deployment variable %s of environment %s", s.Name, s.Environment)
+		switch {
+		case s.Environment != distributeEnvironment:
+			c.Status, c.Detail = report.StatusWarn, fmt.Sprintf("%s: distribute's step deploys to %s", where, distributeEnvironment)
+		case mode == "none":
+			c.Status, c.Detail = report.StatusWarn, where+": any branch's pipeline may deploy there and read it; the hub accepted the risk (security.write_isolation: none)"
+		case envs[s.Environment].AdminOnly:
+			c.Status, c.Detail = report.StatusOK, where+": only admins may deploy there (restrictions.admin_only), so the step of anyone else pauses"
+		default:
+			c.Status, c.Detail = report.StatusUnknown, where+": Bitbucket's API does not show which branches may deploy there; with Premium "+
+				"restrict it to the default branch (Repository settings > Deployments) and state that in security.reason; without Premium "+
+				"any branch's pipeline reads it"
+		}
+	default:
+		c.Status, c.Detail = report.StatusUnknown, fmt.Sprintf("variable %s (%s)", s.Name, s.Where)
+	}
+	out := []report.DoctorCheck{c}
+	if !s.Masked {
+		out = append(out, report.DoctorCheck{Name: "key-location", Status: report.StatusWarn,
+			Detail: where + " is not secured: its value shows in the settings and the API, and the logs do not mask it; make it Secured"})
+	}
+	return out
 }
 
 // gitlabKeyChecks grade one write-key variable on GitLab.

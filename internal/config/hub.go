@@ -65,7 +65,8 @@ func validateHub(h *Hub, doc document, p *problems) {
 	checkBranches(h, doc, p)
 	for i, fp := range h.PreviousFingerprints {
 		if !fingerprintRe.MatchString(fp) {
-			p.errorf(fmt.Sprintf("previous_fingerprints[%d]", i), "%q must be host/numeric-id, like github.com/712345678", fp)
+			p.errorf(fmt.Sprintf("previous_fingerprints[%d]", i), "%q must be host/repository-id, like github.com/712345678 "+
+				"or bitbucket.org/{repository-uuid}", fp)
 		}
 	}
 	if doc.has("opt_in_file") {
@@ -374,7 +375,9 @@ func setDefault(v *string, def string) {
 // CanonicalFingerprint returns a hub fingerprint (host[:port]/id) in the
 // form CI reports it, so that spellings of one hub compare
 // equal and hash to the same marker fp: the host lowercased, the default
-// ports 443 and 80 dropped, and the repository id without leading zeros.
+// ports 443 and 80 dropped, and the repository id without leading zeros. A
+// Bitbucket repository UUID, as BITBUCKET_REPO_UUID gives it
+// ({0f1e…-…}), loses its braces and is lowercased: bitbucket.org/0f1e…-….
 // Anything that is not host[:port]/id is returned unchanged.
 func CanonicalFingerprint(fp string) string {
 	if !fingerprintRe.MatchString(fp) {
@@ -384,6 +387,9 @@ func CanonicalFingerprint(fp string) string {
 	host = strings.ToLower(host)
 	if name, port, ok := strings.Cut(host, ":"); ok && (port == "443" || port == "80") {
 		host = name
+	}
+	if strings.Contains(id, "-") {
+		return host + "/" + strings.ToLower(strings.Trim(id, "{}"))
 	}
 	if id = strings.TrimLeft(id, "0"); id == "" {
 		id = "0"

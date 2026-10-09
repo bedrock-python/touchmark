@@ -15,18 +15,21 @@ import (
 // Where the hub keeps its secrets, as a maintainer's token of the hub reads
 // it: `touchmark doctor --hub-token`. The token goes to the
 // hub's API host only, in a header; the values of secrets and variables are
-// never kept (the APIs of GitHub and Gitea never return them; GitLab's
-// variables carry them, and the decoding drops them).
+// never kept (the APIs of GitHub and Gitea never return them; GitLab's and
+// Bitbucket's variables carry those not masked or secured, and the decoding
+// drops them).
 
 // KeyStoreInput locates the hub for ReadKeyStore.
 type KeyStoreInput struct {
-	// Platform is "github", "gitlab", "gitea" or "forgejo"; "bitbucket" and
-	// "azure-devops" are refused for now.
+	// Platform is "github", "gitlab", "gitea", "forgejo" or "bitbucket";
+	// "azure-devops" is refused for now.
 	Platform string
 	// APIURL is the REST base of the hub's platform (…/api/v3, /api/v4,
 	// /api/v1, https://api.github.com).
 	APIURL string
-	// RepoID is the hub repository's immutable id (the fingerprint's).
+	// RepoID is the hub repository's immutable id (the fingerprint's): a
+	// number, or on Bitbucket the repository's UUID (with or without
+	// braces).
 	RepoID string
 	// Token is the maintainer's token.
 	Token string
@@ -44,8 +47,9 @@ type KeyStore struct {
 	// name, where they live and how they are kept. Values are never read.
 	Secrets []Secret
 	// Environments are the hub's deployment environments on GitHub, with
-	// who may use them; EnvironmentsUnread says why they could not be listed
-	// ("" when they were).
+	// who may use them, and on Bitbucket (whose API does not show which
+	// branches may deploy); EnvironmentsUnread says why they could not be
+	// listed ("" when they were).
 	Environments       []NamedEnvironment
 	EnvironmentsUnread string
 	// ProtectedBranches and ProtectedTags are GitLab's: the refs whose
@@ -65,18 +69,21 @@ type KeyStore struct {
 	Unread []string
 }
 
-// Secret is one secret (GitHub, Gitea, Forgejo) or CI/CD variable (GitLab).
+// Secret is one secret (GitHub, Gitea, Forgejo), CI/CD variable (GitLab)
+// or Pipelines variable (Bitbucket).
 type Secret struct {
 	Name string
 	// Where is "repository", "organization" (shared with the hub),
-	// "dependabot", "environment" (Environment names it), "project" or
-	// "group" (Group names it, GitLab).
+	// "dependabot", "environment" (Environment names it; a deployment
+	// variable on Bitbucket), "project" or "group" (Group names it, GitLab),
+	// "workspace" (Bitbucket).
 	Where       string
 	Environment string
 	Group       string
 	// Protected, Masked and Scope are GitLab's: a protected variable
 	// reaches pipelines of protected refs only; Scope is its environment
-	// scope ("*" for every job).
+	// scope ("*" for every job). On Bitbucket Masked is a secured
+	// variable: hidden in the logs and the API.
 	Protected bool
 	Masked    bool
 	Scope     string
@@ -115,7 +122,9 @@ const (
 //     its CI/CD variables and those of each group above it (protected,
 //     masked, environment scope); its protected branches and tags;
 //   - Gitea and Forgejo: the repository by id, the names of its Actions
-//     secrets and of its organization's.
+//     secrets and of its organization's;
+//   - Bitbucket: the repository by UUID; its Pipelines variables, its
+//     workspace's, and each deployment environment's (secured or not).
 //
 // A listing the token may not read is noted in Unread, or in the field of
 // its own (EnvironmentsUnread, ProtectedBranchesUnread,
@@ -125,7 +134,12 @@ func ReadKeyStore(ctx context.Context, in KeyStoreInput) (KeyStore, error) {
 	if in.Client == nil {
 		in.Client = httpx.New(httpx.Options{})
 	}
-	if repoID(in.RepoID) == "" {
+	switch {
+	case in.Platform == "bitbucket":
+		if in.RepoID = BitbucketRepoID(in.RepoID); in.RepoID == "" {
+			return KeyStore{}, errors.New("hub keys: the hub's repository UUID is unknown")
+		}
+	case repoID(in.RepoID) == "":
 		return KeyStore{}, errors.New("hub keys: the hub's repository id is unknown")
 	}
 	if err := checkToken(in.Token); err != nil {
@@ -150,7 +164,8 @@ func ReadKeyStore(ctx context.Context, in KeyStoreInput) (KeyStore, error) {
 		k.auth = &httpx.Auth{Hosts: []string{api.Host}, Header: k.header("token ")}
 		return k.gitea(ctx)
 	case "bitbucket":
-		return KeyStore{}, errors.New("hub keys: a hub on Bitbucket is not supported yet")
+		k.auth = &httpx.Auth{Hosts: []string{api.Host}, Header: k.header("Bearer ")}
+		return k.bitbucket(ctx)
 	case "azure-devops":
 		return KeyStore{}, errors.New("hub keys: a hub on Azure DevOps is not supported yet")
 	}

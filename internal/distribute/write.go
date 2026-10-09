@@ -296,9 +296,9 @@ func pushOutcome(res gitx.PushResult) (report.Outcome, string) {
 // Cloud's branch restrictions ("Permission denied to update branch …",
 // which comes with "pre-receive hook declined"), Azure Repos' branch
 // policies (TF402455: "Pushes to this branch are not permitted; you must
-// use a pull request to update this branch", rule "policy" as RFC-0003
-// names it), a pre-receive hook, a deletion rule; "push" when the message
-// names none.
+// use a pull request to update this branch": rule "policy", the name Azure
+// DevOps gives such rules), a pre-receive hook, a deletion rule; "push" when
+// the message names none.
 func pushRule(msg string) string {
 	m := strings.ToLower(msg)
 	switch {

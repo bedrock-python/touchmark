@@ -160,7 +160,7 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 func errorBody(typeKey, msg string) map[string]any {
 	return map[string]any{"$id": "1", "innerException": nil, "message": msg,
 		"typeName": "Microsoft.TeamFoundation.Git.Server." + typeKey + ", Microsoft.TeamFoundation.SourceControl.WebServer",
-		"typeKey": typeKey, "errorCode": 0, "eventId": 3000}
+		"typeKey":  typeKey, "errorCode": 0, "eventId": 3000}
 }
 
 // collection is a collection answer.
@@ -209,6 +209,16 @@ func newTestReader(t *testing.T, s *apiServer, token string) *reader {
 	return r.(*reader)
 }
 
+// newTestWriter returns a writer with token; its routes may write.
+func newTestWriter(t *testing.T, s *apiServer, token string) *writer {
+	t.Helper()
+	s.allowWrites = true
+	w, err := NewWriter(s.provider(), auth.Credential{Kind: auth.Token, Token: token}, httpClient())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return w.(*writer)
+}
 
 // Paths of the routes.
 func apisPath(segs ...string) string { return "/" + org + "/_apis/" + strings.Join(segs, "/") }

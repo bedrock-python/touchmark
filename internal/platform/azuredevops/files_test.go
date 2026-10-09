@@ -62,7 +62,8 @@ func fileWorld(t *testing.T, s *apiServer) map[string]string {
 	s.handle(http.MethodGet, repoPath("items"), func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		version, kind := q.Get("versionDescriptor.version"), q.Get("versionDescriptor.versionType")
-		if !(version == "main" && kind == "branch" || version == headCommit && kind == "commit") {
+		known := version == "main" && kind == "branch" || version == headCommit && kind == "commit"
+		if !known {
 			writeJSON(w, http.StatusNotFound, errorBody(keyUnresolvable, "TF401175: The version descriptor <Branch: "+version+"> could not be resolved to a version in the repository"))
 			return
 		}

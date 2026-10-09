@@ -12,6 +12,7 @@ import (
 	"github.com/bedrock-python/touchmark/internal/marker"
 	"github.com/bedrock-python/touchmark/internal/platform"
 	"github.com/bedrock-python/touchmark/internal/prbody"
+	"github.com/bedrock-python/touchmark/internal/report"
 	"github.com/bedrock-python/touchmark/internal/snapshot"
 )
 
@@ -35,6 +36,7 @@ func TestNoReplyEmail(t *testing.T) {
 		{"forgejo", "codeberg.org", "", "tm-bot", "tm-bot@noreply.codeberg.org"},
 		{"bitbucket", "bitbucket.org", "{583f7ec5-ed93-49a9-b449-cfc4556cd7f8}", "{583f7ec5-ed93-49a9-b449-cfc4556cd7f8}", "583f7ec5-ed93-49a9-b449-cfc4556cd7f8@touchmark.invalid"},
 		{"bitbucket", "bitbucket.org", "", "{583f7ec5-ed93-49a9-b449-cfc4556cd7f8}", "583f7ec5-ed93-49a9-b449-cfc4556cd7f8@touchmark.invalid"},
+		{"azure-devops", "dev.azure.com", "56b0f042-b05e-86d9-b0f7-c5ddb1e76385", "56b0f042-b05e-86d9-b0f7-c5ddb1e76385", "56b0f042-b05e-86d9-b0f7-c5ddb1e76385@touchmark.invalid"},
 	} {
 		if got := noReplyEmail(tc.typ, tc.host, tc.id, tc.login); got != tc.want {
 			t.Errorf("noReplyEmail(%q, %q, %q, %q) = %q, want %q", tc.typ, tc.host, tc.id, tc.login, got, tc.want)
@@ -267,5 +269,22 @@ func TestPushRuleBitbucketBranchRestriction(t *testing.T) {
 		if got := pushRule(msg); got != want {
 			t.Errorf("pushRule(%q) = %q, want %q", msg, got, want)
 		}
+	}
+}
+
+// TestPushAzureRefusals: Azure Repos refuses a push to a branch a policy
+// protects with TF402455 (blocked:rules:policy) and a push the identity
+// lacks a Git permission for with TF401027 (blocked:permission:push).
+func TestPushAzureRefusals(t *testing.T) {
+	const oid = "3f786850e387550fdab836ed7e6dc881de23001b"
+	policy := gitx.ParsePush("To https://dev.azure.com/acme/Billing/_git/api\n!\t"+oid+":refs/heads/main\t"+
+		"[remote rejected] (TF402455: Pushes to this branch are not permitted; you must use a pull request to update this branch.)\nDone\n", "")
+	if outcome, reason := pushOutcome(policy); outcome != report.OutcomeBlocked || reason != "rules:policy" {
+		t.Errorf("TF402455: %s:%s, want blocked:rules:policy", outcome, reason)
+	}
+	perm := gitx.ParsePush("To https://dev.azure.com/acme/Billing/_git/api\n!\t"+oid+":refs/heads/touchmark/acme-eng\t"+
+		"[remote rejected] (TF401027: You need the Git 'CreateBranch' permission to perform this action.)\nDone\n", "")
+	if outcome, reason := pushOutcome(perm); outcome != report.OutcomeBlocked || reason != "permission:push" {
+		t.Errorf("TF401027: %s:%s, want blocked:permission:push", outcome, reason)
 	}
 }

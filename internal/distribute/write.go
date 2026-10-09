@@ -294,11 +294,16 @@ func pushOutcome(res gitx.PushResult) (report.Outcome, string) {
 // branch": non-fast-forward, as the preflight names it), its rulesets
 // (GH013) and branch protection (GH006, "protected branch"), Bitbucket
 // Cloud's branch restrictions ("Permission denied to update branch …",
-// which comes with "pre-receive hook declined"), a pre-receive hook, a
-// deletion rule; "push" when the message names none.
+// which comes with "pre-receive hook declined"), Azure Repos' branch
+// policies (TF402455: "Pushes to this branch are not permitted; you must
+// use a pull request to update this branch", rule "policy" as RFC-0003
+// names it), a pre-receive hook, a deletion rule; "push" when the message
+// names none.
 func pushRule(msg string) string {
 	m := strings.ToLower(msg)
 	switch {
+	case strings.Contains(m, "tf402455"):
+		return "policy"
 	case strings.Contains(m, "cannot force-push"):
 		return "non-fast-forward"
 	case strings.Contains(m, "gh013"), strings.Contains(m, "rule violation"):

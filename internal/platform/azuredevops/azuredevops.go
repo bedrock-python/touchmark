@@ -91,13 +91,31 @@ func NewReader(p config.ResolvedProvider, c auth.Credential, client *httpx.Clien
 	return &reader{c: cl}, nil
 }
 
-// NewWriter refuses for now: the write driver comes with the writer.
-func NewWriter(p config.ResolvedProvider, _ auth.Credential, _ *httpx.Client) (platform.Writer, error) {
-	return nil, &platform.Error{Op: "new writer", Class: platform.ClassUnsupported,
-		Err: errors.New("azure-devops: provider " + p.ID + ": delivery to Azure DevOps is not supported yet")}
+// NewWriter returns the write driver for provider p with credential c, a
+// PAT with Code (read & write) of the user that writes (a write identity is
+// never anonymous). Target checks the user's permissions on the repository
+// and returns a TargetWriter bound to it; Azure DevOps cannot mint narrower
+// tokens, so Close only retires the TargetWriter: later calls through it
+// fail with ClassAuth.
+func NewWriter(p config.ResolvedProvider, c auth.Credential, client *httpx.Client) (platform.Writer, error) {
+	if c.Kind == 0 {
+		return nil, errors.New("azure-devops: the write driver needs a token")
+	}
+	cl, err := newClient(p, c, client)
+	if err != nil {
+		return nil, err
+	}
+	return &writer{reader: reader{c: cl}}, nil
 }
 
 // reader is platform.Reader over one identity.
 type reader struct{ c *client }
 
-var _ platform.Reader = (*reader)(nil)
+// writer is platform.Writer: a reader that can mint TargetWriters.
+type writer struct{ reader }
+
+var (
+	_ platform.Reader  = (*reader)(nil)
+	_ platform.Writer  = (*writer)(nil)
+	_ platform.Checker = (*writer)(nil)
+)

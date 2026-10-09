@@ -100,10 +100,13 @@ func (t *TargetRepo) Push(ctx context.Context, spec PushSpec) (PushResult, error
 //     Error (no message for end users)", a PushPolicy: the case "gitea
 //     unsigned 1.26 and 1.27" of TestParsePush, from the live e2e fact
 //     "signed-commits");
+//   - PushPermission for a "[remote rejected]" reason or remote: line with
+//     Azure Repos' TF401027 (a missing Git permission);
 //   - PushPolicy for other "[remote rejected]" reasons that name a rule or
 //     a refusal: "protected branch hook declined", "pre-receive hook
 //     declined", "push declined due to repository rule violations",
-//     GH006/GH013, "deletion prohibited", "denied", "not allowed", …;
+//     GH006/GH013, Azure Repos' TF402455, "deletion prohibited", "denied",
+//     "not allowed", …;
 //   - PushError otherwise.
 //
 // Without status lines, stderr decides, with the rules of ClassifyFailure:
@@ -204,6 +207,8 @@ func (r pushRef) status(remote []string) PushStatus {
 			return PushWorkflows
 		case containsAny(text, unsignedMarkers):
 			return PushUnsigned
+		case containsAny(text, permissionMarkers):
+			return PushPermission
 		case containsAny(text, policyMarkers):
 			return PushPolicy
 		}
@@ -223,9 +228,17 @@ var (
 		"commit must be signed",
 		"protected from unverified commit",
 	}
+	// permissionMarkers: Azure Repos refuses a push the identity lacks a
+	// Git permission for with TF401027 ("You need the Git 'GenericContribute'
+	// permission to perform this action"; also 'CreateBranch' and
+	// 'ForcePush'), in the status line's reason (assumed: to confirm live).
+	permissionMarkers = []string{"tf401027"}
+	// policyMarkers include Azure Repos' TF402455 ("Pushes to this branch
+	// are not permitted; you must use a pull request to update this
+	// branch"), which a branch policy answers.
 	policyMarkers = []string{
 		"protected", "declined", "rule violation", "gh006", "gh013",
-		"prohibited", "denied", "deny ", "not allowed", "forbidden",
+		"prohibited", "denied", "deny ", "not allowed", "forbidden", "tf402455",
 	}
 )
 

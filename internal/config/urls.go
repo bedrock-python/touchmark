@@ -276,9 +276,15 @@ func (r urlResolver) resolve(s string, k urlKind, want, fallback string) (string
 	p := r.providers[match[0]]
 	base := r.sites[match[0]].segs
 	segs := slices.Clone(u.segs[len(base):])
-	if p.Type == "azure-devops" {
+	switch p.Type {
+	case "azure-devops":
 		var err error
 		if segs, err = azureSegments(segs, base, k); err != nil {
+			return "", fmt.Errorf("%s: %w", s, err)
+		}
+	case "bitbucket-datacenter":
+		var err error
+		if segs, err = dataCenterSegments(segs, k); err != nil {
 			return "", fmt.Errorf("%s: %w", s, err)
 		}
 	}
@@ -349,6 +355,32 @@ func azureSegments(segs, base []string, k urlKind) ([]string, error) {
 	return nil, errors.New(repoForm)
 }
 
+// dataCenterSegments returns the path a Bitbucket Data Center URL of kind k
+// names, from segs, its path segments after the provider's url (which
+// keeps any context path): <KEY>/<slug> for a repository's page,
+// /projects/<KEY>/repos/<slug>[/browse…], or its clone URL,
+// /scm/<key>/<slug>.git; <KEY> for a project's page, /projects/<KEY>; and
+// for an exclude entry the same, or a pattern of a project's repositories
+// (/projects/<KEY>/repos/*). Personal repositories (/users/<slug>/repos/…,
+// project key ~<slug>) are not targets: their paths would not pass
+// targets.yml's path rules.
+func dataCenterSegments(segs []string, k urlKind) ([]string, error) {
+	const repoForm = "a Bitbucket Data Center repository URL is <url>/projects/<KEY>/repos/<repository> (or its clone URL, <url>/scm/<key>/<repository>.git)"
+	switch {
+	case k == urlNamespace && len(segs) == 2 && segs[0] == "projects":
+		return []string{segs[1]}, nil
+	case k == urlNamespace:
+		return nil, errors.New("a Bitbucket Data Center org entry names a project, <url>/projects/<KEY>")
+	case len(segs) >= 4 && segs[0] == "projects" && segs[2] == "repos" && (len(segs) == 4 || segs[4] == "browse" && k != urlExclude):
+		return []string{segs[1], segs[3]}, nil
+	case len(segs) == 3 && segs[0] == "scm":
+		return []string{segs[1], segs[2]}, nil
+	case k == urlExclude && len(segs) >= 4 && segs[0] == "projects" && segs[2] == "repos":
+		return append([]string{segs[1]}, segs[3:]...), nil
+	}
+	return nil, errors.New(repoForm)
+}
+
 // checkURLShape checks the path segments a URL of kind k names on a
 // platform of type typ: GitHub, Gitea, Forgejo and Bitbucket have no nested
 // namespaces, so an exclude URL of more than owner/name, without a "**"
@@ -357,6 +389,12 @@ func azureSegments(segs, base []string, k urlKind) ([]string, error) {
 // project (a file, a merge request), not at it.
 func checkURLShape(typ string, segs []string, k urlKind) error {
 	switch typ {
+	case "bitbucket-datacenter":
+		// dataCenterSegments has reduced the URL to <KEY>/<slug> or <KEY>.
+		if k == urlExclude && len(segs) > 2 && !slices.Contains(segs, "**") {
+			return errors.New("a Bitbucket Data Center repository URL is <url>/projects/<KEY>/repos/<repository>; " +
+				"this one points inside a repository and would exclude nothing")
+		}
 	case "github", "gitea", "forgejo", "bitbucket":
 		switch {
 		case k == urlRepo && len(segs) != 2:

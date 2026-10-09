@@ -120,6 +120,17 @@ that property; descriptions do carry the tick box *Rebuild this branch* while a 
 paused; and touchmark never reactivates an abandoned pull request, though Azure DevOps
 would let it.
 
+## On Bitbucket Data Center
+
+Everything [above](#on-bitbucket-cloud) applies, with three differences. A person may
+reopen a declined pull request there: it is then touchmark's open pull request again,
+and no longer a decline; touchmark itself never reopens one. Bitbucket declines a pull
+request without activity for four weeks by default, as its system user, which touchmark
+counts as a bot: such a close waits for the cooldown, as a stale bot's does. And a user
+who may only read a repository may decline its pull requests, the reader included: list
+the reader in `automation_accounts`, so that a decline made with its token counts as a
+bot's, not as the team's (`plan` warns until it is there).
+
 ## Limits
 
 - Only the last 50 closed pull requests on the sync branches count.

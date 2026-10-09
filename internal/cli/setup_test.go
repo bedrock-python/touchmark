@@ -48,6 +48,7 @@ func TestSetupRefusals(t *testing.T) {
 		{"unknown", nil, []string{"setup", "sourcehut", "--hub", h.dir}, `unknown platform "sourcehut"`},
 		{"azure-devops", nil, []string{"setup", "azure-devops", "--hub", h.dir}, "setup does not set up azure-devops yet"},
 		{"bitbucket", nil, []string{"setup", "bitbucket", "--hub", h.dir}, "setup does not set up bitbucket yet"},
+		{"bitbucket-datacenter", nil, []string{"setup", "bitbucket-datacenter", "--hub", h.dir}, "Bitbucket Data Center has no CI of its own"},
 		{"gitea", nil, []string{"setup", "gitea", "--hub", h.dir}, "every branch the secrets"},
 		{"forgejo", nil, []string{"setup", "forgejo"}, "setup does not set up forgejo"},
 		{"flags-first", nil, []string{"setup", "--hub", h.dir, "gitea", "--dry-run"}, "setup does not set up gitea"},

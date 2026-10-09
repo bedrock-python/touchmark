@@ -125,6 +125,26 @@ func TestPropertyDistributeAzureDevOps(t *testing.T) {
 	}
 }
 
+// TestPropertyDistributeBitbucketDataCenter runs the scenarios of the
+// property test on Bitbucket Data Center's flavor of the fake: Bitbucket
+// Cloud's capabilities with a description of 30 000 bytes. By default 10
+// scenarios run; TOUCHMARK_PROPERTY_BBDC_SCENARIOS sets how many, the
+// rounds and the first seed are the property test's.
+func TestPropertyDistributeBitbucketDataCenter(t *testing.T) {
+	needDeliveryGit(t)
+	simHeavy(t)
+	n := simEnvInt(t, "TOUCHMARK_PROPERTY_BBDC_SCENARIOS", 10)
+	rounds := max(1, simEnvInt(t, "TOUCHMARK_PROPERTY_ROUNDS", 2))
+	first := simEnvInt(t, "TOUCHMARK_PROPERTY_SEED", 1)
+	for i := range n {
+		seed := uint64(first + i)
+		t.Run(fmt.Sprintf("seed=%d", seed), func(t *testing.T) {
+			t.Parallel()
+			runSimScenarioOf(t, seed, rounds, nil, fake.BitbucketDataCenter)
+		})
+	}
+}
+
 // simEnvInt reads a positive number from the environment, def when unset.
 func simEnvInt(t *testing.T, name string, def int) int {
 	t.Helper()

@@ -426,13 +426,16 @@ func (r *run) commitPerson(p *provider) gitx.Person {
 // the commit then names the bot by its UUID, links to no account, and
 // can never be taken for someone else's. Azure DevOps has none either: its
 // driver gives the user's sign-in address when connectionData shows one,
-// else the author is "<identity id>@touchmark.invalid".
+// else the author is "<identity id>@touchmark.invalid". Nor has Bitbucket
+// Data Center: its driver gives the user's address, and the service user
+// of a project or repository token, which has none, is
+// "<user id>@touchmark.invalid".
 func noReplyEmail(typ, host, id, login string) string {
 	if h, _, err := net.SplitHostPort(host); err == nil {
 		host = h
 	}
 	switch typ {
-	case "bitbucket", "azure-devops":
+	case "bitbucket", "azure-devops", "bitbucket-datacenter":
 		return strings.Trim(cmp.Or(id, login), "{}") + "@touchmark.invalid"
 	case "gitlab":
 		if id != "" {

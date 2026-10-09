@@ -52,9 +52,9 @@ const (
 var (
 	simHosts = map[fake.Flavor]string{fake.GitHub: "github.com", fake.GitLab: "gitlab.example.com",
 		fake.Gitea: "gitea.example.com", fake.Forgejo: "forgejo.example.com", fake.Bitbucket: "bitbucket.org",
-		fake.AzureDevOps: "dev.azure.com"}
+		fake.AzureDevOps: "dev.azure.com", fake.BitbucketDataCenter: "bitbucket.example.com"}
 	simTypes = map[fake.Flavor]string{fake.GitHub: "github", fake.GitLab: "gitlab", fake.Gitea: "gitea", fake.Forgejo: "forgejo",
-		fake.Bitbucket: "bitbucket", fake.AzureDevOps: "azure-devops"}
+		fake.Bitbucket: "bitbucket", fake.AzureDevOps: "azure-devops", fake.BitbucketDataCenter: "bitbucket-datacenter"}
 )
 
 // simTokens are the git tokens of the accounts of a world.

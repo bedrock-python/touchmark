@@ -14,9 +14,10 @@
 // capabilities of its flavor: title-prefix drafts on
 // GitLab, Gitea and Forgejo; bodies and comments that would run GitLab
 // quick actions are refused (git mode runs them and records a violation);
-// closers are not reported on Gitea and Forgejo; on Bitbucket Cloud labels
-// are refused and a pull request closed without merging can never be
-// edited or reopened (Caps.ClosedImmutable), and so on Azure DevOps, whose
+// closers are not reported on Gitea and Forgejo; on Bitbucket Cloud and
+// Bitbucket Data Center labels are refused and a pull request closed
+// without merging can never be edited or reopened (Caps.ClosedImmutable),
+// and so on Azure DevOps, whose
 // marker lives in a pull request property (Caps.MarkerInProperties: the
 // description alone is held to Caps.MaxBody, a marker line in it never
 // counts, and a person editing the description leaves the stored marker
@@ -73,6 +74,8 @@ const (
 	Bitbucket Flavor = "bitbucket"
 	// AzureDevOps is Azure DevOps Services.
 	AzureDevOps Flavor = "azure-devops"
+	// BitbucketDataCenter is Bitbucket Data Center.
+	BitbucketDataCenter Flavor = "bitbucket-datacenter"
 )
 
 // Tree entry modes.
@@ -94,8 +97,10 @@ var Epoch = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 // requests immutable, no permission of its own for CI files. Azure
 // DevOps' are its driver's too: a 4 000-byte description with the marker
 // in a property (MarkerInProperties), native drafts, labels by name, a
-// known closer, closed pull requests immutable. A flavor other than the
-// six known ones gets GitHub's capabilities under its own name.
+// known closer, closed pull requests immutable. Bitbucket Data Center's are
+// Bitbucket Cloud's with a description of 32 768 characters (30 000 for
+// touchmark). A flavor other than the seven known ones gets GitHub's
+// capabilities under its own name.
 func CapsFor(f Flavor) platform.Caps {
 	c := platform.Caps{
 		Flavor:      string(f),
@@ -126,6 +131,14 @@ func CapsFor(f Flavor) platform.Caps {
 		c.Marker = platform.MarkerInRefDef
 		c.RuntimeOnly = []string{"branch-restrictions"}
 		c.Limits = platform.Limits{Reads: 2, GitReads: 2, ReadsPerMinute: 15, MinInterval: time.Second}
+	case BitbucketDataCenter:
+		c.MaxBody = 30000
+		c.NoLabels = true
+		c.ClosedImmutable = true
+		c.ReaderCloses = true
+		c.Marker = platform.MarkerInRefDef
+		c.RuntimeOnly = []string{"branch-permissions"}
+		c.Limits = platform.Limits{Reads: 4, GitReads: 2, ReadsPerMinute: 120, MinInterval: 500 * time.Millisecond}
 	case AzureDevOps:
 		c.MaxBody = 4000
 		c.ClosedImmutable = true
@@ -750,7 +763,7 @@ func (p *Platform) SetPRState(repoID string, number int64, state platform.PRStat
 	}
 	switch state {
 	case platform.Open:
-		if p.caps.ClosedImmutable && ps.pr.State == platform.Closed {
+		if p.caps.ClosedImmutable && ps.pr.State == platform.Closed && Flavor(p.caps.Flavor) != BitbucketDataCenter {
 			p.setupf("SetPRState(%s, #%d): a declined pull request cannot be reopened", repoID, number)
 			return
 		}
@@ -1262,6 +1275,9 @@ func (p *Platform) prURL(s *repoState, number int64) string {
 		return base + "/pulls/" + n
 	case Bitbucket:
 		return base + "/pull-requests/" + n
+	case BitbucketDataCenter:
+		project, name, _ := strings.Cut(s.repo.Path, "/")
+		return "https://" + p.host + "/projects/" + project + "/repos/" + name + "/pull-requests/" + n
 	case AzureDevOps:
 		project, name, _ := strings.Cut(s.repo.Path, "/")
 		return "https://" + p.host + "/" + project + "/_git/" + name + "/pullrequest/" + n
@@ -1355,7 +1371,7 @@ func notFound(op, format string, args ...any) error {
 }
 
 // unsupported is a write the platform refuses whatever the identity may
-// do (a declined pull request on Bitbucket Cloud).
+// do (a declined pull request on Bitbucket).
 func unsupported(op, format string, args ...any) error {
 	return &platform.Error{Op: op, Class: platform.ClassUnsupported, Status: http.StatusBadRequest,
 		Err: fmt.Errorf(format, args...)}

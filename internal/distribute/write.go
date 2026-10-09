@@ -298,8 +298,12 @@ func pushOutcome(res gitx.PushResult) (report.Outcome, string) {
 // which comes with "pre-receive hook declined"), Azure Repos' branch
 // policies (TF402455: "Pushes to this branch are not permitted; you must
 // use a pull request to update this branch": rule "policy", the name Azure
-// DevOps gives such rules), a pre-receive hook, a deletion rule; "push" when
-// the message names none.
+// DevOps gives such rules), Bitbucket Data Center's branch permissions
+// ("Branch refs/heads/… can only be modified through pull requests":
+// "pull-request-only", the permission's type; another of them, which
+// Atlassian's documentation does not quote, "Check your branch permissions
+// configuration…": "branch-permissions"), a pre-receive hook, a deletion
+// rule; "push" when the message names none.
 func pushRule(msg string) string {
 	m := strings.ToLower(msg)
 	switch {
@@ -312,6 +316,10 @@ func pushRule(msg string) string {
 	case strings.Contains(m, "gh006"), strings.Contains(m, "protected branch"),
 		strings.Contains(m, "permission denied to update branch"):
 		return "protected-branch"
+	case strings.Contains(m, "can only be modified through pull requests"):
+		return "pull-request-only"
+	case strings.Contains(m, "branch permissions"):
+		return "branch-permissions"
 	case strings.Contains(m, "delet"):
 		return "deletion"
 	case strings.Contains(m, "pre-receive"):

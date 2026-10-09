@@ -132,7 +132,8 @@ A provider of type `bitbucket` is Bitbucket Cloud at `https://bitbucket.org` (le
 out). `plan`, `distribute` and `doctor` work on it from a hub on GitHub or GitLab, from
 a hub on Bitbucket itself, whose CI is Bitbucket Pipelines (see
 [A hub on Bitbucket Cloud](../getting-started/bitbucket.md)), or wherever you run
-touchmark; `setup` has nothing for it yet. Bitbucket Data Center is not supported.
+touchmark; `setup` has nothing for it yet. Bitbucket Data Center has a provider type of
+its own (see [Bitbucket Data Center](#bitbucket-data-center)).
 
 ```yaml
 # hub.yml
@@ -300,6 +301,112 @@ exact texts of push refusals; the `mode` strings of the Trees API; how disabled 
 renamed repositories answer; who can write pull request properties (whether project
 Readers, through "Contribute to pull requests", can set or change `touchmark.marker`);
 and whether `Retry-After` comes on answers that went through.
+
+## Bitbucket Data Center
+
+A provider of type `bitbucket-datacenter` is one Bitbucket Data Center instance, 8.19 or
+later, and its `url` is the instance's base URL, context path included
+(`https://git.example.com/bitbucket`); the REST API is under it, at
+`<url>/rest/api/latest`. `plan`, `distribute` and `doctor` work on it from a hub on GitHub
+or GitLab, or wherever you run touchmark. Bitbucket Data Center has no CI of its own, so
+a hub cannot live there, and `setup` has nothing for it.
+
+```yaml
+# hub.yml
+providers:
+  - id: bbdc
+    type: bitbucket-datacenter
+    url: https://git.example.com/bitbucket
+    writer: touchmark-writer                    # the writer user's slug
+    automation_accounts: [touchmark-reader]     # the reader: see "The read key can decline"
+```
+
+**Accounts.** Use two users that only touchmark uses, each with a personal HTTP access
+token. touchmark sends every token as `Authorization: Bearer`, to the API and to git, on
+every version from 8.19. Project and repository access tokens work too, but they act as a
+service user Bitbucket makes for the token: it has no email address, and its name shows
+only in answers (`doctor` and the report name it).
+
+| | Reader | Writer |
+|---|---|---|
+| Variable | `TOUCHMARK_BBDC_READ_TOKEN` | `TOUCHMARK_BBDC_WRITE_TOKEN` |
+| Token permissions | repository read | repository write; no admin |
+| Repositories | read access to the targets | write access to the targets only (directly, through a group or the project); not admin, and no access to the hub |
+
+Bitbucket's API does not tell which token a request came with: `doctor` reports the
+token's expiry and permissions as unknown, so keep a reminder to rotate them.
+
+- **Accounts are user slugs.** `writer`, `known_authors` and `automation_accounts` name
+  users by their slug, as their profile URL shows it (`<url>/users/<slug>`); touchmark keeps
+  their numeric ids.
+- **Targets.** `org` is a project, by its key (`org: ACME`, or its URL
+  `<url>/projects/ACME`); `repo` is `<project key>/<repository slug>`, and web and clone
+  URLs such as `<url>/projects/ACME/repos/billing` and `<url>/scm/acme/billing.git` work.
+  `topics` are repository labels: an entry with `topics: [python]` takes the project's
+  repositories that carry the label `python`. Archived repositories are skipped, and so
+  are those whose default branch does not exist (as empty). A project key that lists no
+  repository is looked up: an unknown or changed key fails the provider's resolve, so no
+  stale pull request is swept on its account. Personal
+  repositories (`~user` projects) are not targets. A renamed repository changes its slug:
+  update `targets.yml`, or select it through `org`.
+- **No labels.** Bitbucket Data Center has labels on repositories only, not on pull
+  requests: `pr.labels` sets nothing there, and touchmark records no label as set.
+- **Drafts** are Bitbucket's own draft flag (`pr.draft`); on an instance that turned drafts
+  off, the pull request opens ready.
+- **No default reviewers.** Bitbucket adds a repository's default reviewers to pull
+  requests made in its web interface, not to those made through the API: add reviewers
+  with a merge check or by hand.
+- **Closing.** touchmark closes its own pull request by declining it, after writing the
+  close into its description. It never reopens or changes a declined pull request, though
+  Bitbucket would let it: a pull request touchmark closed stays closed, and the next
+  proposal is a new one. A person may reopen one; it is touchmark's open pull request
+  again.
+- **Declines** are remembered as on Bitbucket Cloud, without writing to the declined pull
+  request: while a pull request is open, its marker records the state of the opt-in file,
+  and a person's decline holds while that file is parsed the same. `forget_declines` acts
+  while it is present (see
+  [Memory of declined pull requests](../concepts/memory.md#on-bitbucket-cloud)).
+- **Who declined.** Bitbucket declines a pull request without activity for four weeks by
+  default, as its own system user: touchmark reads who declined a pull request from its
+  activities, and takes a decline by the system user, or by a service user, for an
+  automatic close, which holds the content back for `memory.auto_close_cooldown` only. Only
+  a person's decline holds until the opt-in file changes.
+- **The read key can decline.** On Bitbucket Data Center a user who may only read a
+  repository may still decline its pull requests, and the reader's token is in every
+  branch of the hub: list the reader in `automation_accounts`, so that a decline made
+  with it is taken for an automatic close, not the team's decision. `plan` warns until
+  it is there.
+- **No tick boxes, no HTML.** Bitbucket shows HTML in descriptions as text: the marker is
+  a Markdown link reference definition, descriptions carry no tick boxes, a paused pull
+  request asks for a `recreate` entry in `.touchmark/operations.yml`, and
+  `pr.intro_file` should hold no HTML, as on Bitbucket Cloud. A description holds 32 768
+  characters; touchmark keeps its own under 30 000.
+- **Branch permissions** are readable with repository admin rights only, which the writer
+  should not have: `doctor` shows `rules` as unknown. A push a branch permission refuses
+  is `blocked:rules:pull-request-only` when the branch takes changes through pull
+  requests only, `blocked:rules:branch-permissions` for another permission, and
+  `blocked:rules:pre-receive-hook` for a hook (Reject Force Push, Verify Committer, the
+  Jira commit checker).
+- **Commit author.** touchmark authors the writer's commits with the user's email address,
+  which links them to the user, and with `<user id>@touchmark.invalid` for a service user,
+  which has none.
+- **Pace.** Bitbucket's rate limit gives each user a bucket of 60 requests, refilled at 5
+  a second, on each node, and answers 429 past it: touchmark reads 120 times a minute with
+  four targets at once and writes at most twice a second by default; `limits` overrides
+  it.
+
+What the driver assumes from the REST reference and Atlassian's documentation, without a
+live instance: that `X-AUSERNAME` names the user of every authenticated answer (how
+touchmark learns who a token acts as), and the names of project and repository token
+users, and whether `GET /users?filter=` finds those users (without it, such a token
+cannot tell who it is, and the provider stops); that an HTML comment in a description shows as text and a link reference
+definition does not; whether a declined pull request can be edited; what
+`at` with `direction=OUTGOING` selects in pull request listings; whether the dashboard
+lists another user's pull requests to the reader (the sweep of stale pull requests;
+without it the sweep is skipped as incomplete); who the activities name for an automatic
+decline; the texts of push refusals other than pull-request-only; the headers of 429
+answers; and what the file APIs answer for a symlink (one may read as a file whose
+content is its target) and for a missing path.
 
 ## Moving
 

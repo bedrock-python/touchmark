@@ -378,6 +378,37 @@ func TestBitbucketFlavor(t *testing.T) {
 	wantSetupErr(t, e.p, "cannot be reopened")
 }
 
+// TestBitbucketDataCenterFlavor: the Bitbucket Data Center flavor reports
+// the capabilities of its driver and treats a declined pull request as
+// Bitbucket Cloud's flavor does, but that a person may reopen it.
+func TestBitbucketDataCenterFlavor(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	c := fake.CapsFor(fake.BitbucketDataCenter)
+	if c.Flavor != "bitbucket-datacenter" || !c.NoLabels || !c.ClosedImmutable || c.Marker != platform.MarkerInRefDef || c.BodyControls() ||
+		c.Draft != platform.DraftNative || !c.CloserKnown || c.WorkflowPerm || c.MaxBody != 30000 {
+		t.Errorf("CapsFor(BitbucketDataCenter) = %+v", c)
+	}
+	e := newEnv(t, fake.WithFlavor(fake.BitbucketDataCenter))
+	r := e.repo("ACME/api", "README.md", "x")
+	tw := e.target(r)
+	pr, err := tw.CreatePR(ctx, platform.NewPR{Head: "touchmark/hub", Base: "main", Title: "sync", Body: "first"})
+	if err != nil || pr.URL != "https://github.com/projects/ACME/repos/api/pull-requests/1" {
+		t.Fatalf("CreatePR = %+v, %v", pr, err)
+	}
+	closed, open := platform.Closed, platform.Open
+	if _, err := tw.EditPR(ctx, pr.Number, platform.PREdit{Body: ptr("closed"), State: &closed}); err != nil {
+		t.Fatal(err)
+	}
+	_, err = tw.EditPR(ctx, pr.Number, platform.PREdit{State: &open})
+	wantRule(t, "the writer reopens", err, platform.ClassUnsupported, http.StatusBadRequest, "")
+	// A person may.
+	e.p.SetPRState(r.ID, pr.Number, platform.Open, nil, time.Time{})
+	if err := e.p.Err(); err != nil || e.p.PR(r.ID, pr.Number).State != platform.Open {
+		t.Errorf("a person's reopening: %v", err)
+	}
+}
+
 // TestAzureDevOpsFlavor: the Azure DevOps flavor reports the capabilities
 // of its driver, keeps the marker apart from the description (the
 // description alone fits Caps.MaxBody, a marker pasted into it never

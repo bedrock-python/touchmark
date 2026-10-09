@@ -28,7 +28,7 @@
       }
     },
     "forget_declines": {
-      "description": "Propose again the content of a pull request the target closed without merging. touchmark marks that pull request revoked, so the entry acts once; on Bitbucket Cloud and Azure DevOps, where touchmark never edits a declined pull request, the entry acts while it is present.",
+      "description": "Propose again the content of a pull request the target closed without merging. touchmark marks that pull request revoked, so the entry acts once; on Bitbucket Cloud, Bitbucket Data Center and Azure DevOps, where touchmark never edits a declined pull request, the entry acts while it is present.",
       "type": ["array", "null"],
       "items": {
         "type": "object",

@@ -183,7 +183,8 @@ func (t *target) createWrites(np platform.NewPR) (first, then int) {
 // editWrites is how many writes the flavor's driver sends for e, before
 // the edit is known to apply (first) and after (then): the edit, on Gitea
 // and Forgejo after a state or base change in a request of its own, on
-// Bitbucket followed by the decline of a close, on Azure DevOps after the
+// Bitbucket and Bitbucket Data Center followed by the decline of a close, on
+// Azure DevOps after the
 // property of a new body's marker and one call per label added; then
 // labels added in a call of their own but on GitLab and Azure DevOps, after
 // each missing one is created.
@@ -199,7 +200,7 @@ func (t *target) editWrites(e platform.PREdit) (first, then int) {
 	if (flavor == Gitea || flavor == Forgejo) && (e.State != nil || e.Base != nil) && (e.Title != nil || e.Body != nil) {
 		first++
 	}
-	if flavor == Bitbucket && e.State != nil && (e.Title != nil || e.Body != nil || e.Base != nil) {
+	if (flavor == Bitbucket || flavor == BitbucketDataCenter) && e.State != nil && (e.Title != nil || e.Body != nil || e.Base != nil) {
 		first++
 	}
 	if len(e.AddLabels) > 0 && flavor != GitLab {

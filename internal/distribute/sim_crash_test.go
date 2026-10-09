@@ -70,6 +70,7 @@ var simCrashCases = []simCrashCase{
 	{name: "open-gitea", flavor: fake.Gitea, setup: func(*simWorld) {}},
 	{name: "open-bitbucket", flavor: fake.Bitbucket, setup: func(*simWorld) {}},
 	{name: "open-azure-devops", flavor: fake.AzureDevOps, setup: func(*simWorld) {}},
+	{name: "open-bitbucket-datacenter", flavor: fake.BitbucketDataCenter, setup: func(*simWorld) {}},
 	{name: "update", flavor: fake.GitHub, setup: func(w *simWorld) {
 		w.run(ModeDistribute, nil)
 		w.ship("AGENTS.md", 2)
@@ -125,6 +126,10 @@ var simCrashCases = []simCrashCase{
 	{name: "sweep-dropped-bitbucket", flavor: fake.Bitbucket, setup: func(w *simWorld) {
 		w.run(ModeDistribute, nil)
 		w.excluded["api"] = true
+	}},
+	{name: "close-no-diff-bitbucket-datacenter", flavor: fake.BitbucketDataCenter, setup: func(w *simWorld) {
+		w.run(ModeDistribute, nil)
+		w.mustDo(w.push(w.target("api"), "main", maps.Clone(w.files[simBase])))
 	}},
 	// On Azure DevOps the close stores the closed marker in the property,
 	// then abandons the pull request.

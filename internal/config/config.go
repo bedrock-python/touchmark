@@ -103,7 +103,7 @@ type Security struct {
 
 type Provider struct {
 	ID                 string         `yaml:"id"`
-	Type               string         `yaml:"type"` // github | gitlab | gitea | forgejo | bitbucket | azure-devops
+	Type               string         `yaml:"type"` // github | gitlab | gitea | forgejo | bitbucket | azure-devops | bitbucket-datacenter
 	URL                string         `yaml:"url"`
 	APIURL             string         `yaml:"api_url"`
 	CAFile             string         `yaml:"ca_file"`

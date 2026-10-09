@@ -210,6 +210,24 @@ func TestCheck(t *testing.T) {
 			},
 		},
 		{
+			// Topics are repository labels on Bitbucket Data Center.
+			name: "topics and paths on bitbucket-datacenter",
+			hub: &Hub{ID: "acme-eng", Providers: []Provider{
+				{ID: "bbdc", Type: "bitbucket-datacenter", URL: "https://git.example.com/bitbucket"},
+			}},
+			targets: &Targets{
+				Targets: []Entry{
+					{Org: "ACME", Topics: []string{"python"}},
+					{Org: "ACME", Match: []string{"ACME/svc-*", "ACME/api/x"}},
+				},
+				Exclude: []string{"LEGACY/old/x"},
+			},
+			warnings: []string{
+				"targets.yml: exclude[0]: LEGACY/old/x has 3 path segments, and a Bitbucket Data Center repository path is PROJECT/repository, so it excludes nothing",
+				"targets.yml: targets[1].match[1]: ACME/api/x matches no repository directly under ACME (a bitbucket-datacenter namespace has no subgroups), so it selects nothing",
+			},
+		},
+		{
 			name: "listed and excluded",
 			hub:  selectHub(),
 			targets: &Targets{

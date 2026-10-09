@@ -41,18 +41,22 @@ type glFake struct {
 	t   *testing.T
 	srv *httptest.Server
 
-	mu         sync.Mutex
-	version    string
-	saAPI      bool
-	saCreate   bool
-	premium    bool
-	next       int64
-	users      map[int64]*fUser
-	tokens     map[string]*fToken
-	groups     map[int64]*fGroup
-	projects   map[int64]*fProject
-	writes     []string // "METHOD path" of every request that is not a GET
-	failRoutes map[string]int
+	mu       sync.Mutex
+	version  string
+	saAPI    bool
+	saCreate bool
+	premium  bool
+	// lateProtection makes the first read of a protected branch answer 404
+	// although it exists: GitLab protects a new project's default branch
+	// from a background job, which a read may not see yet.
+	lateProtection bool
+	next           int64
+	users          map[int64]*fUser
+	tokens         map[string]*fToken
+	groups         map[int64]*fGroup
+	projects       map[int64]*fProject
+	writes         []string // "METHOD path" of every request that is not a GET
+	failRoutes     map[string]int
 }
 
 type fUser struct {
@@ -766,6 +770,10 @@ func (f *glFake) serveProject(w http.ResponseWriter, r *http.Request, route stri
 		notFound(w)
 	case "GET projects/:projects/protected_branches/:protected_branches":
 		b := p.branches[s[3]]
+		if f.lateProtection {
+			f.lateProtection = false
+			b = nil
+		}
 		if b == nil {
 			notFound(w)
 			return

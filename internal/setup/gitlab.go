@@ -1187,12 +1187,22 @@ func (g *gitlabSetup) defaultBranch(ctx context.Context) {
 			g.r.add(step, StatusWould, "would protect %s: push No one, merge Maintainers, no force push", b)
 			return
 		}
-		if err := g.send(ctx, http.MethodPost, protect, nil, "projects", id(g.hub.ID), "protected_branches"); err != nil {
-			g.r.add(step, StatusFail, "cannot protect %s: %v", b, err)
+		perr := g.send(ctx, http.MethodPost, protect, nil, "projects", id(g.hub.ID), "protected_branches")
+		if perr == nil {
+			g.r.add(step, StatusDone, "protected %s: push No one, merge Maintainers, no force push", b)
 			return
 		}
-		g.r.add(step, StatusDone, "protected %s: push No one, merge Maintainers, no force push", b)
-		return
+		// GitLab protects a new project's default branch from a background
+		// job: the read above may miss a protection the POST then meets
+		// (409). Read it again, and go on as for a branch found protected.
+		if !isStatus(perr, http.StatusConflict) {
+			g.r.add(step, StatusFail, "cannot protect %s: %v", b, perr)
+			return
+		}
+		if err := g.get(ctx, &pb, "projects", id(g.hub.ID), "protected_branches", b); err != nil {
+			g.r.add(step, StatusFail, "cannot protect %s: %v; and reading the protection GitLab reports: %v", b, perr, err)
+			return
+		}
 	}
 	if pushOK(pb.Push) && mergeOK(pb.Merge) && !pb.AllowForcePush {
 		g.r.add(step, StatusOK, "%s is protected: push No one, merge %s, no force push", b, mergeLevels(pb.Merge))

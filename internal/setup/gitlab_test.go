@@ -709,3 +709,16 @@ func TestGitLabWriterOnHub(t *testing.T) {
 		t.Errorf("writer-guard %s %q, exit %d", s.Status, s.Detail, rep.ExitCode())
 	}
 }
+
+// TestGitLabLateProtection: the read of main misses the protection GitLab
+// is still making for the new project, and the POST meets it (409):
+// setup reads it again and protects main as for a branch found protected.
+func TestGitLabLateProtection(t *testing.T) {
+	w := newGLWorld(t, "18.11")
+	w.f.lateProtection = true
+	rep := w.run(t, w.input(false))
+	if s := step(t, rep, "default-branch"); s.Status != StatusDone {
+		t.Errorf("default-branch %s %q", s.Status, s.Detail)
+	}
+	w.checkHub(t, rep)
+}

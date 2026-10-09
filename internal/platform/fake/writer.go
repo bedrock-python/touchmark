@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bedrock-python/touchmark/internal/marker"
 	"github.com/bedrock-python/touchmark/internal/platform"
 	"github.com/bedrock-python/touchmark/internal/throttle"
 )
@@ -200,7 +201,7 @@ func (t *target) createPR(ctx context.Context, np platform.NewPR) (platform.PR, 
 		case strings.TrimSpace(np.Title) == "":
 			return platform.PR{}, invalid(op, "the title is empty")
 		}
-		if err := p.checkText(op, np.Body); err != nil {
+		if err := p.checkBody(op, np.Body); err != nil {
 			return platform.PR{}, err
 		}
 		if err := t.p.checkLabels(op, np.Labels); err != nil {
@@ -242,7 +243,7 @@ func (t *target) createPR(ctx context.Context, np platform.NewPR) (platform.PR, 
 			HeadRepoID: s.repo.ID,
 			BaseExists: true,
 			Title:      p.draftTitle(np.Title, np.Draft),
-			Body:       np.Body,
+			Body:       p.stored(np.Body),
 			Labels:     labels,
 			Author:     t.as,
 			CreatedAt:  p.now(),
@@ -301,7 +302,7 @@ func (t *target) editPR(ctx context.Context, number int64, e platform.PREdit) (p
 			return platform.PR{}, invalid(op, "the title is empty")
 		}
 		if e.Body != nil {
-			if err := p.checkText(op, *e.Body); err != nil {
+			if err := p.checkBody(op, *e.Body); err != nil {
 				return platform.PR{}, err
 			}
 		}
@@ -318,7 +319,7 @@ func (t *target) editPR(ctx context.Context, number int64, e platform.PREdit) (p
 		}
 		if p.caps.ClosedImmutable && pr.State == platform.Closed {
 			changes := e.Title != nil && p.draftTitle(*e.Title, pr.Draft) != pr.Title ||
-				e.Body != nil && *e.Body != pr.Body || e.Base != nil && *e.Base != pr.Base
+				e.Body != nil && p.stored(*e.Body) != pr.Body || e.Base != nil && *e.Base != pr.Base
 			switch {
 			case e.State != nil && *e.State == platform.Open:
 				return platform.PR{}, unsupported(op, "#%d: a declined pull request cannot be reopened", number)
@@ -342,7 +343,7 @@ func (t *target) editPR(ctx context.Context, number int64, e platform.PREdit) (p
 			pr.Title = p.draftTitle(*e.Title, pr.Draft)
 		}
 		if e.Body != nil {
-			pr.Body = *e.Body
+			pr.Body = p.stored(*e.Body)
 		}
 		if e.Base != nil {
 			pr.Base, pr.BaseExists = *e.Base, true
@@ -395,8 +396,12 @@ func (t *target) Comment(ctx context.Context, number int64, body string) error {
 		if strings.TrimSpace(body) == "" {
 			return struct{}{}, invalid(op, "the comment is empty")
 		}
-		if err := p.checkText(op, body); err != nil {
-			return struct{}{}, err
+		// Where descriptions are short (the marker apart), comments are not:
+		// Azure DevOps bounds its comments far above its descriptions.
+		if !p.apart() {
+			if err := p.checkText(op, body); err != nil {
+				return struct{}{}, err
+			}
 		}
 		ps.comments = append(ps.comments, Comment{Author: t.as, Body: body, CreatedAt: p.now()})
 		if p.git != nil && p.caps.QuickActions {
@@ -460,6 +465,18 @@ func (p *Platform) draftTitle(title string, draft bool) string {
 
 func hasPrefixFold(s, prefix string) bool {
 	return len(s) >= len(prefix) && strings.EqualFold(s[:len(prefix)], prefix)
+}
+
+// checkBody checks a pull request's body as checkText does, but where the
+// marker lives in a property (Caps.MarkerInProperties): there the
+// description alone, without its marker line (marker.Detach), is held to
+// Caps.MaxBody.
+func (p *Platform) checkBody(op, body string) error {
+	if !p.apart() {
+		return p.checkText(op, body)
+	}
+	desc, _ := marker.Detach(body)
+	return p.checkText(op, desc)
 }
 
 // checkText checks a body or comment against the flavor: at most

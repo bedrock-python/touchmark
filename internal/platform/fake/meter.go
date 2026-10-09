@@ -162,11 +162,15 @@ func (t *target) missingLabels(names []string) int {
 // before the pull request is known to exist (first) and after (then): the
 // pull request; on GitHub then each missing label and the call that puts
 // the labels on it; on Gitea and Forgejo first each missing label (the
-// pull request takes their ids); on GitLab nothing more (labels by name).
+// pull request takes their ids); on GitLab nothing more (labels by name);
+// on Azure DevOps then the property that holds the marker (labels by name
+// in the request).
 func (t *target) createWrites(np platform.NewPR) (first, then int) {
 	switch Flavor(t.p.caps.Flavor) {
 	case GitLab:
 		return 1, 0
+	case AzureDevOps:
+		return 1, 1
 	case Gitea, Forgejo:
 		return 1 + t.missingLabels(np.Labels), 0
 	}
@@ -179,11 +183,19 @@ func (t *target) createWrites(np platform.NewPR) (first, then int) {
 // editWrites is how many writes the flavor's driver sends for e, before
 // the edit is known to apply (first) and after (then): the edit, on Gitea
 // and Forgejo after a state or base change in a request of its own, on
-// Bitbucket followed by the decline of a close; then labels added in a call
-// of their own but on GitLab, after each missing one is created.
+// Bitbucket followed by the decline of a close, on Azure DevOps after the
+// property of a new body's marker and one call per label added; then
+// labels added in a call of their own but on GitLab and Azure DevOps, after
+// each missing one is created.
 func (t *target) editWrites(e platform.PREdit) (first, then int) {
 	first = 1
 	flavor := Flavor(t.p.caps.Flavor)
+	if flavor == AzureDevOps {
+		if e.Body != nil {
+			first++
+		}
+		return first + len(dedupe(e.AddLabels)), 0
+	}
 	if (flavor == Gitea || flavor == Forgejo) && (e.State != nil || e.Base != nil) && (e.Title != nil || e.Body != nil) {
 		first++
 	}

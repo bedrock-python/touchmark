@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bedrock-python/touchmark/internal/marker"
 	"github.com/bedrock-python/touchmark/internal/platform"
 	"github.com/bedrock-python/touchmark/internal/platform/fake"
 )
@@ -375,4 +376,68 @@ func TestBitbucketFlavor(t *testing.T) {
 	// A person cannot reopen it either.
 	e.p.SetPRState(r.ID, pr.Number, platform.Open, nil, time.Time{})
 	wantSetupErr(t, e.p, "cannot be reopened")
+}
+
+// TestAzureDevOpsFlavor: the Azure DevOps flavor reports the capabilities
+// of its driver, keeps the marker apart from the description (the
+// description alone fits Caps.MaxBody, a marker pasted into it never
+// counts, a person editing it keeps the stored marker), labels by name,
+// and treats an abandoned pull request as final, as on Bitbucket.
+func TestAzureDevOpsFlavor(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	c := fake.CapsFor(fake.AzureDevOps)
+	if c.Flavor != "azure-devops" || c.NoLabels || !c.ClosedImmutable || c.Marker != platform.MarkerInProperties || !c.BodyControls() ||
+		c.Draft != platform.DraftNative || !c.CloserKnown || c.WorkflowPerm || c.LabelsByID || c.QuickActions || c.MaxBody != 4000 {
+		t.Errorf("CapsFor(AzureDevOps) = %+v", c)
+	}
+	e := newEnv(t, fake.WithFlavor(fake.AzureDevOps))
+	r := e.repo("Billing/api", "README.md", "x")
+	tw := e.target(r)
+	line := testMarkerLine(t)
+	long := strings.Repeat("x", 3990)
+	pr, err := tw.CreatePR(ctx, platform.NewPR{Head: "touchmark/hub", Base: "main", Title: "sync",
+		Body: long + "\n\n" + line, Labels: []string{"engineering-assets"}, Draft: true})
+	if err != nil || pr.URL != "https://github.com/Billing/_git/api/pullrequest/1" || !pr.Draft || pr.Body != long+"\n\n"+line ||
+		len(pr.Labels) != 1 {
+		t.Fatalf("CreatePR = %+v, %v", pr, err)
+	}
+	_, err = tw.CreatePR(ctx, platform.NewPR{Head: "other", Base: "main", Title: "sync", Body: long + "0123456789x"})
+	wantClass(t, "a description over 4 000 bytes", err, platform.ClassInvalid)
+
+	// A marker pasted into the description does not count: the stored one
+	// does, and a person's edit keeps it.
+	e.p.UpdatePR(r.ID, pr.Number, func(p *platform.PR) { p.Body = "We rewrote it.\n\n" + strings.Replace(line, "stream=sync", "stream=x", 1) })
+	e.ok()
+	if got := e.p.PR(r.ID, pr.Number); got.Body != "We rewrote it.\n\n"+line {
+		t.Errorf("after a person's edit: %q", got.Body)
+	}
+
+	closed := platform.Closed
+	body := "closed by touchmark\n\n" + line
+	got, err := tw.EditPR(ctx, pr.Number, platform.PREdit{Body: &body, State: &closed})
+	if err != nil || got.State != platform.Closed || got.Body != body || got.ClosedBy == nil || got.ClosedBy.ID != e.writer.ID {
+		t.Fatalf("close = %+v, %v", got, err)
+	}
+	open := platform.Open
+	_, err = tw.EditPR(ctx, pr.Number, platform.PREdit{State: &open})
+	wantClass(t, "reactivate", err, platform.ClassUnsupported)
+	_, err = tw.EditPR(ctx, pr.Number, platform.PREdit{Body: ptr("again")})
+	wantClass(t, "edit an abandoned one", err, platform.ClassUnsupported)
+	if _, err := tw.EditPR(ctx, pr.Number, platform.PREdit{State: &closed, Body: &body}); err != nil {
+		t.Errorf("closing again with the same body: %v", err)
+	}
+}
+
+// testMarkerLine is a real marker line of a test hub.
+func testMarkerLine(t *testing.T) string {
+	t.Helper()
+	line, err := marker.Encode(marker.Marker{Key: "sha256:6b1f0c3a9e2d4b586b1f0c3a9e2d4b586b1f0c3a9e2d4b586b1f0c3a9e2d4b58", Data: marker.Data{
+		V: marker.Version, Stream: "sync", Hub: "acme-eng", FP: "github.com/712345678",
+		DecidedAt: "3f2c1ab9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3", Engine: "0.3.0",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return line
 }

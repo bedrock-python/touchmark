@@ -16,7 +16,11 @@
 // quick actions are refused (git mode runs them and records a violation);
 // closers are not reported on Gitea and Forgejo; on Bitbucket Cloud labels
 // are refused and a pull request closed without merging can never be
-// edited or reopened (Caps.ClosedImmutable). Branch rulesets, the
+// edited or reopened (Caps.ClosedImmutable), and so on Azure DevOps, whose
+// marker lives in a pull request property (Caps.MarkerInProperties: the
+// description alone is held to Caps.MaxBody, a marker line in it never
+// counts, and a person editing the description cannot change the stored
+// marker). Branch rulesets, the
 // Preflighter of GitHub's driver (WithPreflight) and its API commits
 // (WithAPICommits, platform.Committer) are modeled in rules.go.
 //
@@ -51,6 +55,7 @@ import (
 	"time"
 
 	"github.com/bedrock-python/touchmark/internal/gitx"
+	"github.com/bedrock-python/touchmark/internal/marker"
 	"github.com/bedrock-python/touchmark/internal/platform"
 	"github.com/bedrock-python/touchmark/internal/snapshot"
 )
@@ -66,6 +71,8 @@ const (
 	Forgejo Flavor = "forgejo"
 	// Bitbucket is Bitbucket Cloud.
 	Bitbucket Flavor = "bitbucket"
+	// AzureDevOps is Azure DevOps Services.
+	AzureDevOps Flavor = "azure-devops"
 )
 
 // Tree entry modes.
@@ -84,8 +91,11 @@ var Epoch = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 // Markdown reference definition on Bitbucket, MarkerInRefDef) and has no
 // API commit (WithAPICommits adds one). Bitbucket's are those its driver's
 // Probe reports: native drafts, no labels, a known closer, closed pull
-// requests immutable, no permission of its own for CI files. A flavor other
-// than the five known ones gets GitHub's capabilities under its own name.
+// requests immutable, no permission of its own for CI files. Azure
+// DevOps' are its driver's too: a 4 000-byte description with the marker
+// in a property (MarkerInProperties), native drafts, labels by name, a
+// known closer, closed pull requests immutable. A flavor other than the
+// six known ones gets GitHub's capabilities under its own name.
 func CapsFor(f Flavor) platform.Caps {
 	c := platform.Caps{
 		Flavor:      string(f),
@@ -116,6 +126,12 @@ func CapsFor(f Flavor) platform.Caps {
 		c.Marker = platform.MarkerInRefDef
 		c.RuntimeOnly = []string{"branch-restrictions"}
 		c.Limits = platform.Limits{Reads: 2, GitReads: 2, ReadsPerMinute: 15, MinInterval: time.Second}
+	case AzureDevOps:
+		c.MaxBody = 4000
+		c.ClosedImmutable = true
+		c.Marker = platform.MarkerInProperties
+		c.RuntimeOnly = []string{"branch-policies", "push-policies"}
+		c.Limits = platform.Limits{Reads: 4, GitReads: 2, ReadsPerMinute: 120, WritesPerMinute: 30, MinInterval: 500 * time.Millisecond}
 	default:
 		c.WorkflowPerm = true
 		c.Limits = platform.Limits{Reads: 8, GitReads: 4, WritesPerMinute: 60, WritesPerHour: 450, MinInterval: time.Second}
@@ -699,6 +715,7 @@ func (p *Platform) AddPR(repoID string, pr platform.PR) int64 {
 	if pr.HeadRepoID == "" {
 		pr.HeadRepoID = repoID
 	}
+	pr.Body = p.stored(pr.Body)
 	if err := p.normalizePR(s, &pr); err != nil {
 		p.setupf("AddPR(%s): %v", repoID, err)
 		return 0
@@ -749,7 +766,9 @@ func (p *Platform) SetPRState(repoID string, number int64, state platform.PRStat
 // move its head. Number and RepoID cannot change; the result is checked
 // and completed like AddPR's, except that BaseExists and HeadRepoID are
 // kept as fn leaves them: an empty HeadRepoID is a PR whose fork was
-// deleted.
+// deleted. Where the marker lives in a property (Caps.MarkerInProperties)
+// the body fn leaves is the description, without any marker line in it,
+// and the stored marker stays: people cannot edit properties.
 func (p *Platform) UpdatePR(repoID string, number int64, fn func(*platform.PR)) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -759,6 +778,10 @@ func (p *Platform) UpdatePR(repoID string, number int64, fn func(*platform.PR)) 
 	}
 	pr := p.storedPR(ps.pr)
 	fn(&pr)
+	if p.apart() {
+		_, line := marker.Detach(ps.pr.Body)
+		pr.Body = marker.Attach(pr.Body, line)
+	}
 	pr.Number, pr.RepoID = number, repoID
 	if err := p.normalizePR(p.repos[repoID], &pr); err != nil {
 		p.setupf("UpdatePR(%s, #%d): %v", repoID, number, err)
@@ -1154,6 +1177,21 @@ func (p *Platform) storedPR(pr platform.PR) platform.PR {
 	return pr
 }
 
+// apart reports whether the flavor keeps the marker apart from the
+// description (Caps.MarkerInProperties).
+func (p *Platform) apart() bool { return p.caps.Marker == platform.MarkerInProperties }
+
+// stored is body as the platform keeps it: where the marker lives in a
+// property, the description without marker lines followed by the last
+// marker line of body (marker.Attach of marker.Detach), as the driver reads
+// it back; body itself elsewhere.
+func (p *Platform) stored(body string) string {
+	if !p.apart() {
+		return body
+	}
+	return marker.Attach(marker.Detach(body))
+}
+
 // prView is a pull request as the API reports it: without the closer of a
 // PR closed unmerged when the flavor does not report closers.
 func (p *Platform) prView(pr platform.PR) platform.PR {
@@ -1174,6 +1212,9 @@ func (p *Platform) prURL(s *repoState, number int64) string {
 		return base + "/pulls/" + n
 	case Bitbucket:
 		return base + "/pull-requests/" + n
+	case AzureDevOps:
+		project, name, _ := strings.Cut(s.repo.Path, "/")
+		return "https://" + p.host + "/" + project + "/_git/" + name + "/pullrequest/" + n
 	}
 	return base + "/pull/" + n
 }

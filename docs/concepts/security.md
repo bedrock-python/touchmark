@@ -23,9 +23,35 @@ closed where it is missing.
   separate account has its own rate limits.
 - **The writer has no access to the hub**, so a leaked write key cannot change the packs.
   `doctor` fails when the writer can push to the hub, and warns when it can see a
-  private one.
+  private one. See [A writer on the hub](#a-writer-on-the-hub-gitlab) for a GitLab hub
+  that has to live in the group of its targets.
 - **`plan` holds no write credential**, and a test of the code's call graph keeps it from
   ever reaching one.
+
+## A writer on the hub (GitLab)
+
+On GitLab a member of a group inherits its projects, and GitLab cannot lower an inherited
+role on one project. A hub kept in the group that holds its targets is therefore reached
+by the writer, a group access token or a service account of that group. What rule 5
+protects is that a leaked write key cannot change what `distribute` ships;
+`security.writer_on_hub: guard` gets that by verifying the hub instead of hiding it:
+
+- the writer is below Maintainer on the hub (a Maintainer changes its protection,
+  settings and variables);
+- the default branch is protected, and no rule that matches it lets the writer push or
+  merge (GitLab applies the most permissive matching rule);
+- merge request pipelines run the CI file of the default branch
+  (*CI/CD configuration file* `.gitlab-ci.yml@<hub path>:<default branch>`): otherwise the
+  writer, pushing to a merge request's branch, could rewrite the CI file to drop the plan;
+- a merge waits for a pipeline that succeeded, and a skipped pipeline does not count;
+- `plan`, in every hub merge request pipeline, exits 2 when the writer or one of its
+  `known_authors` opened the merge request or pushed to its source branch since the
+  branch was created (read from GitLab's push events, which name who pushed), and when it
+  cannot tell; the setting comes from the default branch's `hub.yml`.
+
+`doctor` grades these as `hub-guard` instead of `hub-hidden`, `doctor --hub-token` grades
+the settings with a maintainer's token, and `touchmark setup gitlab` sets them up. Other
+platforms report `hub-guard` as unknown: keep the writer off the hub there.
 
 ## The write key stays on the default branch
 

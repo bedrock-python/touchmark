@@ -20,6 +20,7 @@ Each check has a name, a status and a detail. The names you will see:
 | `scopes`, `2fa` | the write identity (Gitea, Forgejo) | the token lacks a scope the writer needs, or has more than it needs |
 | `signing-key` | the write identity | `TOUCHMARK_<ID>_SIGNING_KEY` is set but cannot sign for the writer |
 | `hub-hidden` | the write identity | the writer can see the hub, so a leaked write key could change the packs |
+| `hub-guard` | the write identity, under `security.writer_on_hub: guard` | the writer reaches the hub and could get content onto its default branch: a Maintainer role, a rule that lets it push or merge, merge request pipelines that run the source branch's CI file, merges that do not wait for a pipeline that succeeded; GitLab only, unknown elsewhere |
 | `markers` | the write identity | a pull request carries a marker with this hub's `id` but another fingerprint, or touchmark's marker from an unknown author |
 | `access` | each target | the writer cannot write there; on GitHub, the App's installation has more permissions than touchmark asks for |
 | `rules` | each target | a branch rule would block the sync branch or require what touchmark cannot do |

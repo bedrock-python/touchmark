@@ -76,6 +76,13 @@ type KeyStore struct {
 	// (PipelineSettingsUnread says why).
 	PipelineSettings       *PipelineSettings
 	PipelineSettingsUnread string
+	// CIConfigPath, MergeAfterPipeline and MergeOnSkipped are GitLab's
+	// ci_config_path, only_allow_merge_if_pipeline_succeeds and
+	// allow_merge_on_skipped_pipeline, for security.writer_on_hub guard;
+	// nil when not shown.
+	CIConfigPath       *string
+	MergeAfterPipeline *bool
+	MergeOnSkipped     *bool
 	// Unread lists what could not be read, and why: the checks that need it
 	// are unknown.
 	Unread []string
@@ -411,13 +418,17 @@ func (k *keyReader) gitlab(ctx context.Context) (KeyStore, error) {
 			Kind     string `json:"kind"`
 			FullPath string `json:"full_path"`
 		} `json:"namespace"`
-		PipelineVariables *string `json:"ci_pipeline_variables_minimum_override_role"`
+		PipelineVariables  *string `json:"ci_pipeline_variables_minimum_override_role"`
+		CIConfigPath       *string `json:"ci_config_path"`
+		MergeAfterPipeline *bool   `json:"only_allow_merge_if_pipeline_succeeds"`
+		MergeOnSkipped     *bool   `json:"allow_merge_on_skipped_pipeline"`
 	}
 	id := k.in.RepoID
 	if err := k.get(ctx, k.segs("projects", id), &project); err != nil {
 		return KeyStore{}, fmt.Errorf("hub keys: read the hub project %s: %w", id, err)
 	}
-	k.ks = KeyStore{Platform: "gitlab", RepoPath: project.Path, DefaultBranch: project.DefaultBranch, Visibility: visibility(project.Visibility)}
+	k.ks = KeyStore{Platform: "gitlab", RepoPath: project.Path, DefaultBranch: project.DefaultBranch, Visibility: visibility(project.Visibility),
+		CIConfigPath: project.CIConfigPath, MergeAfterPipeline: project.MergeAfterPipeline, MergeOnSkipped: project.MergeOnSkipped}
 	if project.PipelineVariables != nil {
 		k.ks.PipelineVariables = *project.PipelineVariables
 	} else {

@@ -57,7 +57,8 @@ type DoctorDeps struct {
 //   - hub-hidden: for the provider on the hub's host, that its writer may
 //     not write to the hub: ok when the hub is not visible to it or it
 //     cannot push there, fail when it can, warn when a private hub is
-//     visible to it (it is a member).
+//     visible to it (it is a member). Under security.writer_on_hub guard a
+//     writer that sees the hub gets hub-guard instead (hubGuardCheck).
 //
 // Per target: skipped with the reason of delivery (archived, disabled,
 // empty, mirror, pending-deletion, prs-disabled, sha256), not-opted-in
@@ -253,6 +254,8 @@ func (r *run) hubHiddenCheck(ctx context.Context, p *provider, dd DoctorDeps) re
 		return c
 	case err != nil:
 		return unknownCheck("hub-hidden", "look up the hub as the writer", err)
+	case r.hub != nil && r.hub.Security.WriterOnHub == "guard":
+		return r.hubGuardCheck(ctx, p, hub)
 	}
 	checker, ok := p.writer.(platform.Checker)
 	if !ok {
@@ -285,6 +288,53 @@ func (r *run) hubHiddenCheck(ctx context.Context, p *provider, dd DoctorDeps) re
 			"the writer should have no access to the hub at all"
 	default:
 		c.Status, c.Detail = report.StatusOK, "the writer sees the "+hub.Visibility+" hub but cannot push to it"
+	}
+	return c
+}
+
+// hubGuardCheck is check hub-guard, under security.writer_on_hub guard for
+// a writer that sees the hub: the conditions of platform.HubGuard as one
+// check, its status the worst of theirs, its detail the conditions that
+// are not ok (all of them when every one is). A driver without HubGuard
+// gives unknown: only GitLab verifies the guard.
+func (r *run) hubGuardCheck(ctx context.Context, p *provider, hub platform.Repo) report.DoctorCheck {
+	c := report.DoctorCheck{Name: "hub-guard"}
+	guard, ok := p.writer.(platform.HubGuard)
+	if !ok {
+		c.Status, c.Detail = report.StatusUnknown, "the writer sees the hub, and security.writer_on_hub guard is verified on GitLab only, not by the "+
+			p.cfg.Type+" driver: keep the writer off the hub"
+		return c
+	}
+	var fs []platform.Finding
+	err := r.retry(ctx, p, func() error {
+		var err error
+		fs, err = guard.GuardHub(ctx, hub)
+		return err
+	})
+	if err != nil {
+		return unknownCheck("hub-guard", "check the hub's guard as the writer", err)
+	}
+	if len(fs) == 0 {
+		c.Status, c.Detail = report.StatusUnknown, "the driver reported no condition of the guard"
+		return c
+	}
+	rank := map[report.CheckStatus]int{report.StatusOK: 0, report.StatusUnknown: 1, report.StatusWarn: 2, report.StatusFail: 3}
+	c.Status = report.StatusOK
+	var bad, all []string
+	for _, f := range fs {
+		s := fromFinding(f).Status
+		if rank[s] > rank[c.Status] {
+			c.Status = s
+		}
+		all = append(all, f.Detail)
+		if s != report.StatusOK {
+			bad = append(bad, string(s)+": "+f.Detail)
+		}
+	}
+	if len(bad) > 0 {
+		c.Detail = strings.Join(bad, "; ")
+	} else {
+		c.Detail = "the writer reaches the hub but cannot get content onto its default branch: " + strings.Join(all, "; ")
 	}
 	return c
 }

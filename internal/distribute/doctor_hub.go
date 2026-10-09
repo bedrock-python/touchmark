@@ -269,6 +269,9 @@ func KeyLocationChecks(ks hubch.KeyStore, known []string, cfg *config.Hub) []rep
 	}
 	if ks.Platform == "gitlab" {
 		out = append(out, gitlabRefChecks(ks)...)
+		if cfg != nil && cfg.Security.WriterOnHub == "guard" {
+			out = append(out, gitlabGuardSettings(ks))
+		}
 	}
 	for _, u := range ks.Unread {
 		add(report.StatusUnknown, "not readable with this token: %s", u)
@@ -578,6 +581,41 @@ func gitlabRefChecks(ks hubch.KeyStore) []report.DoctorCheck {
 		pv.Status, pv.Detail = report.StatusWarn, fmt.Sprintf("the minimum role for pipeline variables is %s: set it to no_one_allowed (Settings > CI/CD > Variables)", ks.PipelineVariables)
 	}
 	return append(out, pv)
+}
+
+// gitlabGuardSettings grades, under security.writer_on_hub guard, the hub's
+// settings that make a merge wait for the plan of the default branch's CI
+// configuration, as a maintainer's token reads them (check hub-guard;
+// doctor's own hub-guard reads them as the writer, which GitLab may not
+// show them to).
+func gitlabGuardSettings(ks hubch.KeyStore) report.DoctorCheck {
+	c := report.DoctorCheck{Name: "hub-guard"}
+	var fails []string
+	unknown := false
+	switch {
+	case ks.CIConfigPath == nil:
+		unknown = true
+	case !config.PinnedCIConfig(*ks.CIConfigPath, ks.RepoPath, ks.DefaultBranch):
+		fails = append(fails, fmt.Sprintf("merge request pipelines read the CI file of their source branch (CI configuration file %q), which the writer "+
+			"may rewrite to drop the plan that refuses its pushes: set it to .gitlab-ci.yml@%s:%s", *ks.CIConfigPath, ks.RepoPath, ks.DefaultBranch))
+	}
+	switch {
+	case ks.MergeAfterPipeline == nil || ks.MergeOnSkipped == nil:
+		unknown = true
+	case !*ks.MergeAfterPipeline:
+		fails = append(fails, "a merge does not wait for the pipeline: turn on Pipelines must succeed")
+	case *ks.MergeOnSkipped:
+		fails = append(fails, "a skipped pipeline counts as a success: turn off Skipped pipelines are considered successful")
+	}
+	switch {
+	case len(fails) > 0:
+		c.Status, c.Detail = report.StatusFail, strings.Join(fails, "; ")
+	case unknown:
+		c.Status, c.Detail = report.StatusUnknown, "the hub's CI configuration path or merge checks are not shown to this token"
+	default:
+		c.Status, c.Detail = report.StatusOK, "the hub's pipelines read their CI file from "+ks.DefaultBranch+", and a merge waits for a pipeline that succeeded"
+	}
+	return c
 }
 
 // worse returns the worse of two statuses.

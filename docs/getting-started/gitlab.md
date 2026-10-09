@@ -19,7 +19,11 @@ See [Set up a hub's platform](../guide/setup.md#gitlab).
    to, and add the accounts, or create the group access tokens, only on groups that hold
    targets and not the hub. A member of a group inherits its projects, and a group access
    token is a member of its group, so a writer on a group that holds the hub could push
-   to it; `touchmark setup gitlab` refuses that layout, and `doctor` fails on it.
+   to it; `touchmark setup gitlab` refuses that layout, and `doctor` fails on it. If the
+   hub must stay in that group, set `security.writer_on_hub: guard` in `hub.yml` first:
+   setup then accepts the layout and sets up what keeps the writer, a Developer of the
+   hub, from getting content onto its default branch (see
+   [A writer on the hub](../concepts/security.md#a-writer-on-the-hub-gitlab)).
     - The *reader* has the role Reporter and a token with `read_api` and
       `read_repository`. Store it as the variable `TOUCHMARK_READ_TOKEN`, masked but not
       protected: merge request pipelines need it.

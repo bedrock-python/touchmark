@@ -21,18 +21,20 @@ const (
 	defaultAutoCloseCooldown = "30d"
 	defaultWriteIsolation    = "platform"
 	defaultPrivateTargets    = "skip"
+	defaultWriterOnHub       = "refuse"
 	defaultSign              = "auto"
 )
 
 // Enumerations of hub.yml.
 var (
-	providerTypes   = []string{"github", "gitlab", "gitea", "forgejo", "bitbucket", "azure-devops"}
-	linkHubModes    = []string{"auto", "always", "never"}
-	isolationModes  = []string{"platform", "external", "none"}
-	privateTargets  = []string{"skip", "deliver"}
-	signModes       = []string{"auto", "always"}
-	defaultURLs     = map[string]string{"github": "https://github.com", "gitlab": "https://gitlab.com", "bitbucket": bitbucketURL}
-	shorthandFields = []string{"writer", "sign", "platform", "base_url"}
+	providerTypes    = []string{"github", "gitlab", "gitea", "forgejo", "bitbucket", "azure-devops"}
+	linkHubModes     = []string{"auto", "always", "never"}
+	isolationModes   = []string{"platform", "external", "none"}
+	privateTargets   = []string{"skip", "deliver"}
+	writerOnHubModes = []string{"refuse", "guard"}
+	signModes        = []string{"auto", "always"}
+	defaultURLs      = map[string]string{"github": "https://github.com", "gitlab": "https://gitlab.com", "bitbucket": bitbucketURL}
+	shorthandFields  = []string{"writer", "sign", "platform", "base_url"}
 )
 
 func parseHub(data []byte) (*Hub, []Warning, error) {
@@ -167,6 +169,7 @@ func checkLimits(l *Limits, doc document, p *problems) {
 func checkSecurity(s *Security, doc document, p *problems) {
 	checkEnum(p, doc, "security.write_isolation", s.WriteIsolation, isolationModes)
 	checkEnum(p, doc, "security.private_targets_in_public_hub", s.PrivateTargetsInPublicHub, privateTargets)
+	checkEnum(p, doc, "security.writer_on_hub", s.WriterOnHub, writerOnHubModes)
 	if s.WriteIsolation == "none" && isBlank(s.Reason) {
 		p.errorf("security.reason", "required with write_isolation: none: say why the write key cannot be isolated")
 	}
@@ -354,6 +357,7 @@ func applyHubDefaults(h *Hub, doc document) {
 	setDefault(&h.Memory.AutoCloseCooldown, defaultAutoCloseCooldown)
 	setDefault(&h.Security.WriteIsolation, defaultWriteIsolation)
 	setDefault(&h.Security.PrivateTargetsInPublicHub, defaultPrivateTargets)
+	setDefault(&h.Security.WriterOnHub, defaultWriterOnHub)
 	for i, fp := range h.PreviousFingerprints {
 		h.PreviousFingerprints[i] = CanonicalFingerprint(fp)
 	}

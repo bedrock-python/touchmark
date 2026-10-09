@@ -34,7 +34,9 @@ import (
 //     (premium); on Free it changes allow_force_push alone;
 //   - projects show ci_pipeline_variables_minimum_override_role (and the
 //     deprecated restrict_user_defined_variables) to Maintainers, and
-//     protect_merge_request_pipelines from 18.10.
+//     protect_merge_request_pipelines from 18.10; ci_config_path,
+//     only_allow_merge_if_pipeline_succeeds and
+//     allow_merge_on_skipped_pipeline.
 type glFake struct {
 	t   *testing.T
 	srv *httptest.Server
@@ -175,6 +177,10 @@ func (f *glFake) addProject(name string, ns int64, members map[int64]int) *fProj
 	p.branches["main"] = &fProtected{push: []fLevel{{id: f.id(), level: 40}}, merge: []fLevel{{id: f.id(), level: 40}}}
 	p.settings["ci_pipeline_variables_minimum_override_role"] = "maintainer"
 	p.settings["restrict_user_defined_variables"] = false
+	// As GitLab shows a new project's (CE 18.11, checked live).
+	p.settings["ci_config_path"] = ""
+	p.settings["only_allow_merge_if_pipeline_succeeds"] = false
+	p.settings["allow_merge_on_skipped_pipeline"] = false
 	if f.atLeast(18, 10) {
 		p.settings["protect_merge_request_pipelines"] = true
 	}

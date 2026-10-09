@@ -130,9 +130,12 @@ func runSetup(ctx context.Context, e *env, o *options, s *setupOptions) (err err
 			return configErrorf("%w\nfix %s first (touchmark check --worktree tells more)", joinedError(err), config.HubFile)
 		}
 	}
-	isolation := "platform"
+	isolation, writerOnHub := "platform", ""
 	if cfg != nil && cfg.Security.WriteIsolation != "" {
 		isolation = cfg.Security.WriteIsolation
+	}
+	if cfg != nil {
+		writerOnHub = cfg.Security.WriterOnHub
 	}
 	if isolation == "none" {
 		return configErrorf("setup offers only an isolated write key, and %s sets security.write_isolation: none: "+
@@ -174,7 +177,7 @@ func runSetup(ctx context.Context, e *env, o *options, s *setupOptions) (err err
 	case "gitlab":
 		rep, err = setup.GitLab(ctx, setup.GitLabInput{
 			APIURL: trusted.APIURL, Host: rp.Host, Project: repoPath, Group: strings.Trim(s.group, "/"), Token: token, Client: client,
-			Isolation: isolation, Accounts: s.accounts, ReaderName: s.readerName, WriterName: s.writerName,
+			Isolation: isolation, WriterOnHub: writerOnHub, Accounts: s.accounts, ReaderName: s.readerName, WriterName: s.writerName,
 			ReadVar: prefix + "READ_TOKEN", WriteVar: prefix + "WRITE_TOKEN", Writer: rp.Writer,
 			TokenDays: s.tokenDays, Schedules: s.schedules, DryRun: o.dryRun, Engine: version(),
 			Redact: reg, BasicUsers: basicUsers,

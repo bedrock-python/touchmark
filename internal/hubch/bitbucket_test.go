@@ -362,8 +362,13 @@ func TestBitbucketUpsertComment(t *testing.T) {
 	if res, err := ch.UpsertComment(t.Context(), 41, marker, body("second")); err != nil || res != CommentUpdated {
 		t.Errorf("second: %s, %v", res, err)
 	}
+	s.takeLog()
 	if res, err := ch.UpsertComment(t.Context(), 41, marker, body("second")); err != nil || res != CommentUnchanged {
 		t.Errorf("same: %s, %v", res, err)
+	}
+	// Unchanged only once the edit proves the comment its own.
+	if log := s.takeLog(); len(log) != 2 || !strings.HasPrefix(log[1], "PUT ") || !strings.HasSuffix(log[1], "/comments/504?") {
+		t.Errorf("requests %q", log)
 	}
 	want := []string{"{alice}: LGTM", "{mallory}: " + body("planted"), "{bot}: " + body("inline"), "{bot}: " + body("deleted"), "{bot}: " + body("second")}
 	if got := s.raws(); !slices.Equal(got, want) {
@@ -389,6 +394,40 @@ func TestBitbucketUpsertComment(t *testing.T) {
 	}
 	if _, err := s.channel(t, "").(Commenter).UpsertComment(t.Context(), 41, marker, body("x")); err == nil {
 		t.Error("an anonymous comment")
+	}
+}
+
+// Someone else's comment that holds exactly the body plan would write is
+// not taken for plan's own: equal content proves nothing until an edit is
+// accepted, so plan tries it, is refused, and comments itself.
+func TestBitbucketUpsertCommentCopiedBody(t *testing.T) {
+	const marker = `[touchmark-plan]: # "touchmark plan: acme-eng"`
+	body := "the plan\n\n" + marker + "\n"
+	s := newBBServer(t)
+	ch := s.channel(t, bbTok).(Commenter)
+	s.add("{mallory}", body)
+	s.takeLog()
+
+	res, err := ch.UpsertComment(t.Context(), 41, marker, body)
+	if err != nil || res != CommentCreated {
+		t.Fatalf("first: %s, %v", res, err)
+	}
+	if log := s.takeLog(); !slices.Equal(log, []string{
+		"GET /2.0/repositories/acme/engineering-assets/pullrequests/41/comments?pagelen=100&page=1",
+		"PUT /2.0/repositories/acme/engineering-assets/pullrequests/41/comments/500?",
+		"POST /2.0/repositories/acme/engineering-assets/pullrequests/41/comments?",
+	}) {
+		t.Errorf("requests %q", log)
+	}
+	if got, want := s.raws(), []string{"{mallory}: " + body, "{bot}: " + body}; !slices.Equal(got, want) {
+		t.Errorf("comments\n got  %q\n want %q", got, want)
+	}
+	// The next run with the same body finds its own: unchanged.
+	if res, err := ch.UpsertComment(t.Context(), 41, marker, body); err != nil || res != CommentUnchanged {
+		t.Errorf("same: %s, %v", res, err)
+	}
+	if got := s.raws(); len(got) != 2 {
+		t.Errorf("comments %q", got)
 	}
 }
 

@@ -238,11 +238,15 @@ const bitbucketCommentPage = 100
 // that are neither deleted nor inline and whose raw content holds marker.
 // An access token cannot learn its own account (GET /2.0/user refuses it),
 // so the comment is not told by its author: each candidate, newest first, is
-// replaced (PUT …/comments/{id}) unless its content is already body, and a
-// refusal (HTTP 403 or 404: another account's comment, which only its author
-// may edit) moves on to the next. Without one that takes the edit, it
-// creates the comment (POST …/comments). A comment of anyone else that holds
-// the marker is thus never changed.
+// replaced (PUT …/comments/{id}), and a refusal (HTTP 403 or 404: another
+// account's comment, which only its author may edit) moves on to the next.
+// Only an accepted edit proves the comment touchmark's, so a candidate whose
+// content is already body is replaced all the same (the edit changes
+// nothing) and counts as unchanged once Bitbucket accepts it: a comment of
+// someone else's that copies the body exactly does not stand in for
+// touchmark's. Without one that takes the edit, it creates the comment
+// (POST …/comments). A comment of anyone else that holds the marker is thus
+// never changed.
 func (ch *bitbucketChannel) UpsertComment(ctx context.Context, pr int64, marker, body string) (CommentResult, error) {
 	if pr <= 0 {
 		return "", fmt.Errorf("hub channel: no pull request to comment on (#%d)", pr)
@@ -284,12 +288,12 @@ func (ch *bitbucketChannel) UpsertComment(ctx context.Context, pr int64, marker,
 	payload := map[string]any{"content": map[string]string{"raw": body}}
 	for i := len(found) - 1; i >= 0; i-- {
 		c := found[i]
-		if c.raw == body {
-			return CommentUnchanged, nil
-		}
 		edit := comments + "/" + strconv.FormatInt(c.id, 10)
 		_, err := ch.client.JSON(ctx, http.MethodPut, edit, ch.auth, payload, nil)
 		if err == nil {
+			if c.raw == body {
+				return CommentUnchanged, nil
+			}
 			return CommentUpdated, nil
 		}
 		if s := status(err); s == http.StatusForbidden || s == http.StatusNotFound {

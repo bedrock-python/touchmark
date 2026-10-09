@@ -9,7 +9,7 @@
 | Program | `touchmark`, one static Go binary; the same binary in the image `ghcr.io/bedrock-python/touchmark` and the GitHub Action `bedrock-python/touchmark` |
 | Requires | git 2.31+ for `check`, `status`, `apply`, `manifest`; git 2.45+ for `plan` and `distribute`, which read the targets (the image brings its own) |
 | Install | archives on [GitHub releases](https://github.com/bedrock-python/touchmark/releases) · `go install github.com/bedrock-python/touchmark/cmd/touchmark@latest` (Go 1.26+) · `docker run ghcr.io/bedrock-python/touchmark:<version>` |
-| Platforms | GitHub (github.com, GHE.com, GHES 3.19+), GitLab 17.0+, Gitea 1.26+, Forgejo 15+ |
+| Platforms | GitHub (github.com, GHE.com, GHES 3.19+), GitLab 17.0+, Gitea 1.26+, Forgejo 15+; as providers a hub delivers to: Bitbucket Cloud, Azure DevOps Services |
 | Hub template | <https://github.com/bedrock-python/engineering-assets-template> |
 | Source | <https://github.com/bedrock-python/touchmark> |
 
@@ -47,8 +47,8 @@ no lock file, no header, no marker in their files. It never checks a target out 
 and never runs a script, hook, filter or LFS from the hub or a target. It delivers
 nothing to a repository without the opt-in file, unless `targets.yml` subscribes it
 (`opt_in: assumed`). There is no pull mode (targets do not
-fetch from the hub), no remote pack sources, no Azure DevOps driver, and no hub on
-Bitbucket Pipelines: Bitbucket Cloud is a provider a hub elsewhere delivers to.
+fetch from the hub), no remote pack sources, and no hub on Bitbucket Pipelines or Azure
+Pipelines: Bitbucket Cloud and Azure DevOps are providers a hub elsewhere delivers to.
 
 ## Mental model
 
@@ -251,7 +251,7 @@ ten `::error` and ten `::warning` annotations.
 | `version` | `1` | format version |
 | `id` | — | slug, 3–40 characters; names the branch `touchmark/<id>`; `change-me` fails `check` |
 | `writer`, `sign` | — , `auto` | single-provider shorthand: the writer account, commit signing (`auto`, `always`) |
-| `providers[]` | from CI | `id`, `type` (`github`, `gitlab`, `gitea`, `forgejo`), `url` (required for gitea and forgejo), `api_url`, `ca_file`, `writer`, `known_authors`, `automation_accounts`, `sign`, `limits`; replaces the shorthand |
+| `providers[]` | from CI | `id`, `type` (`github`, `gitlab`, `gitea`, `forgejo`, `bitbucket`, `azure-devops`), `url` (required for gitea, forgejo and azure-devops: `https://dev.azure.com/<organization>`), `api_url`, `ca_file`, `writer`, `known_authors`, `automation_accounts`, `sign`, `limits`; replaces the shorthand |
 | `branch`, `branch_aliases` | `touchmark/<id>`, none | the sync branch, and former names whose pull requests stay the hub's |
 | `previous_fingerprints` | none | the hub's fingerprints before it moved |
 | `opt_in_file` | `.engineering-assets.yml` | the opt-in file's path in targets |
@@ -275,7 +275,9 @@ the one provider whose `url` it lies under (`github` defaults to `https://github
 `gitlab` to `https://gitlab.com`); none fails `check`, and so do several unless the
 entry's `provider` or `defaults.provider` picks one of them, credentials, a query, a
 fragment, and any scheme but `https` (`http` for loopback only). On GitHub, Gitea and
-Forgejo a repository URL, and an `exclude` URL without `**`, names `owner/name`.
+Forgejo a repository URL, and an `exclude` URL without `**`, names `owner/name`; on Azure
+DevOps it is `https://dev.azure.com/<organization>/<project>/_git/<repository>`, naming
+`<project>/<repository>`, and an `org` URL is the organization itself.
 
 `.engineering-assets.yml` (in each target; `touchmark schema opt-in`): `version`,
 `enabled` (default `true`; `false` opts out whatever the hub says), `packs` (added to
@@ -284,7 +286,7 @@ covers everything under it). At most 64 KiB.
 
 `.touchmark/operations.yml` (in the hub; `touchmark schema operations`):
 `recreate[]` (`target`, `head`: acts while the branch head is that commit),
-`forget_declines[]` (`target`, `pr`: acts once; on Bitbucket Cloud while present), `allow_mass_close` (`max`, `until`),
+`forget_declines[]` (`target`, `pr`: acts once; on Bitbucket Cloud and Azure DevOps while present), `allow_mass_close` (`max`, `until`),
 `adopt_unmarked` (`until`). Dates are `YYYY-MM-DD`, UTC, inclusive.
 
 Environment, one set per provider; `<ID>` is the provider id upper-cased with `-` as
@@ -307,7 +309,8 @@ from its environment once read:
    every managed file would look `local`. touchmark refuses a shallow clone and a partial
    clone (`--filter`). In CI: `fetch-depth: 0` (GitHub, Gitea), `GIT_DEPTH: "0"` (GitLab).
 2. **Reader and writer are two different accounts** on every platform: two GitHub Apps,
-   two GitLab service accounts (or group access tokens), two Gitea or Forgejo bot users.
+   two GitLab service accounts (or group access tokens), two Gitea or Forgejo bot users,
+   two Azure DevOps users with personal access tokens (Code read; Code read & write).
    The read key reaches any branch of the hub; the write key must not.
 3. **The write key is visible to the default branch only.** GitHub: secrets in the
    environment `touchmark-distribute` with deployment branches *Selected* = the default

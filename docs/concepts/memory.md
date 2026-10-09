@@ -109,6 +109,17 @@ request was open:
   declines it; bots' closes wait for the cooldown, and the third in a row counts as a
   decline.
 
+## On Azure DevOps
+
+touchmark never writes to an abandoned pull request on Azure DevOps either: whether its
+properties, which hold the marker there, can still be changed is not known, and the
+memory of Bitbucket Cloud needs no such write. Everything [above](#on-bitbucket-cloud)
+applies, with three differences: the marker lives in the property `touchmark.marker`
+rather than the description, so the edit that records a new opt-in state changes only
+that property; descriptions do carry the tick box *Rebuild this branch* while a branch is
+paused; and touchmark never reactivates an abandoned pull request, though Azure DevOps
+would let it.
+
 ## Limits
 
 - Only the last 50 closed pull requests on the sync branches count.

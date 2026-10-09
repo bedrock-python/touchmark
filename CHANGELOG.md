@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0](https://github.com/bedrock-python/touchmark/compare/v0.3.0...v0.4.0) (2026-10-09)
+
+
+### Features
+
+* **azuredevops:** deliver to Azure DevOps Services ([#23](https://github.com/bedrock-python/touchmark/issues/23)) ([dd4be4b](https://github.com/bedrock-python/touchmark/commit/dd4be4b8a78cbd30d068a1c7ec8705a9e6ff6bb1))
+* **bitbucket:** deliver to Bitbucket Cloud ([#20](https://github.com/bedrock-python/touchmark/issues/20)) ([73200b0](https://github.com/bedrock-python/touchmark/commit/73200b04cf938b40c206d77fdd7b49c5b57a8306))
+* **bitbucket:** run a hub on Bitbucket Pipelines ([#22](https://github.com/bedrock-python/touchmark/issues/22)) ([532dad8](https://github.com/bedrock-python/touchmark/commit/532dad87361bae032fc8f1c7973639d6ea7bb6d9))
+
 ## [0.3.0](https://github.com/bedrock-python/touchmark/compare/v0.2.0...v0.3.0) (2026-10-08)
 
 

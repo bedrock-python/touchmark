@@ -1,5 +1,5 @@
 // Package platform defines what touchmark needs from a code hosting platform
-// (GitHub, GitLab, Gitea, Forgejo, Bitbucket Cloud; later Azure DevOps): the
+// (GitHub, GitLab, Gitea, Forgejo, Bitbucket Cloud, Azure DevOps): the
 // Reader and Writer interfaces drivers implement, their capabilities, and one
 // error model.
 //
@@ -132,9 +132,13 @@ type PR struct {
 	// BaseExists is false when the target branch was deleted.
 	BaseExists bool
 	Title      string
-	Body       string // raw body, marker included
-	Labels     []string
-	Author     Account
+	// Body is the raw body, marker included: its last line on every
+	// platform. Where the platform keeps the marker outside the description
+	// (Caps.Marker MarkerInProperties) the driver appends it, as
+	// marker.Attach does, so the core reads the same Body everywhere.
+	Body   string
+	Labels []string
+	Author Account
 	// ClosedBy is who closed or merged the PR; nil if open or not reported
 	// (see Caps.CloserKnown).
 	ClosedBy  *Account
@@ -142,7 +146,9 @@ type PR struct {
 	ClosedAt  time.Time // zero while open
 }
 
-// NewPR is a pull request to create.
+// NewPR is a pull request to create. Its Body, and PREdit's, end with the
+// marker line; a driver of a MarkerInProperties platform stores that line
+// apart (marker.Detach) and writes the rest as the description.
 type NewPR struct {
 	Head, Base, Title, Body string
 	// Labels are created by the driver when missing.
@@ -255,8 +261,21 @@ const (
 type MarkerStore uint8
 
 const (
-	MarkerInBody       MarkerStore = iota // last line of the description
-	MarkerInProperties                    // PR properties (Azure DevOps, later)
+	MarkerInBody MarkerStore = iota // last line of the description
+	// MarkerInProperties keeps the marker line out of the description, in
+	// a property of the pull request (Azure DevOps: the properties API,
+	// key touchmark.marker), for a platform whose descriptions are too
+	// short to hold one (4 000 characters there). The core still writes
+	// and reads one Body with the marker as its last line, in the comment
+	// frame: a driver of such a platform splits what the core writes with
+	// marker.Detach (the description, without marker lines; the line, to
+	// the property) and joins what it reads with marker.Attach (the
+	// description without marker lines, then the property's line), so the
+	// description a person edits can never forge or hide the marker. The
+	// description alone must fit MaxBody: prbody reserves no room for the
+	// marker there. Other platforms see no change: their Body is the
+	// description itself.
+	MarkerInProperties
 	// MarkerInRefDef is the last line of the description too, with the
 	// payload of MarkerInBody wrapped in a Markdown link reference
 	// definition, `[touchmark]: # "touchmark:v1 …"`, which renderers do not
@@ -280,11 +299,14 @@ type Limits struct {
 
 // Caps describes a platform instance, found once per run by Reader.Probe.
 type Caps struct {
-	// Flavor is "github", "ghe.com", "ghes", "gitlab", "gitea", "forgejo"
-	// or "bitbucket" (Bitbucket Cloud).
+	// Flavor is "github", "ghe.com", "ghes", "gitlab", "gitea", "forgejo",
+	// "bitbucket" (Bitbucket Cloud) or "azure-devops" (Azure DevOps
+	// Services).
 	Flavor  string
 	Version string
-	// MaxBody is the body budget in bytes, marker included.
+	// MaxBody is the body budget in bytes, marker included, but where the
+	// marker lives apart (MarkerInProperties): there it bounds the
+	// description alone.
 	MaxBody     int
 	Draft       DraftStyle
 	DraftPrefix string

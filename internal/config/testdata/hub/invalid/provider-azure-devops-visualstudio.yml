@@ -1,0 +1,7 @@
+# error: providers[0].url: a provider of type azure-devops is one organization of Azure DevOps Services
+version: 1
+id: acme-eng
+providers:
+  - id: ado
+    type: azure-devops
+    url: https://acme.visualstudio.com

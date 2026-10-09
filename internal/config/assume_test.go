@@ -128,3 +128,33 @@ func TestOptInEnabled(t *testing.T) {
 		t.Errorf("enabled changes the hash: %s, %s", a, b)
 	}
 }
+
+// TestAssumeAzureDevOps: an org entry of an Azure DevOps provider names the
+// organization, which no repository path (project/repository) starts
+// with, so any target of the provider may lie in it, as its match allows.
+func TestAssumeAzureDevOps(t *testing.T) {
+	hub := &Hub{ID: "acme-eng", Providers: []Provider{
+		{ID: "ado", Type: "azure-devops", URL: "https://dev.azure.com/acme"},
+		{ID: "gh", Type: "github"},
+	}}
+	targets := &Targets{
+		Defaults: Defaults{Provider: "ado"},
+		Targets: []Entry{
+			{Org: "acme", OptIn: OptInAssumed, Match: []string{"Billing/*"}},
+		},
+	}
+	for _, tc := range []struct {
+		target string
+		want   Assumption
+	}{
+		{"Billing/api", Assumption{Unresolved: []string{"org: acme"}}},
+		{"ado:billing/web", Assumption{Unresolved: []string{"org: acme"}}},
+		{"Web/site", Assumption{}},
+		{"gh:Billing/api", Assumption{}},
+	} {
+		got, err := Assume(hub, targets, ref(t, tc.target))
+		if err != nil || !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("Assume(%s) = %+v, %v; want %+v", tc.target, got, err, tc.want)
+		}
+	}
+}

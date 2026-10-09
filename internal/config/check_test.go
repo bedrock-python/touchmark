@@ -190,6 +190,26 @@ func TestCheck(t *testing.T) {
 			warnings: []string{"targets.yml: exclude[0]: acme/legacy/old has 3 path segments, and a bitbucket repository path is owner/name, so it excludes nothing"},
 		},
 		{
+			name: "topics and match on azure-devops",
+			hub: &Hub{ID: "acme-eng", Providers: []Provider{
+				{ID: "ado", Type: "azure-devops", URL: "https://dev.azure.com/acme"},
+			}},
+			targets: &Targets{
+				Targets: []Entry{
+					{Org: "acme", Topics: []string{"python"}},
+					{Org: "acme", Match: []string{"Billing/*", "Web/**", "Billing/api/x"}},
+				},
+				Exclude: []string{"Legacy/old/x"},
+			},
+			errors: []string{
+				"targets.yml: targets[0].topics: provider ado is Azure DevOps, whose repositories have no topics; select them with match: (paths like <project>/svc-*)",
+			},
+			warnings: []string{
+				"targets.yml: exclude[0]: Legacy/old/x has 3 path segments, and an Azure DevOps repository path is project/repository, so it excludes nothing",
+				"targets.yml: targets[1].match[2]: Billing/api/x has 3 path segments, and an Azure DevOps repository path is project/repository, so it selects nothing",
+			},
+		},
+		{
 			name: "listed and excluded",
 			hub:  selectHub(),
 			targets: &Targets{

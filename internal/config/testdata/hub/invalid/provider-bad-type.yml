@@ -1,6 +1,6 @@
-# error: providers[0].type: "azure-devops" must be one of
+# error: providers[0].type: "sourcehut" must be one of
 version: 1
 id: acme-eng
 providers:
-  - id: ado
-    type: azure-devops
+  - id: srht
+    type: sourcehut

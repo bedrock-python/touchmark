@@ -104,6 +104,27 @@ func TestPropertyDistributeBitbucket(t *testing.T) {
 	}
 }
 
+// TestPropertyDistributeAzureDevOps runs the scenarios of the property
+// test on Azure DevOps' flavor of the fake: the marker in a property apart
+// from a description of 4 000 bytes, labels by name, and abandoned pull
+// requests no one edits or reactivates, under the same checks. By default
+// 15 scenarios run; TOUCHMARK_PROPERTY_AZURE_SCENARIOS sets how many, the
+// rounds and the first seed are the property test's.
+func TestPropertyDistributeAzureDevOps(t *testing.T) {
+	needDeliveryGit(t)
+	simHeavy(t)
+	n := simEnvInt(t, "TOUCHMARK_PROPERTY_AZURE_SCENARIOS", 15)
+	rounds := max(1, simEnvInt(t, "TOUCHMARK_PROPERTY_ROUNDS", 2))
+	first := simEnvInt(t, "TOUCHMARK_PROPERTY_SEED", 1)
+	for i := range n {
+		seed := uint64(first + i)
+		t.Run(fmt.Sprintf("seed=%d", seed), func(t *testing.T) {
+			t.Parallel()
+			runSimScenarioOf(t, seed, rounds, nil, fake.AzureDevOps)
+		})
+	}
+}
+
 // simEnvInt reads a positive number from the environment, def when unset.
 func simEnvInt(t *testing.T, name string, def int) int {
 	t.Helper()
@@ -639,7 +660,7 @@ func (s *simScenario) closeOwn(tg *simTarget, by platform.Account) string {
 
 func (s *simScenario) reopen(tg *simTarget) string {
 	if s.p.Caps().ClosedImmutable {
-		return "" // no one reopens a declined pull request on Bitbucket
+		return "" // no one reopens a declined pull request on Bitbucket or Azure DevOps
 	}
 	var closed []platform.PR
 	for _, pr := range s.ownPRs(tg) {

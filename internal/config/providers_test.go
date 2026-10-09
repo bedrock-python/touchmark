@@ -40,6 +40,8 @@ func TestResolveProviders(t *testing.T) {
 		{ID: "bb", Type: "bitbucket"},
 		{ID: "bb-url", Type: "bitbucket", URL: "https://Bitbucket.org/"},
 		{ID: "bb-test", Type: "bitbucket", URL: "http://localhost:8080", APIURL: "http://localhost:8080/2.0"},
+		{ID: "ado", Type: "azure-devops", URL: "https://dev.azure.com/acme/"},
+		{ID: "ado-test", Type: "azure-devops", URL: "http://localhost:8081/acme", APIURL: "http://localhost:8081/acme"},
 	}}
 	want := map[string]resolvedURLs{
 		"gh":       {"https://github.com", "github.com", "https://api.github.com", "https://api.github.com/graphql", "TOUCHMARK_GH_"},
@@ -56,6 +58,8 @@ func TestResolveProviders(t *testing.T) {
 		"bb":       {"https://bitbucket.org", "bitbucket.org", "https://api.bitbucket.org/2.0", "", "TOUCHMARK_BB_"},
 		"bb-url":   {"https://Bitbucket.org", "bitbucket.org", "https://api.bitbucket.org/2.0", "", "TOUCHMARK_BB_URL_"},
 		"bb-test":  {"http://localhost:8080", "localhost:8080", "http://localhost:8080/2.0", "", "TOUCHMARK_BB_TEST_"},
+		"ado":      {"https://dev.azure.com/acme", "dev.azure.com", "https://dev.azure.com/acme", "", "TOUCHMARK_ADO_"},
+		"ado-test": {"http://localhost:8081/acme", "localhost:8081", "http://localhost:8081/acme", "", "TOUCHMARK_ADO_TEST_"},
 	}
 	// The CI environment does not matter for declared providers, except
 	// GITHUB_API_URL on the hub's own host (below).
@@ -304,8 +308,23 @@ func TestResolveProvidersErrors(t *testing.T) {
 		},
 		{
 			name: "bad type",
+			hub:  &Hub{Providers: []Provider{{ID: "srht", Type: "sourcehut"}}},
+			want: `hub.yml: providers[0]: type: "sourcehut" must be one of github, gitlab, gitea, forgejo, bitbucket, azure-devops`,
+		},
+		{
+			name: "azure-devops without url",
 			hub:  &Hub{Providers: []Provider{{ID: "ado", Type: "azure-devops"}}},
-			want: `hub.yml: providers[0]: type: "azure-devops" must be one of github, gitlab, gitea, forgejo, bitbucket`,
+			want: "hub.yml: providers[0]: url: required for azure-devops",
+		},
+		{
+			name: "azure-devops at a project",
+			hub:  &Hub{Providers: []Provider{{ID: "ado", Type: "azure-devops", URL: "https://dev.azure.com/acme/Billing"}}},
+			want: "hub.yml: providers[0]: url: a provider of type azure-devops is one organization of Azure DevOps Services",
+		},
+		{
+			name: "azure-devops elsewhere without api_url",
+			hub:  &Hub{Providers: []Provider{{ID: "ado", Type: "azure-devops", URL: "https://ado.example.com/acme"}}},
+			want: "hub.yml: providers[0]: url: a provider of type azure-devops is one organization",
 		},
 		{
 			name: "bitbucket elsewhere without api_url",

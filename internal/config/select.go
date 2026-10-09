@@ -60,20 +60,38 @@ func (r resolver) matchPattern(pat Ref, target Ref) bool {
 // mayContain reports whether the org or group entry e, whose namespace is
 // ns, could select target: the target lies in the namespace (directly, or
 // in a nested one when subgroups are included) on a compatible provider,
-// and its path passes the entry's match patterns.
+// and its path passes the entry's match patterns. On Azure DevOps the
+// namespace is the provider's organization, which repository paths
+// (project/repository) do not start with: any target of the provider may
+// lie in it.
 func (r resolver) mayContain(e *Entry, ns Ref, target Ref) bool {
-	if !sameProvider(r.provider(firstNonEmpty(e.Provider, ns.Provider)), r.provider(target.Provider)) {
+	provider := r.provider(firstNonEmpty(e.Provider, ns.Provider))
+	if !sameProvider(provider, r.provider(target.Provider)) {
 		return false
+	}
+	if len(e.Match) > 0 && !matchAnyPath(e.Match, target.Path) {
+		return false
+	}
+	if r.providerType(provider) == "azure-devops" {
+		return true
 	}
 	prefix := strings.ToLower(ns.Path) + "/"
 	path := strings.ToLower(target.Path)
 	if !strings.HasPrefix(path, prefix) {
 		return false
 	}
-	if len(e.Match) > 0 && !matchAnyPath(e.Match, target.Path) {
-		return false
-	}
 	return includeSubgroups(e) || !strings.Contains(path[len(prefix):], "/")
+}
+
+// providerType returns the type of the provider with id in hub.yml, "" for
+// one it does not list.
+func (r resolver) providerType(id string) string {
+	for _, p := range r.hub.Providers {
+		if p.ID == id {
+			return p.Type
+		}
+	}
+	return ""
 }
 
 func firstNonEmpty(a, b string) string {

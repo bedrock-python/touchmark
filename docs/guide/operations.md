@@ -37,7 +37,7 @@ cleanup to stay safe:
 | Entry | Acts | Then |
 |---|---|---|
 | `recreate` | while the sync branch's head is exactly `head` | a new push to the branch makes it inert |
-| `forget_declines` | once: touchmark marks pull request `pr` revoked; on Bitbucket Cloud, while the entry is present (see below) | inert |
+| `forget_declines` | once: touchmark marks pull request `pr` revoked; on Bitbucket Cloud and Azure DevOps, while the entry is present (see below) | inert |
 | `allow_mass_close` | up to `max` closes in a run, until the end of `until` (UTC) | inert after the date |
 | `adopt_unmarked` | until the end of `until` (UTC) | inert after the date |
 
@@ -71,6 +71,10 @@ on every run while it is present: keep it until the pull request it brings is me
 closed. Removed earlier, the decline is in force again; an open pull request stays, as
 memory never closes one, and its description then names the decline under *Previously
 declined*.
+
+On Azure DevOps a `forget_declines` entry acts while it is present too: touchmark never
+writes to an abandoned pull request there, so it cannot mark one revoked. Descriptions
+there do carry *Rebuild this branch*.
 
 ## On your machine
 

@@ -32,7 +32,8 @@ changelog before you merge it.
   and reject fields they do not know.
 - **What touchmark leaves in repositories:** the marker in pull request bodies
   (`touchmark:v1`, an HTML comment, or a Markdown reference definition on Bitbucket
-  Cloud), the commit trailers (`Touchmark-Hub`, `Touchmark-Stream`,
+  Cloud; on Azure DevOps the comment lives in the pull request property
+  `touchmark.marker`), the commit trailers (`Touchmark-Hub`, `Touchmark-Stream`,
   `Touchmark-Content`, `Touchmark-Hub-Commit`), the control lines of a pull request body,
   the marker of the plan comment, and the sync branch's name. Every release reads what an
   earlier one wrote. The marker's payload is frozen: a change to it is a `touchmark:v2`

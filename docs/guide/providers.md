@@ -201,6 +201,105 @@ their scopes: `doctor` reports both as unknown, so keep a reminder to rotate the
   reads 15 times a minute by default, with two targets at once, and writes at most once a
   second; `limits` overrides it.
 
+## Azure DevOps
+
+A provider of type `azure-devops` is one organization of Azure DevOps Services, and its
+`url` names it: `https://dev.azure.com/<organization>` (one provider per organization;
+the old `https://<organization>.visualstudio.com` form and Azure DevOps Server are not
+supported). `plan`, `distribute` and `doctor` work on it from a hub on GitHub or GitLab,
+or wherever you run touchmark; a hub whose own CI is Azure Pipelines is not supported
+yet, and `setup` has nothing for it.
+
+```yaml
+# hub.yml
+providers:
+  - id: ado
+    type: azure-devops
+    url: https://dev.azure.com/acme
+    writer: 3f2a8d4e-1b6c-4f0a-9e7d-5c2b1a0f9e8d   # the writer user's identity id
+```
+
+**Accounts.** Use two users that only touchmark uses, each with a personal access token
+(PAT) for this organization only: service principals of Microsoft Entra ID are not
+supported yet. Global PATs (for all organizations) stop working on 2026-12-01.
+
+| | Reader | Writer |
+|---|---|---|
+| Variable | `TOUCHMARK_ADO_READ_TOKEN` | `TOUCHMARK_ADO_WRITE_TOKEN` |
+| Scopes | Code (read) | Code (read & write) |
+| Repositories | read access to the targets | Contribute, Create branch and Contribute to pull requests on the targets only; no administration, and no access to the hub |
+
+A PAT cannot read its own expiry or scopes: `doctor` reports both as unknown, so keep a
+reminder to renew the tokens before they expire.
+
+- **Accounts are identity ids.** Display names are neither unique nor stable, so
+  `writer`, `known_authors` and `automation_accounts` name users by their identity id, a
+  GUID: `GET https://dev.azure.com/<organization>/_apis/connectionData` with the user's
+  token shows it as `authenticatedUser.id`.
+- **Targets.** A repository is `<project>/<repository>`; web URLs such as
+  `https://dev.azure.com/acme/Billing/_git/api` work. `org` names the whole organization
+  (`org: acme`, or its URL `https://dev.azure.com/acme`); select a project's repositories
+  with `match` (`Billing/*`). Azure DevOps has no topics: `check` refuses `topics` on its
+  entries. Disabled repositories are skipped. Project and repository names with spaces
+  can be reached through `org` only: `targets.yml` paths take letters, digits, `.`, `-`
+  and `_`.
+- **The marker lives in a pull request property** (`touchmark.marker`), not in the
+  description, which Azure DevOps limits to 4 000 characters: the description is short,
+  its lists are cut to fit, and the marker still records every change. Editing the
+  description in the web UI leaves the marker as it is, and a marker pasted into the
+  description is ignored. The property is not protected, though: anyone who may
+  contribute to pull requests in the project, project Readers included by default, may
+  be able to write it through the API (see the
+  [threat model](../project/threat-model.md)). touchmark writes the property right after
+  it opens a pull request, trying a few times; should it still fail, it abandons the new
+  pull request and opens another, so that none stays without its marker.
+- **People's text in the description** is theirs: a close or a refresh of the marker
+  writes the property alone and sends no description, so a description people filled up
+  to the limit never stops touchmark from closing its pull request.
+- **Labels** are added by name, as `pr.labels` says. **Drafts** are Azure DevOps' own
+  draft flag (`pr.draft`).
+- **Closing.** touchmark closes its own pull request by abandoning it, after it stored the
+  closing marker. It never reactivates an abandoned pull request, nor changes it: a pull
+  request touchmark closed stays closed, and the next proposal is a new one.
+- **Declines** are remembered without writing to the abandoned pull request, as on
+  Bitbucket Cloud: while a pull request is open its marker records the state of the
+  opt-in file, and a person's decline holds while that file is parsed the same. touchmark
+  leaves no comment on it; the report says `declined`. To have declined content proposed
+  again, edit `packs` or `ignore`, or add a `forget_declines` entry, which acts while it
+  is present (see [Memory of declined pull requests](../concepts/memory.md#on-bitbucket-cloud)).
+- **Comments** are threads touchmark closes at once, so that they never wait for a
+  resolution.
+- **Branch policies** refuse direct pushes to the branches they protect, and the writer
+  reads none upfront: `doctor` shows `rules` as unknown; a push a policy refuses
+  (TF402455) is `blocked:rules:policy`, one the writer lacks a permission for (TF401027)
+  `blocked:permission:push`. The writer's permissions are read with the Has Permissions
+  API when the token may use it; when it may not, `doctor` shows `access` as unknown and
+  the first push or pull request meets a missing permission.
+- **Commit author.** touchmark authors the writer's commits with its sign-in address when
+  Azure DevOps shows one, else with `<identity id>@touchmark.invalid`.
+- **Pace.** Azure DevOps meters a user's load over five minutes and announces it in its
+  `X-RateLimit-*` headers, which pause the provider before it delays requests, and in
+  `Retry-After` on requests it delayed, which pauses the provider for that long; touchmark
+  reads 120 times a minute with four targets at once and writes at most 30 times a minute
+  by default; `limits` overrides it.
+- **The reader needs a token.** Azure DevOps sends anonymous reads of files (the Trees
+  API) and of pull request properties to its sign-in page even in public projects, so a
+  plan without the reader's token fails on Azure DevOps targets.
+- **Cost.** Listing a target's pull requests reads the marker of every open one and of the
+  60 newest abandoned and completed ones (touchmark remembers the 50 newest closed pull
+  requests); older closed pull requests count as without a marker.
+
+What only a live organization can confirm, and the driver assumes from the REST
+reference: the size limit of pull request properties and whether they survive an
+abandon; whether labels in a create request are applied (touchmark adds missing ones
+after it); the error of a duplicate pull request (TF401179); whether `closedBy` is set
+on abandoned pull requests; the order of pull request listings and where they cut
+descriptions; the answer to a refused PAT (401, a sign-in redirect or a 203 page); the
+exact texts of push refusals; the `mode` strings of the Trees API; how disabled and
+renamed repositories answer; who can write pull request properties (whether project
+Readers, through "Contribute to pull requests", can set or change `touchmark.marker`);
+and whether `Retry-After` comes on answers that went through.
+
 ## Moving
 
 - **A target moves to another provider on the same host** (a new App, a new group): add

@@ -1,0 +1,6 @@
+# error: providers[0].url: required for azure-devops: https://dev.azure.com/<organization>
+version: 1
+id: acme-eng
+providers:
+  - id: ado
+    type: azure-devops

@@ -376,3 +376,70 @@ providers:
 		}
 	}
 }
+
+// TestResolveURLsAzureDevOps: an Azure DevOps provider is one organization;
+// its repository URLs are <project>/_git/<repository>, and the organization
+// URL itself is the namespace of an org entry.
+func TestResolveURLsAzureDevOps(t *testing.T) {
+	provs := resolvedProviders(t, `version: 1
+id: acme-eng
+providers:
+  - id: ado
+    type: azure-devops
+    url: https://dev.azure.com/acme
+  - id: other
+    type: azure-devops
+    url: https://dev.azure.com/fabrikam
+`)
+	for _, tc := range []struct {
+		entry Entry
+		want  string // the resolved value, or a substring of the error after "!"
+	}{
+		{Entry{Repo: "https://dev.azure.com/acme/Billing/_git/api"}, "ado:Billing/api"},
+		{Entry{Repo: "https://dev.azure.com/ACME/Billing/_git/api/"}, "ado:Billing/api"},
+		{Entry{Repo: "https://dev.azure.com/fabrikam/Web/_git/site"}, "other:Web/site"},
+		{Entry{Org: "https://dev.azure.com/acme"}, "ado:acme"},
+		{Entry{Org: "https://dev.azure.com/acme/"}, "ado:acme"},
+		{Entry{Org: "https://dev.azure.com/acme/Billing"}, "!an Azure DevOps org entry names the whole organization"},
+		{Entry{Repo: "https://dev.azure.com/acme/Billing/api"}, "!an Azure DevOps repository URL is https://dev.azure.com/<organization>/<project>/_git/<repository>"},
+		{Entry{Repo: "https://dev.azure.com/acme/Billing/_git/api/pullrequest/3"}, "!an Azure DevOps repository URL is"},
+		{Entry{Repo: "https://dev.azure.com/contoso/Billing/_git/api"}, "!is not under the url of any provider"},
+	} {
+		got, err := ResolveURLs(&Targets{Targets: []Entry{tc.entry}}, provs)
+		if want, ok := strings.CutPrefix(tc.want, "!"); ok {
+			if err == nil || !strings.Contains(err.Error(), want) {
+				t.Errorf("%+v: error %v, want one with %q", tc.entry, err, want)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("%+v: %v", tc.entry, err)
+			continue
+		}
+		if v := selectorValue(&got.Targets[0]); v != tc.want {
+			t.Errorf("%+v: %q, want %q", tc.entry, v, tc.want)
+		}
+	}
+	for _, tc := range []struct{ ex, want string }{
+		{"https://dev.azure.com/acme/Legacy/_git/old", "ado:Legacy/old"},
+		{"https://dev.azure.com/acme/Legacy/_git/old-*", "ado:Legacy/old-*"},
+		{"https://dev.azure.com/acme/Legacy/*", "ado:Legacy/*"},
+		{"https://dev.azure.com/acme/Legacy/**", "ado:Legacy/**"},
+		{"https://dev.azure.com/acme/Legacy/old", "!or a pattern of a project's repositories"},
+	} {
+		got, err := ResolveURLs(&Targets{Exclude: []string{tc.ex}}, provs)
+		if want, ok := strings.CutPrefix(tc.want, "!"); ok {
+			if err == nil || !strings.Contains(err.Error(), want) {
+				t.Errorf("exclude %s: error %v, want one with %q", tc.ex, err, want)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("exclude %s: %v", tc.ex, err)
+			continue
+		}
+		if got.Exclude[0] != tc.want {
+			t.Errorf("exclude %s: %q, want %q", tc.ex, got.Exclude[0], tc.want)
+		}
+	}
+}

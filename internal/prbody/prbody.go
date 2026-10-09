@@ -168,6 +168,12 @@ type Input struct {
 	// records the hash of the human part (marker.Data.Body), that is how a
 	// body is built: human, then its hash into the marker, then human +
 	// "\n\n" + marker, which fits the budget whatever the marker's length.
+	//
+	// Where the platform keeps the marker apart (Caps.Marker
+	// platform.MarkerInProperties, Azure DevOps) the body still ends with
+	// it, for the driver to store it apart (marker.Detach), but
+	// Caps.MaxBody bounds the human part alone: no room is reserved for the
+	// marker, and the marker line does not count.
 	Marker string
 }
 
@@ -368,15 +374,16 @@ func (r *renderer) fit() (string, error) {
 		}
 	}
 	limit := r.in.Caps.MaxBody
-	if limit > 0 && r.in.Marker == "" {
+	apart := r.in.Caps.Marker == platform.MarkerInProperties
+	if limit > 0 && r.in.Marker == "" && !apart {
 		if limit <= markerRoom {
 			return "", fmt.Errorf("%w: %d bytes leave no room for a marker of up to %d", ErrTooLarge, limit, marker.MaxLine)
 		}
 		limit -= markerRoom
 	}
-	for k := 0; limit > 0 && r.size(n) > limit; {
+	for k := 0; limit > 0 && r.budgetSize(n) > limit; {
 		if k == numLists {
-			return "", fmt.Errorf("%w: %d bytes with every list cut, more than %d", ErrTooLarge, r.size(n), limit)
+			return "", fmt.Errorf("%w: %d bytes with every list cut, more than %d", ErrTooLarge, r.budgetSize(n), limit)
 		}
 		if n[k] == 0 {
 			k++
@@ -429,6 +436,20 @@ func (r *renderer) pieces(n [numLists]int) [13]piece {
 		{text: r.footnote},
 		{text: r.in.Marker},
 	}
+}
+
+// budgetSize is what Caps.MaxBody bounds of r.body(n): all of it, but
+// where the platform keeps the marker apart (platform.MarkerInProperties),
+// whose marker line and the blank line before it do not count.
+func (r *renderer) budgetSize(n [numLists]int) int {
+	size := r.size(n)
+	if r.in.Caps.Marker != platform.MarkerInProperties || r.in.Marker == "" {
+		return size
+	}
+	if size == len(r.in.Marker) {
+		return 0
+	}
+	return size - len(r.in.Marker) - len("\n\n")
 }
 
 // size is len(r.body(n)), without building the body.

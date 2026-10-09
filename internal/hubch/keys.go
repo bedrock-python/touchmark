@@ -21,7 +21,8 @@ import (
 
 // KeyStoreInput locates the hub for ReadKeyStore.
 type KeyStoreInput struct {
-	// Platform is "github", "gitlab", "gitea", "forgejo" or "bitbucket".
+	// Platform is "github", "gitlab", "gitea", "forgejo" or "bitbucket";
+	// "azure-devops" is refused for now.
 	Platform string
 	// APIURL is the REST base of the hub's platform (…/api/v3, /api/v4,
 	// /api/v1, https://api.github.com).
@@ -165,6 +166,8 @@ func ReadKeyStore(ctx context.Context, in KeyStoreInput) (KeyStore, error) {
 	case "bitbucket":
 		k.auth = &httpx.Auth{Hosts: []string{api.Host}, Header: k.header("Bearer ")}
 		return k.bitbucket(ctx)
+	case "azure-devops":
+		return KeyStore{}, errors.New("hub keys: a hub on Azure DevOps is not supported yet")
 	}
 	return KeyStore{}, fmt.Errorf("hub keys: unknown platform %q", in.Platform)
 }

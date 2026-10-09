@@ -47,6 +47,10 @@ type writeAct struct {
 	// soft marks a secondary write: a comment, a branch deletion after a
 	// close (see execute).
 	soft bool
+	// kept marks an edit whose description is the one last read, which
+	// the driver does not send (keptBody): its marker line alone is
+	// touchmark's text.
+	kept bool
 	// desc says what the write did, for warnings ("pushed touchmark/acme").
 	desc string
 }
@@ -113,13 +117,18 @@ func (x *targetExec) prepare(ctx context.Context) ([]writeAct, bool) {
 // unsafeText checks every body and comment of acts with prbody.CheckText:
 // none may run a GitLab quick action or mention anyone, whatever made it.
 // Bodies touchmark renders pass by construction, and so do those it writes
-// back (keptBody): a failure is a bug, and the target writes nothing.
+// back (keptBody), but for a description kept as read where the marker
+// lives apart, which is not sent: its marker line is checked alone. A
+// failure is a bug, and the target writes nothing.
 func unsafeText(acts []writeAct) error {
 	for _, a := range acts {
 		var text, what string
 		switch {
 		case a.kind == actCreate:
 			text, what = a.newPR.Body, "the new pull request's description"
+		case a.kind == actEdit && a.edit.Body != nil && a.kept:
+			_, text = marker.Detach(*a.edit.Body)
+			what = fmt.Sprintf("the marker of #%d", a.pr)
 		case a.kind == actEdit && a.edit.Body != nil:
 			text, what = *a.edit.Body, fmt.Sprintf("the description of #%d", a.pr)
 		case a.kind == actComment:
@@ -198,15 +207,29 @@ func (p *preparer) consume(s decide.Step) ([]writeAct, error) {
 	if err != nil {
 		return nil, err
 	}
-	body := keptBody(prbody.Untick(pr.Body, prbody.ControlRecreate), line)
-	return []writeAct{{kind: actEdit, pr: s.PR, edit: platform.PREdit{Body: &body}, desc: fmt.Sprintf("took the rebuild request of #%d", s.PR)}}, nil
+	body, kept := p.x.keptBody(pr.Body, prbody.Untick(pr.Body, prbody.ControlRecreate), line)
+	return []writeAct{{kind: actEdit, pr: s.PR, edit: platform.PREdit{Body: &body}, kept: kept, desc: fmt.Sprintf("took the rebuild request of #%d", s.PR)}}, nil
 }
 
-// keptBody is a body touchmark writes back with a new marker line: people's
-// part of it made inert first (prbody.Inert), so that touchmark never runs a
-// GitLab quick action or mentions anyone with what people wrote.
-func keptBody(body, markerLine string) string {
-	return prbody.ReplaceMarker(prbody.Inert(marker.Strip(body)), markerLine)
+// keptBody is a body touchmark writes back with a new marker line: body,
+// the body read changed by touchmark's own edit (a control ticked off or
+// added; read itself when the edit is the marker's alone), people's part of
+// it made inert first (prbody.Inert), so that touchmark never runs a GitLab
+// quick action or mentions anyone with what people wrote.
+//
+// Where the marker lives apart from the description
+// (platform.MarkerInProperties) and the edit leaves the description as
+// read, the description stays byte for byte as read and kept is set: the
+// driver sends no description equal to the current one, so nothing of
+// people's text is written, and Inert would only lengthen it, past the
+// platform's limit when people filled the description (a close or an
+// opt-in refresh would then fail every run, and the pull request would
+// never close). Elsewhere the result is the same as ever.
+func (x *targetExec) keptBody(read, body, markerLine string) (_ string, kept bool) {
+	if x.t.prov.caps.Marker == platform.MarkerInProperties && marker.Strip(body) == marker.Strip(read) {
+		return prbody.ReplaceMarker(marker.Strip(read), markerLine), true
+	}
+	return prbody.ReplaceMarker(prbody.Inert(marker.Strip(body)), markerLine), false
 }
 
 // create opens the pull request of the sync branch: the rendered body with a
@@ -320,10 +343,10 @@ func (p *preparer) close(ctx context.Context, s decide.Step) ([]writeAct, error)
 	if err != nil {
 		return nil, err
 	}
-	body := keptBody(pr.Body, line)
+	body, kept := x.keptBody(pr.Body, pr.Body, line)
 	state := platform.Closed
 	p.closed[s.PR] = s.Reason
-	return []writeAct{{kind: actEdit, pr: s.PR, edit: platform.PREdit{Body: &body, State: &state}, desc: fmt.Sprintf("closed #%d", s.PR)}}, nil
+	return []writeAct{{kind: actEdit, pr: s.PR, edit: platform.PREdit{Body: &body, State: &state}, kept: kept, desc: fmt.Sprintf("closed #%d", s.PR)}}, nil
 }
 
 // comment renders the comment after a close or a first-seen decline.
@@ -366,8 +389,8 @@ func (p *preparer) remember(s decide.Step) ([]writeAct, error) {
 	if err != nil {
 		return nil, err
 	}
-	body = keptBody(body, line)
-	return []writeAct{{kind: actEdit, pr: s.PR, edit: platform.PREdit{Body: &body}, desc: desc}}, nil
+	body, kept := x.keptBody(pr.Body, body, line)
+	return []writeAct{{kind: actEdit, pr: s.PR, edit: platform.PREdit{Body: &body}, kept: kept, desc: desc}}, nil
 }
 
 // refresh writes the current opt-in state into the marker of an open pull
@@ -401,8 +424,8 @@ func (x *targetExec) refreshAct(pr platform.PR, m marker.Marker) (writeAct, erro
 	if err != nil {
 		return writeAct{}, err
 	}
-	body := keptBody(pr.Body, line)
-	return writeAct{kind: actEdit, pr: pr.Number, edit: platform.PREdit{Body: &body},
+	body, kept := x.keptBody(pr.Body, pr.Body, line)
+	return writeAct{kind: actEdit, pr: pr.Number, edit: platform.PREdit{Body: &body}, kept: kept,
 		desc: fmt.Sprintf("recorded the opt-in state in #%d", pr.Number)}, nil
 }
 

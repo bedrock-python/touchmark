@@ -1,4 +1,4 @@
-# error: platform: "azure-devops" must be one of
+# error: platform: "sourcehut" must be one of
 version: 1
 id: acme-eng
-platform: azure-devops
+platform: sourcehut

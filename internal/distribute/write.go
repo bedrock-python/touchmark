@@ -11,6 +11,7 @@ import (
 
 	"github.com/bedrock-python/touchmark/internal/decide"
 	"github.com/bedrock-python/touchmark/internal/gitx"
+	"github.com/bedrock-python/touchmark/internal/marker"
 	"github.com/bedrock-python/touchmark/internal/platform"
 	"github.com/bedrock-python/touchmark/internal/report"
 	"github.com/bedrock-python/touchmark/internal/throttle"
@@ -294,11 +295,16 @@ func pushOutcome(res gitx.PushResult) (report.Outcome, string) {
 // branch": non-fast-forward, as the preflight names it), its rulesets
 // (GH013) and branch protection (GH006, "protected branch"), Bitbucket
 // Cloud's branch restrictions ("Permission denied to update branch …",
-// which comes with "pre-receive hook declined"), a pre-receive hook, a
-// deletion rule; "push" when the message names none.
+// which comes with "pre-receive hook declined"), Azure Repos' branch
+// policies (TF402455: "Pushes to this branch are not permitted; you must
+// use a pull request to update this branch": rule "policy", the name Azure
+// DevOps gives such rules), a pre-receive hook, a deletion rule; "push" when
+// the message names none.
 func pushRule(msg string) string {
 	m := strings.ToLower(msg)
 	switch {
+	case strings.Contains(m, "tf402455"):
+		return "policy"
 	case strings.Contains(m, "cannot force-push"):
 		return "non-fast-forward"
 	case strings.Contains(m, "gh013"), strings.Contains(m, "rule violation"):
@@ -414,6 +420,10 @@ func (x *targetExec) doCreate(ctx context.Context, a writeAct) (string, bool) {
 		return err
 	}, func() (bool, error) {
 		found, ok, err := x.openFrom(ctx, a.branch)
+		if ok && err == nil && x.t.prov.caps.Marker == platform.MarkerInProperties {
+			found, err = x.markCreated(ctx, a, found)
+			ok = err == nil
+		}
 		if ok {
 			pr = found
 		}
@@ -438,6 +448,23 @@ func (x *targetExec) doCreate(ctx context.Context, a writeAct) (string, bool) {
 	}
 	x.fail("open the pull request", err)
 	return "", false
+}
+
+// markCreated returns pr, the open pull request a CreatePR whose outcome was
+// unknown left, once it carries the marker it was opened with. Where the
+// marker lives apart from the description (platform.MarkerInProperties)
+// the driver stores it after the pull request is made, so the pull request
+// may have none: it would block the target as marker-invalid. The create
+// then counts as done only after an edit with the new pull request's body
+// and labels, which stores the marker; elsewhere the marker came with the
+// description, and the caller does not call it.
+func (x *targetExec) markCreated(ctx context.Context, a writeAct, pr platform.PR) (platform.PR, error) {
+	_, want := marker.Detach(a.newPR.Body)
+	if _, got := marker.Detach(pr.Body); got == want {
+		return pr, nil
+	}
+	body := a.newPR.Body
+	return x.tw.EditPR(ctx, pr.Number, platform.PREdit{Body: &body, AddLabels: slices.Clone(a.newPR.Labels)})
 }
 
 // openFrom returns the open pull request of touchmark's authors from

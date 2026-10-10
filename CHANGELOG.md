@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0](https://github.com/bedrock-python/touchmark/compare/v0.5.0...v0.6.0) (2026-10-10)
+
+
+### Features
+
+* **bitbucket-datacenter:** deliver to Bitbucket Data Center ([#30](https://github.com/bedrock-python/touchmark/issues/30)) ([685e94c](https://github.com/bedrock-python/touchmark/commit/685e94c5fd1b8c603ccf46d482b532a5c6d6f845))
+
+
+### Bug Fixes
+
+* **setup:** protect a new GitLab hub's default branch while GitLab still protects it ([#28](https://github.com/bedrock-python/touchmark/issues/28)) ([e5739ac](https://github.com/bedrock-python/touchmark/commit/e5739ac2a90572b9f0240bec138267f71d76d45d))
+
 ## [0.5.0](https://github.com/bedrock-python/touchmark/compare/v0.4.0...v0.5.0) (2026-10-09)
 
 

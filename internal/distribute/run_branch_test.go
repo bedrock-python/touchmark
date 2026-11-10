@@ -111,3 +111,31 @@ func TestRunBranchSafety(t *testing.T) {
 		}
 	}
 }
+
+// A merge into the default branch of a branch older than the history the
+// proof fetches (a day before Hc's parent) cuts that history short: git
+// makes the merge a shallow boundary with both of its parents, and Hc's
+// parent below it is not reached. It once paused the pull request as
+// edited ("sits on commits that are not on the default branch").
+func TestRunBranchOldMerge(t *testing.T) {
+	t.Parallel()
+	w := newGitWorld(t)
+	api := w.optedIn("acme/api", nil)
+	old := map[string][]byte{"src/old.txt": []byte("work begun long ago\n")}
+	if _, err := w.p.PushFiles(api.ID, "feature", old, w.person, fake.Epoch.Add(-72*time.Hour)); err != nil {
+		t.Fatalf("PushFiles: %v", err)
+	}
+	w.syncCommit(api, branch, "", baseFiles...)
+	n := w.openOwn(api)
+	w.written(api, n)
+	feature := w.pr(api, platform.PR{Head: "feature", Base: "main", Author: w.person, Title: "old work"})
+	if _, err := w.p.MergePR(api.ID, feature, fake.MergeCommit, w.person, time.Time{}); err != nil {
+		t.Fatalf("MergePR: %v", err)
+	}
+	w.ok()
+	rep := w.run(w.deps(ModeDistribute), ModeDistribute)
+	tg := want(t, rep, "gh:acme/api", report.OutcomeUnchanged, "", n)
+	if writes := w.p.Writes(); len(writes) > 0 {
+		t.Errorf("wrote %q (warnings %q)", writes, tg.Warnings)
+	}
+}

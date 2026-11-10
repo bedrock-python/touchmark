@@ -5,6 +5,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -130,6 +133,88 @@ func (t *TargetRepo) DeepenSince(ctx context.Context, branch string, since time.
 		return fmt.Errorf("git fetch: branch %s no longer exists: %w", branch, ErrNotFound)
 	}
 	return err
+}
+
+// Deepen fetches by more commits of branch's history below the current
+// shallow boundaries (--deepen), without blobs, and updates no ref, as
+// DeepenSince does. It reaches the history DeepenSince leaves out: git
+// makes a commit with a parent older than since a boundary with all of its
+// parents, so a merge of an older branch cuts the default branch's own
+// history short (ShallowNotBefore finds such boundaries). by must be
+// positive.
+func (t *TargetRepo) Deepen(ctx context.Context, branch string, by int) error {
+	if err := checkBranch(branch); err != nil {
+		return fmt.Errorf("git fetch: %w", err)
+	}
+	if by < 1 {
+		return fmt.Errorf("git fetch: deepen %d is not positive", by)
+	}
+	unlock, err := t.lockFetch()
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	_, err = t.run(ctx, cmdOpts{network: true}, "fetch", "--quiet",
+		"--filter=blob:none", "--deepen="+strconv.Itoa(by),
+		"--no-tags", "--no-write-fetch-head", "--recurse-submodules=no",
+		remoteName, "refs/heads/"+branch)
+	if isMissingRemoteRef(err) {
+		return fmt.Errorf("git fetch: branch %s no longer exists: %w", branch, ErrNotFound)
+	}
+	return err
+}
+
+// ShallowNotBefore returns the shallow boundaries in rev's history whose
+// committer date is not before since, sorted: after DeepenSince back to
+// since, a commit that is a boundary for its own age is older than since,
+// so these were cut for a parent's age, and the history beyond them is
+// missing although it may be newer than since. A boundary whose committer
+// date cannot be read is returned too. Boundaries outside rev's history
+// (the bottom of another branch fetched to a depth) are left out. A
+// repository that is not shallow has none.
+func (t *TargetRepo) ShallowNotBefore(ctx context.Context, rev string, since time.Time) ([]string, error) {
+	if err := checkObjectName(rev); err != nil {
+		return nil, err
+	}
+	data, err := os.ReadFile(filepath.Join(t.Dir, "shallow"))
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return nil, nil
+	case err != nil:
+		return nil, fmt.Errorf("git target: %w", err)
+	}
+	var ids []string
+	for line := range strings.SplitSeq(string(data), "\n") {
+		if line == "" {
+			continue
+		}
+		if !isOID(line) {
+			return nil, fmt.Errorf("git target: the shallow file holds %q", abbrev(line))
+		}
+		ids = append(ids, line)
+	}
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	commits, err := t.commits(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, c := range commits {
+		if !c.Time.IsZero() && c.Time.Before(since) {
+			continue
+		}
+		in, err := t.IsAncestor(ctx, c.SHA, rev)
+		if err != nil {
+			return nil, err
+		}
+		if in {
+			out = append(out, c.SHA)
+		}
+	}
+	slices.Sort(out)
+	return out, nil
 }
 
 // FetchBlobs fetches blobs by id the way git's promisor fetch does:

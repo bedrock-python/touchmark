@@ -153,6 +153,71 @@ func TestDeepenSince(t *testing.T) {
 	}
 }
 
+// A merge of a branch older than since is a shallow boundary with both of
+// its parents after DeepenSince, so the default branch's own commits below
+// it are missing; ShallowNotBefore names that boundary, not the bottom of
+// another branch fetched to a depth, and Deepen fetches what is missing.
+func TestDeepenOldMerge(t *testing.T) {
+	t.Parallel()
+	s := newServed(t, t.TempDir(), "repo.git")
+	day := int64(86400)
+	base := int64(1767225600)
+	at := func(d int64) string { return fmt.Sprintf("%d +0000", base+d*day) }
+	root := s.commitAt("main", nil, []file{{path: "a.txt", content: "v1\n"}}, "root\n", at(1))
+	old := s.commitAt("feature", []string{root}, []file{{path: "b.txt", content: "old\n"}}, "old work\n", at(2))
+	mine := s.commitAt("main", []string{root}, []file{{path: "a.txt", content: "v2\n"}}, "mine\n", at(10))
+	s.commitAt("sync", []string{mine}, []file{{path: "c.txt", content: "ours\n"}}, "ours\n", at(10))
+	other := s.commitAt("other", []string{root}, []file{{path: "d.txt", content: "o1\n"}}, "o1\n", at(10))
+	s.commitAt("other", []string{other}, []file{{path: "d.txt", content: "o2\n"}}, "o2\n", at(10))
+	merge := s.commitAt("main", []string{mine, old}, []file{{path: "b.txt", content: "old\n"}}, "merge\n", at(11))
+	tr := newTarget(t, s.dir, Auth{})
+	ctx := t.Context()
+	for _, f := range []struct {
+		branch string
+		depth  int
+	}{{"main", 1}, {"sync", 2}, {"other", 1}} {
+		if _, _, err := tr.FetchBranch(ctx, f.branch, f.depth); err != nil {
+			t.Fatalf("FetchBranch(%s): %v", f.branch, err)
+		}
+	}
+	since := time.Unix(base+9*day, 0)
+	if err := tr.DeepenSince(ctx, "main", since); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := tr.IsAncestor(ctx, mine, merge); err != nil || ok {
+		t.Fatalf("IsAncestor(mine, merge) after DeepenSince = %v, %v; want false: git cuts the merge with both parents", ok, err)
+	}
+	if cut, err := tr.ShallowNotBefore(ctx, merge, since); err != nil || !slices.Equal(cut, []string{merge}) {
+		t.Fatalf("ShallowNotBefore(merge) = %v, %v; want the merge %s", cut, err, merge)
+	}
+	if err := tr.Deepen(ctx, "main", 1); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := tr.IsAncestor(ctx, mine, merge); err != nil || !ok {
+		t.Errorf("IsAncestor(mine, merge) after Deepen = %v, %v", ok, err)
+	}
+	if err := tr.Deepen(ctx, "gone", 1); !errors.Is(err, ErrNotFound) {
+		t.Errorf("Deepen(gone) = %v, want ErrNotFound", err)
+	}
+	if err := tr.Deepen(ctx, "main", 0); err == nil {
+		t.Error("Deepen(0) succeeded")
+	}
+}
+
+// A repository that is not shallow has no boundary to name.
+func TestShallowNotBeforeFull(t *testing.T) {
+	t.Parallel()
+	s := newServed(t, t.TempDir(), "repo.git")
+	ids := s.chain("main", "", 2)
+	tr := newTarget(t, s.dir, Auth{})
+	if _, _, err := tr.FetchBranch(t.Context(), "main", 5); err != nil {
+		t.Fatal(err)
+	}
+	if cut, err := tr.ShallowNotBefore(t.Context(), ids[1], time.Unix(0, 0)); err != nil || cut != nil {
+		t.Errorf("ShallowNotBefore(full history) = %v, %v", cut, err)
+	}
+}
+
 func TestFetchBlobs(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()

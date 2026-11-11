@@ -4,9 +4,9 @@ package gitx
 // fetches, commits built without a work tree, and pushes with a lease.
 //
 // The implementation is split by concern: target.go (isolation, InitTarget,
-// running commands), fetch.go (RemoteRefs, FetchBranch, DeepenSince,
-// FetchBlobs, ReadBlob), log.go (FirstParentLog, Commit, DiffTree,
-// IsCleanMerge, IsAncestor, Tree), attrs.go (Attrs, Renormalized),
+// running commands), fetch.go (RemoteRefs, FetchBranch, DeepenSince, Deepen,
+// ShallowNotBefore, FetchBlobs, ReadBlob), log.go (FirstParentLog, Commit,
+// DiffTree, IsCleanMerge, IsAncestor, Tree), attrs.go (Attrs, Renormalized),
 // build.go (BuildCommit), push.go (Push, ParsePush) and failure.go
 // (ClassifyFailure, PushResult.Transient).
 //
@@ -27,8 +27,9 @@ package gitx
 //
 // The proofs of ancestry (a merge's second parent, Hc's first parent) run
 // after DeepenSince back to a day before the older of the commits to prove,
-// and anything but a yes counts as no proof: decide.ClassifyBranch calls
-// the branch edited then.
+// and after Deepen below the boundaries ShallowNotBefore names, where a
+// merge of an older branch cut the history short. Anything but a yes
+// counts as no proof: decide.ClassifyBranch calls the branch edited then.
 
 import (
 	"context"

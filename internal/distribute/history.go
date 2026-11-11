@@ -19,6 +19,11 @@ import (
 // default branch's history is fetched: its date less a day.
 const deepenMargin = 24 * time.Hour
 
+// cutDeepens are the depths, in commits, that ancestor fetches below the
+// shallow boundaries one after the other while a merge of an older branch
+// keeps the default branch's history cut short.
+var cutDeepens = []int{decide.MaxHistory, 25 * decide.MaxHistory}
+
 // branchReads is what step 6 learned about a target's sync branches.
 type branchReads struct {
 	// branches are the classified branches by name (the sync branch and the
@@ -62,10 +67,11 @@ type branchRead struct {
 // the snapshot fetched) and its first-parent chain read at once, since a
 // later fetch may cut the shallow history; then the ancestry of Hc's first
 // parent and of the second parents of the merges after Hc is proven
-// against B (DeepenSince, then IsAncestor; what cannot be proven is
-// TriUnknown), the branches are classified, and with adopt the one-off
-// migration rule is applied to foreign ones. moving is the branch a push
-// would move, whose workflows difference is read.
+// against B (DeepenSince, deeper where a merge of an older branch cut the
+// history short, then IsAncestor; what cannot be proven is TriUnknown), the
+// branches are classified, and with adopt the one-off migration rule is
+// applied to foreign ones. moving is the branch a push would move, whose
+// workflows difference is read.
 //
 // An error is one of the target: a fetch or a read of the branch failed, or
 // the fetch of the default branch's history for the proofs failed in
@@ -209,15 +215,17 @@ func (r *run) prove(ctx context.Context, w *Work, hs []*branchRead, adopt bool) 
 		for _, h := range legacy {
 			dates = append(dates, h.hist.Commits[len(h.hist.Commits)-1].SHA)
 		}
-		deepened, err := r.deepen(ctx, w, dates)
+		since, err := r.deepen(ctx, w, dates)
 		if err != nil {
 			return err
 		}
 		for _, sha := range slices.Sorted(maps.Keys(need)) {
-			proven[sha] = r.ancestor(ctx, w, sha, deepened)
+			if proven[sha], err = r.ancestor(ctx, w, sha, since); err != nil {
+				return err
+			}
 		}
 		for _, h := range legacy {
-			h.legacy = deepened && r.legacyRewritable(ctx, w, h.hist.Head)
+			h.legacy = !since.IsZero() && r.legacyRewritable(ctx, w, h.hist.Head)
 		}
 	}
 	for _, h := range hs {
@@ -246,38 +254,38 @@ func triOf(sha, b string, proven map[string]decide.Tri) decide.Tri {
 }
 
 // deepen fetches the default branch's history back to a day before the
-// oldest of the commits shas (DeepenSince) and reports whether it did. A
-// fetch that failed in transport (transportFailure), after three attempts,
-// is an error; one that failed otherwise, and an unknown date, prove
-// nothing (false, with a warning).
-func (r *run) deepen(ctx context.Context, w *Work, shas []string) (bool, error) {
+// oldest of the commits shas (DeepenSince) and returns that date. A fetch
+// that failed in transport (transportFailure), after three attempts, is an
+// error; one that failed otherwise, and an unknown date, prove nothing (the
+// zero time, with a warning).
+func (r *run) deepen(ctx context.Context, w *Work, shas []string) (time.Time, error) {
 	var oldest time.Time
 	for _, sha := range shas {
 		c, err := w.Repo.Commit(ctx, sha)
 		if err != nil && ctx.Err() != nil {
-			return false, err
+			return time.Time{}, err
 		}
 		if err != nil || c.Time.IsZero() {
 			r.proofWarning(w, fmt.Sprintf("the date of %s is unknown (%v)", short(sha), err))
-			return false, nil
+			return time.Time{}, nil
 		}
 		if oldest.IsZero() || c.Time.Before(oldest) {
 			oldest = c.Time
 		}
 	}
 	if oldest.IsZero() {
-		return false, nil
+		return time.Time{}, nil
 	}
 	since := oldest.Add(-deepenMargin)
 	err := r.gitRetry(ctx, w.t.prov, func() error { return gitFailure(w.Repo.DeepenSince(ctx, w.DefaultBranch, since)) })
 	switch {
 	case err == nil:
-		return true, nil
+		return since, nil
 	case transportFailure(ctx, err):
-		return false, fmt.Errorf("fetch it back to %s: %w", since.UTC().Format(time.DateOnly), err)
+		return time.Time{}, fmt.Errorf("fetch it back to %s: %w", since.UTC().Format(time.DateOnly), err)
 	}
 	r.proofWarning(w, fmt.Sprintf("the history of %s could not be fetched back to %s: %v", w.DefaultBranch, since.UTC().Format(time.DateOnly), err))
-	return false, nil
+	return time.Time{}, nil
 }
 
 // transportFailure reports whether err, a failed fetch, says nothing about
@@ -289,20 +297,51 @@ func transportFailure(ctx context.Context, err error) bool {
 		platform.ClassOf(err) != platform.ClassUnknown
 }
 
-// ancestor proves whether sha is an ancestor of B, after deepened history.
-func (r *run) ancestor(ctx context.Context, w *Work, sha string, deepened bool) decide.Tri {
-	if !deepened {
-		return decide.TriUnknown
+// ancestor proves whether sha is an ancestor of B on the history deepen
+// fetched back to since (the zero time: none, nothing is proven). git's
+// "no" is a proof only when no shallow boundary in B's history is as new as
+// since (gitx.TargetRepo.ShallowNotBefore): a merge of a branch older than
+// since cuts the default branch's own history short. Until then the
+// history is fetched deeper below the boundaries, by each of cutDeepens in
+// turn, and asked again; what is still cut short after the last is
+// unknown. An error is a transport failure of such a fetch, after three
+// attempts.
+func (r *run) ancestor(ctx context.Context, w *Work, sha string, since time.Time) (decide.Tri, error) {
+	if since.IsZero() {
+		return decide.TriUnknown, nil
 	}
-	ok, err := w.Repo.IsAncestor(ctx, sha, w.B)
-	switch {
-	case err != nil:
-		r.proofWarning(w, fmt.Sprintf("whether %s is on %s is unknown: %v", short(sha), w.DefaultBranch, err))
-		return decide.TriUnknown
-	case ok:
-		return decide.TriYes
+	unknown := func(why any) (decide.Tri, error) {
+		r.proofWarning(w, fmt.Sprintf("whether %s is on %s is unknown: %v", short(sha), w.DefaultBranch, why))
+		return decide.TriUnknown, nil
 	}
-	return decide.TriNo
+	for i := 0; ; i++ {
+		ok, err := w.Repo.IsAncestor(ctx, sha, w.B)
+		switch {
+		case err != nil:
+			return unknown(err)
+		case ok:
+			return decide.TriYes, nil
+		}
+		cut, err := w.Repo.ShallowNotBefore(ctx, w.B, since)
+		switch {
+		case err != nil:
+			return unknown(err)
+		case len(cut) == 0:
+			return decide.TriNo, nil
+		case i == len(cutDeepens):
+			return unknown("the history is still cut short at " + short(cut[0]))
+		}
+		by := cutDeepens[i]
+		err = r.gitRetry(ctx, w.t.prov, func() error { return gitFailure(w.Repo.Deepen(ctx, w.DefaultBranch, by)) })
+		switch {
+		case err == nil:
+		case transportFailure(ctx, err):
+			return decide.TriUnknown, fmt.Errorf("fetch it %d commits deeper: %w", by, err)
+		default:
+			r.proofWarning(w, fmt.Sprintf("the history of %s could not be fetched %d commits deeper: %v", w.DefaultBranch, by, err))
+			return decide.TriUnknown, nil
+		}
+	}
 }
 
 // ancestryAnswer is one answer of Write.HubIsAncestor about a hub commit.

@@ -168,7 +168,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$COMMIT" && test "$(git rev-parse "refs/tags/$TAG^{commit}")" = "$COMMIT" ||
             { echo "::error::HEAD or $TAG is not $COMMIT"; exit 1; }
 
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version: ${{ env.GO_VERSION }}
           # A release never builds from a cache another run could have written.
